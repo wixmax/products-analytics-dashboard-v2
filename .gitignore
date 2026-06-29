@@ -64,6 +64,8 @@ Vagrantfile
 !/writable/debugbar/index.html
 
 php_errors.log
+error_log
+**/error_log
 
 #-------------------------
 # User Guide Temp Files
