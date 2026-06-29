@@ -87,6 +87,7 @@ error_log
 # Composer
 #-------------------------
 vendor/
+vendor.zip
 
 #-------------------------
 # IDE / Development Files
