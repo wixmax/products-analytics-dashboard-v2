@@ -988,6 +988,75 @@ class Products extends ResourceController
         return $this->respond(['success' => true]);
     }
 
+    public function activity()
+    {
+        $productUrl = $this->request->getVar('product_url');
+        $refresh = $this->request->getVar('refresh') === '1';
+
+        if (empty($productUrl)) {
+            $json = $this->request->getJSON(true);
+            $productUrl = $json['product_url'] ?? null;
+            $refresh = $refresh || ($json['refresh'] ?? false);
+        }
+        if (empty($productUrl)) {
+            return $this->fail('product_url is required');
+        }
+
+        $model = new ProductModel();
+        $product = $model->where('product_url', $productUrl)->first();
+
+        // Return cached data if exists and no refresh requested
+        if (!$refresh && $product && !empty($product['activity_data'])) {
+            $data = json_decode($product['activity_data'], true);
+            if ($data !== null) {
+                return $this->respond([
+                    'source' => 'cache',
+                    'activity' => $data,
+                ]);
+            }
+        }
+
+        // Fetch from external API
+        $inputObj = ['0' => ['json' => ['product_url' => $productUrl]]];
+        $apiUrl = 'https://www.overviewdata.io/api/trpc/data.getAdActivity?batch=1&input=' . urlencode(json_encode($inputObj));
+
+        try {
+            $client = \Config\Services::curlrequest();
+            $response = $client->request('GET', $apiUrl, [
+                'headers' => [
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept' => 'application/json',
+                ],
+                'timeout' => 30,
+            ]);
+
+            if ($response->getStatusCode() !== 200) {
+                return $this->fail('External API request failed', 502);
+            }
+
+            $rawBody = $response->getBody();
+            $parsed = json_decode($rawBody, true);
+            $base = is_array($parsed) ? ($parsed[0] ?? null) : $parsed;
+            $activity = $base['result']['data']['json'] ?? [];
+
+            // Save to database
+            if ($product) {
+                $model->update($product['id'], ['activity_data' => json_encode($activity)]);
+            }
+
+            return $this->respond([
+                'source' => 'api',
+                'activity' => $activity,
+            ]);
+        } catch (\Exception $e) {
+            return $this->respond([
+                'source' => 'error',
+                'error' => $e->getMessage(),
+                'activity' => [],
+            ]);
+        }
+    }
+
     private function cleanDateStr($dateStr)
     {
         if (empty($dateStr) || $dateStr === '--') {

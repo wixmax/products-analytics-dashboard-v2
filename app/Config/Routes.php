@@ -43,6 +43,10 @@ $routes->get('/api/products/snapshots', 'Products::snapshots');
 $routes->get('/api/products/snapshots/(:num)', 'Products::getSnapshot/$1');
 $routes->post('/api/products/snapshots/(:num)/restore', 'Products::restoreSnapshot/$1');
 
+// Activity Data Endpoints
+$routes->get('/api/products/activity', 'Products::activity');
+$routes->post('/api/products/activity', 'Products::activity');
+
 // Settings Endpoints
 $routes->get('/api/settings/(:segment)', 'Products::getSetting/$1');
 $routes->post('/api/settings', 'Products::saveSetting');

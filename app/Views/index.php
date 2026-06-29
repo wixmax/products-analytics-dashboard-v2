@@ -728,6 +728,14 @@
                 id="details-fb-library-btn"
                 >🌐 عرض في مكتبة الإعلانات</a
               >
+              <button
+                class="btn btn-secondary"
+                id="details-refresh-activity-btn"
+                onclick="refreshActivityData()"
+                style="border:1px solid var(--color-primary);color:var(--color-primary)"
+              >
+                🔄 تحديث النشاط
+              </button>
             </div>
           </div>
         </div>

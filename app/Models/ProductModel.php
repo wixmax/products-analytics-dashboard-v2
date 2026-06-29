@@ -20,7 +20,7 @@ class ProductModel extends Model
         'badge_algorithm', 'active_ads', 'origin', 'collected_money', 
         'collected_supporter', 'remaining_days', 'sold', 'moq', 
         'is_saved', 'saved_at', 'rating', 'notes', 'saved_status', 'collection',
-        'api_version', 'snapshot_id',
+        'api_version', 'snapshot_id', 'activity_data',
         'created_at', 'updated_at'
     ];
 

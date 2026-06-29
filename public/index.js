@@ -1234,24 +1234,9 @@ async function openDetailsModal(product) {
     </div>
   `;
   
-  // Build API URL
-  const inputObj = { "0": { json: { product_url: product.productUrl } } };
-  const apiUrl = `https://www.overviewdata.io/api/trpc/data.getAdActivity?batch=1&input=${encodeURIComponent(JSON.stringify(inputObj))}`;
+  // Fetch activity from local API (cached or from external)
+  let activityEntries = await fetchActivityData(product.productUrl, false);
   
-  let activityEntries = null;
-  
-  try {
-    const response = await fetch(apiUrl);
-    if (response.ok) {
-      const payload = await response.json();
-      const base = Array.isArray(payload) ? payload[0] : payload;
-      activityEntries = base?.result?.data?.json || [];
-    }
-  } catch (err) {
-    console.warn("Direct fetch for ad activity failed. Running simulation instead.", err);
-  }
-  
-  // Generate a highly realistic set of entries if none fetched
   if (!activityEntries || activityEntries.length === 0) {
     activityEntries = generateSimulatedActivity(product);
   }
@@ -1662,4 +1647,35 @@ function downloadProductDataJSON() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast("تم تحميل بيانات المنتج بصيغة JSON! 📥", "success");
+}
+
+async function fetchActivityData(productUrl, refresh = false) {
+  try {
+    const params = new URLSearchParams({ product_url: productUrl });
+    if (refresh) params.set('refresh', '1');
+    const res = await fetch(`/api/products/activity?${params.toString()}`);
+    if (!res.ok) return null;
+    const result = await res.json();
+    if (result.source === 'error') return null;
+    return result.activity || null;
+  } catch (e) {
+    console.warn("Failed to fetch activity data", e);
+    return null;
+  }
+}
+
+async function refreshActivityData() {
+  if (!currentProductForDetails) return;
+  const product = currentProductForDetails;
+  document.getElementById("details-chart").innerHTML = `
+    <div style="width:100%; text-align:center; padding: 2rem 0; color: var(--color-text-muted);">
+      ⏳ جاري تحديث بيانات النشاط...
+    </div>
+  `;
+  let activityEntries = await fetchActivityData(product.productUrl, true);
+  if (!activityEntries || activityEntries.length === 0) {
+    activityEntries = generateSimulatedActivity(product);
+  }
+  renderTimelineAndMetrics(product, activityEntries);
+  showToast("✅ تم تحديث بيانات النشاط", "success");
 }
