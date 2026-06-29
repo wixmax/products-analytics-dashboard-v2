@@ -1,0 +1,362 @@
+// Application State
+let allInternationalProducts = [];
+let currentFilteredProducts = []; // Keep track of filtered list for pagination
+let loadedOrigins = new Set();
+
+// Pagination State
+let currentPage = 1;
+const itemsPerPage = 12;
+
+const API_JAPAN = "https://www.overviewdata.io/api/trpc/data.japanProducts?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%7D%7D%7D";
+const API_CHINA = "https://www.overviewdata.io/api/trpc/data.chinaProducts?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%7D%7D%7D";
+
+window.addEventListener("DOMContentLoaded", () => {
+    setupTheme();
+    renderEmptyState();
+});
+
+function renderEmptyState() {
+    const container = document.getElementById("products-container");
+    container.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-icon">🌍</div>
+            <h3>يرجى اختيار بلد لبدء جلب المنتجات</h3>
+            <p>اختر اليابان أو الصين من القائمة الجانبية لعرض أحدث المنتجات.</p>
+        </div>
+    `;
+    document.getElementById("pagination-container").innerHTML = "";
+}
+
+async function selectCountry(origin) {
+    if (loadedOrigins.has(origin)) {
+        filterByOrigin(origin);
+        return;
+    }
+    await fetchByOrigin(origin);
+}
+
+async function fetchByOrigin(origin) {
+    const localUrl = `/api/products?origin=${origin}&per_page=1000`;
+    showToast(`جاري جلب بيانات ${origin} من قاعدة البيانات المحلية...`, "info");
+    
+    try {
+        const response = await fetch(localUrl);
+        if (!response.ok) throw new Error("Database Error");
+        const json = await response.json();
+        
+        const mappedList = (json.results || []).map(p => {
+            return {
+                product_title: p.title,
+                product_url: p.product_url,
+                product_image: p.ad_image_urls,
+                collected_money: p.collected_money,
+                collected_supporter: p.collected_supporter,
+                remaining_days: p.remaining_days,
+                product_price: p.price_1,
+                sold: p.sold,
+                moq: p.moq,
+                category: p.category
+            };
+        });
+
+        const wrappedData = {
+            result: {
+                data: {
+                    json: mappedList
+                }
+            }
+        };
+
+        if (mappedList.length === 0) {
+            showToast(`لا توجد بيانات لـ ${origin} في قاعدة البيانات. جاري المزامنة مع السيرفر...`, "info");
+            await triggerSyncForOrigin(origin);
+        } else {
+            processAndAppendData(wrappedData, origin);
+            showToast(`تم جلب بيانات ${origin} بنجاح من قاعدة البيانات 🎉`, "success");
+        }
+    } catch (error) {
+        console.error(`Error fetching local ${origin} data:`, error);
+        showToast(`فشل جلب بيانات ${origin} محلياً.`, "error");
+    }
+}
+
+async function triggerSyncForOrigin(origin) {
+    const apiEndpoint = origin === "Japan" ? API_JAPAN : API_CHINA;
+    const syncUrl = `/api/products/sync-trpc`;
+    
+    try {
+        const response = await fetch(syncUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: `url=${encodeURIComponent(apiEndpoint)}`
+        });
+        
+        if (!response.ok) throw new Error("Sync Proxy Error");
+        const data = await response.json();
+        
+        // Detect source from server response
+        const source = (Array.isArray(data) && data[0] && data[0].source) ? data[0].source : 'api';
+        
+        processAndAppendData(data, origin);
+        if (source === 'database') {
+            showToast(`📦 تم جلب بيانات ${origin} من قاعدة البيانات المحلية`, "info");
+        } else {
+            showToast(`🌐 تمت مزامنة بيانات ${origin} من السيرفر الخارجي وحفظها في قاعدة البيانات بنجاح! 🎉`, "success");
+        }
+    } catch (err) {
+        console.error("Sync failed:", err);
+        showToast("فشلت عملية المزامنة التلقائية مع السيرفر الرئيسي.", "error");
+    }
+}
+
+function processAndAppendData(data, origin) {
+  const base = Array.isArray(data) ? data[0] : data;
+  const rawProducts = base?.result?.data?.json || [];
+
+  if (Array.isArray(rawProducts)) {
+    const mapped = rawProducts.map((p) => {
+      // Common extraction based on origin specific keys
+      let priceInfo = "--";
+      let secondaryStat = "--";
+      let secondaryLabel = "الداعمين";
+      let thirdStat = "--";
+      let thirdLabel = "أيام متبقية";
+
+      if (origin === "Japan") {
+          priceInfo = p.collected_money ? parseInt(p.collected_money).toLocaleString() + " ¥" : "--";
+          secondaryStat = p.collected_supporter || "--";
+          secondaryLabel = "الداعمين";
+          thirdStat = p.remaining_days || "--";
+      } else if (origin === "China") {
+          priceInfo = p.product_price || "--";
+          secondaryStat = p.sold || "--";
+          secondaryLabel = "المبيعات";
+          thirdStat = p.moq ? `MOQ: ${p.moq}` : "--";
+          thirdLabel = "الحد الأدنى";
+      }
+
+      let finalUrl = p.product_url || p.projectUrl || p.productUrl || p.url || "#";
+      if (finalUrl !== "#" && !finalUrl.startsWith("http")) {
+          finalUrl = "https://" + finalUrl;
+      }
+
+      return {
+        ...p,
+        origin: origin,
+        originFlag: origin === "Japan" ? "🇯🇵" : "🇨🇳",
+        title: p.product_title || p.title || p.name || `منتج من ${origin}`,
+        imageUrl: p.product_image || p.product_image_url || p.imageUrl || p.image || "",
+        url: finalUrl,
+        priceInfo,
+        secondaryStat,
+        secondaryLabel,
+        thirdStat,
+        thirdLabel
+      };
+    });
+
+    allInternationalProducts = [...allInternationalProducts, ...mapped];
+    loadedOrigins.add(origin);
+
+    filterByOrigin(origin);
+    updateKPIs();
+  }
+}
+
+function renderProducts(products) {
+    currentFilteredProducts = products;
+    const container = document.getElementById("products-container");
+    
+    if (!products || products.length === 0) {
+        renderEmptyState();
+        return;
+    }
+
+    // Pagination Logic
+    const totalPages = Math.ceil(products.length / itemsPerPage);
+    if (currentPage > totalPages) currentPage = 1;
+
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const paginatedItems = products.slice(start, end);
+
+    container.innerHTML = paginatedItems.map((p) => {
+        let domain = "المتجر";
+        try {
+            if (p.url && p.url.startsWith("http")) {
+                domain = new URL(p.url).hostname.replace("www.", "");
+            }
+        } catch (e) {
+            domain = "رابط خارجي";
+        }
+        return `
+            <article class="product-card">
+                <div class="product-media">
+                    <img src="${p.imageUrl}" alt="${p.title}" onerror="this.src='https://via.placeholder.com/400x300?text=No+Image'">
+                    <div class="media-badge">${p.originFlag} ${p.origin}</div>
+                </div>
+                <div class="card-body">
+                    <div class="p-meta-info">
+                        <span>🏪 ${domain}</span>
+                        <span>${p.category || "عام"}</span>
+                    </div>
+                    <h4 class="p-title" title="${p.title}">${p.title}</h4>
+                    
+                    <div class="p-stats">
+                        <div class="p-stat-box">
+                            <span class="p-stat-val">${p.priceInfo}</span>
+                            <span class="p-stat-lbl">التمويل/السعر</span>
+                        </div>
+                        <div class="p-stat-box">
+                            <span class="p-stat-val">${p.secondaryStat}</span>
+                            <span class="p-stat-lbl">${p.secondaryLabel}</span>
+                        </div>
+                        <div class="p-stat-box">
+                            <span class="p-stat-val">${p.thirdStat}</span>
+                            <span class="p-stat-lbl">${p.thirdLabel}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="${p.url}" target="_blank" class="btn btn-primary">🔗 معاينة المنتج</a>
+                </div>
+            </article>
+        `;
+    }).join("");
+
+    renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+    const container = document.getElementById("pagination-container");
+    if (totalPages <= 1) {
+        container.innerHTML = "";
+        return;
+    }
+
+    let html = `
+        <div class="pagination">
+            <button class="btn btn-secondary" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">السابق</button>
+    `;
+
+    // Show a limited number of page buttons
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+    if (endPage - startPage + 1 < maxVisible) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        html += `
+            <button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'}" onclick="changePage(${i})">${i}</button>
+        `;
+    }
+
+    html += `
+            <button class="btn btn-secondary" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">التالي</button>
+        </div>
+        <div style="text-align: center; margin-top: 10px; font-size: 0.85rem; color: var(--color-text-muted);">
+            صفحة ${currentPage} من ${totalPages} (إجمالي ${currentFilteredProducts.length} منتج)
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function changePage(page) {
+    currentPage = page;
+    renderProducts(currentFilteredProducts);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateKPIs() {
+    document.getElementById("kpi-total").textContent = allInternationalProducts.length;
+    document.getElementById("kpi-japan").textContent = allInternationalProducts.filter((p) => p.origin === "Japan").length;
+    document.getElementById("kpi-china").textContent = allInternationalProducts.filter((p) => p.origin === "China").length;
+}
+
+function filterByOrigin(origin) {
+    currentPage = 1;
+    if (origin === "all") {
+        renderProducts(allInternationalProducts);
+    } else {
+        const filtered = allInternationalProducts.filter((p) => p.origin === origin);
+        renderProducts(filtered);
+    }
+}
+
+function searchProducts() {
+    currentPage = 1;
+    const query = document.getElementById("search-input").value.toLowerCase();
+    const filtered = allInternationalProducts.filter((p) =>
+        p.title.toLowerCase().includes(query) ||
+        (p.category && p.category.toLowerCase().includes(query))
+    );
+    renderProducts(filtered);
+}
+
+function handleLocalFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function (e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            const origin = file.name.includes("اليابان") || file.name.toLowerCase().includes("japan") ? "Japan" : "China";
+            processAndAppendData(data, origin);
+            showToast(`تم استيراد ${file.name} بنجاح`, "success");
+            await uploadImportedJson(data, origin);
+        } catch (err) {
+            showToast("خطأ في قراءة ملف JSON", "error");
+        }
+    };
+    reader.readAsText(file);
+}
+
+async function uploadImportedJson(data, origin) {
+    try {
+        const response = await fetch(`/api/products/import?origin=${origin}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error("Import request failed");
+        const resJson = await response.json();
+        showToast(`تم حفظ ${resJson.inserted} منتج جديد وتحديث ${resJson.updated} في قاعدة البيانات 💾`, "success");
+    } catch (err) {
+        console.warn("Failed to upload imported JSON to DB:", err);
+    }
+}
+
+function setupTheme() {
+    const btn = document.getElementById("theme-toggle-btn");
+    const currentTheme = localStorage.getItem("app-theme") || "light";
+    document.documentElement.setAttribute("data-theme", currentTheme);
+
+    btn.addEventListener("click", () => {
+        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        const nextTheme = isDark ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", nextTheme);
+        localStorage.setItem("app-theme", nextTheme);
+    });
+}
+
+function showToast(message, type = "info") {
+    const container = document.getElementById("toast-container");
+    const t = document.createElement("div");
+    t.className = `toast ${type}`;
+    t.innerHTML = `<span>💡</span> <div>${message}</div>`;
+    container.appendChild(t);
+    setTimeout(() => t.classList.add("show"), 50);
+    setTimeout(() => {
+        t.classList.remove("show");
+        setTimeout(() => t.remove(), 400);
+    }, 3500);
+}
