@@ -520,7 +520,7 @@ function processLoadedData(rawData, sourceInfo) {
         algorithm: p.algorithm || p.algo || "new",
         ad_start_date: p.ad_start_date || "--",
         ads_count: Number(p.ads_count) || 0,
-        avg_creatives: Number(p.avg_creatives) || 1,
+        avg_creatives: Number(p.avg_creatives) || 0,
         ad_title: p.ad_title || "",
         ad_body: p.ad_body || "",
         ad_image_urls: p.ad_image_urls || "",
@@ -1480,7 +1480,8 @@ function renderTimelineAndMetrics(product, entries) {
     [...new Set(entries.map((e) => e.ad_video_urls).filter(Boolean))].length ||
     1;
   const adsCount = entries.length || product.ads_count || 12;
-  const avgCreatives = product.avg_creatives || 2.1;
+  const avgCreatives =
+    product.avg_creatives || product.ads_count || entries.length || 1;
 
   const viewsMinVal = (adsCount * 9.5 + uniqueVideos * 5) * 1000;
   const viewsMaxVal = viewsMinVal * 10;
