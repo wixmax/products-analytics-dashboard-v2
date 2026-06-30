@@ -481,7 +481,7 @@ async function openDetailsModal(product) {
   
   let mediaHtml = "";
   if (videoUrls.length > 0) {
-    videoUrls.slice(0, 2).forEach((vUrl, i) => {
+    videoUrls.forEach((vUrl, i) => {
       mediaHtml += `
         <div class="details-media-item">
           <video controls autoplay muted loop>
@@ -491,16 +491,16 @@ async function openDetailsModal(product) {
         </div>
       `;
     });
-    if (videoUrls.length === 1 && imageUrls.length > 0) {
+    imageUrls.forEach((imgUrl, i) => {
       mediaHtml += `
         <div class="details-media-item">
-          <img src="${imageUrls[0]}" alt="${product.title}">
+          <img src="${imgUrl}" alt="${product.title}">
           <div class="details-media-overlay-text">${overlayText}</div>
         </div>
       `;
-    }
+    });
   } else if (imageUrls.length > 0) {
-    imageUrls.slice(0, 2).forEach((imgUrl, i) => {
+    imageUrls.forEach((imgUrl, i) => {
       mediaHtml += `
         <div class="details-media-item">
           <img src="${imgUrl}" alt="${product.title}">
