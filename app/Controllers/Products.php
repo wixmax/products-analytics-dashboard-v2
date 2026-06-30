@@ -419,7 +419,8 @@ class Products extends ResourceController
             if (isset($queryParams['input'])) {
                 $inputDecoded = json_decode($queryParams['input'], true);
                 if (is_array($inputDecoded)) {
-                    $json = $inputDecoded[0]['json'] ?? [];
+                    $firstKey = array_key_first($inputDecoded);
+                    $json = $inputDecoded[$firstKey]['json'] ?? [];
                     if (isset($json['v'])) {
                         $requestedVersion = $json['v'];
                     }
@@ -510,7 +511,8 @@ class Products extends ResourceController
         $data = $syncService->fetchAndSaveTrpcUrl($url);
         
         if ($data === null) {
-            return $this->fail('Failed to fetch or parse tRPC data');
+            log_message('error', 'syncTrpc: fetchAndSaveTrpcUrl returned null for URL: ' . substr($url, 0, 200));
+            return $this->fail('Failed to fetch or parse tRPC data from external API');
         }
 
         // Add source indicator to distinguish from database responses

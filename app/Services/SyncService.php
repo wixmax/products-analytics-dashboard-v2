@@ -61,7 +61,7 @@ class SyncService
         ];
 
         $apiVersion = $this->extractVersion($input);
-        $url = 'https://www.overviewdata.io/api/trpc/data.insights?batch=1&input=' . urlencode(json_encode($input));
+        $url = 'https://www.overviewdata.io/api/trpc/data.insights?batch=1&input=' . urlencode(json_encode($input, JSON_FORCE_OBJECT));
 
         try {
             $response = $this->client->request('GET', $url, [
@@ -153,7 +153,7 @@ class SyncService
         ];
 
         $apiVersion = $this->extractVersion($input);
-        $url = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($input));
+        $url = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($input, JSON_FORCE_OBJECT));
 
         try {
             $response = $this->client->request('GET', $url, [
@@ -244,7 +244,7 @@ class SyncService
 
         $apiVersion = $this->extractVersion($input);
         $endpoint = ($origin === 'Japan') ? 'data.japanProducts' : 'data.chinaProducts';
-        $url = "https://www.overviewdata.io/api/trpc/{$endpoint}?batch=1&input=" . urlencode(json_encode($input));
+        $url = "https://www.overviewdata.io/api/trpc/{$endpoint}?batch=1&input=" . urlencode(json_encode($input, JSON_FORCE_OBJECT));
 
         try {
             $response = $this->client->request('GET', $url, [
@@ -326,6 +326,8 @@ class SyncService
             ]);
 
             if ($response->getStatusCode() !== 200) {
+                $body = $response->getBody();
+                log_message('error', 'fetchAndSaveTrpcUrl: External API returned HTTP ' . $response->getStatusCode() . ' - ' . substr($body, 0, 300));
                 return null;
             }
 

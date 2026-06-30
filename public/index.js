@@ -51,14 +51,14 @@ let watchedStores = [];
 
 async function loadInitialDatabaseData() {
   try {
-    const collectionsRes = await fetch('/api/products/collections');
+    const collectionsRes = await fetch("/api/products/collections");
     if (collectionsRes.ok) {
       collections = await collectionsRes.json();
     }
-    const savedRes = await fetch('/api/products/saved');
+    const savedRes = await fetch("/api/products/saved");
     if (savedRes.ok) {
       const dbSaved = await savedRes.json();
-      savedProducts = dbSaved.map(p => ({
+      savedProducts = dbSaved.map((p) => ({
         ...p,
         productUrl: p.product_url,
         algorithm: p.algo,
@@ -67,10 +67,10 @@ async function loadInitialDatabaseData() {
         rating: parseInt(p.rating) || 0,
         notes: p.notes || "",
         collection: p.collection || "عامة",
-        status: p.saved_status || "active"
+        status: p.saved_status || "active",
       }));
     }
-    const watchlistRes = await fetch('/api/products/watchlist');
+    const watchlistRes = await fetch("/api/products/watchlist");
     if (watchlistRes.ok) {
       watchedStores = await watchlistRes.json();
     }
@@ -147,10 +147,17 @@ window.addEventListener("DOMContentLoaded", () => {
   toggleApiMode();
 
   // Bootstrap initial products from PostgreSQL if provided by server
-  if (window.INITIAL_PRODUCTS_FROM_DB && window.INITIAL_PRODUCTS_FROM_DB.result?.data?.json?.productsEntries?.length > 0) {
+  if (
+    window.INITIAL_PRODUCTS_FROM_DB &&
+    window.INITIAL_PRODUCTS_FROM_DB.result?.data?.json?.productsEntries
+      ?.length > 0
+  ) {
     document.getElementById("api-endpoint-select").value = "winning";
     toggleApiMode();
-    processLoadedData(window.INITIAL_PRODUCTS_FROM_DB, "قاعدة البيانات (PostgreSQL)");
+    processLoadedData(
+      window.INITIAL_PRODUCTS_FROM_DB,
+      "قاعدة البيانات (PostgreSQL)",
+    );
   }
 });
 
@@ -166,7 +173,8 @@ function initFiltersPanel() {
   // Render Countries select
   const countryContainer = document.getElementById("api-filter-country");
   let countryHtml = COUNTRIES_LIST.map(
-    (c) => `<option value="${c.code}" selected>${c.flag} ${c.name} (${c.code})</option>`,
+    (c) =>
+      `<option value="${c.code}" selected>${c.flag} ${c.name} (${c.code})</option>`,
   ).join("");
   countryContainer.innerHTML = countryHtml;
 }
@@ -335,7 +343,10 @@ function openGeneratedURL() {
 async function handleFetchAPI() {
   const mode = document.getElementById("api-endpoint-select").value;
   if (!mode) {
-    showToast("⚠️ يرجى اختيار نوع الاستعلام / البيانات أولاً من القائمة الجانبية!", "error");
+    showToast(
+      "⚠️ يرجى اختيار نوع الاستعلام / البيانات أولاً من القائمة الجانبية!",
+      "error",
+    );
     return;
   }
   const url = generateFullURL();
@@ -348,12 +359,12 @@ async function handleFetchAPI() {
   showToast("محاولة جلب البيانات عن طريق السيرفر لتخطي CORS...", "info");
 
   try {
-    const response = await fetch('/api/products/sync-trpc', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: `url=${encodeURIComponent(url)}`
+    const response = await fetch("/api/products/sync-trpc", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: `url=${encodeURIComponent(url)}`,
     });
     if (!response.ok) {
       throw new Error(`HTTP Error! status: ${response.status}`);
@@ -361,14 +372,23 @@ async function handleFetchAPI() {
     const data = await response.json();
 
     // Detect data source from server response
-    const source = (Array.isArray(data) && data[0] && data[0].source) ? data[0].source : 'unknown';
-    
-    if (source === 'database') {
+    const source =
+      Array.isArray(data) && data[0] && data[0].source
+        ? data[0].source
+        : "unknown";
+
+    if (source === "database") {
       processLoadedData(data, "قاعدة البيانات المحلية");
-      showToast("📦 تم جلب البيانات من قاعدة البيانات المحلية (بدون اتصال بالسيرفر الخارجي)", "info");
-    } else if (source === 'api') {
+      showToast(
+        "📦 تم جلب البيانات من قاعدة البيانات المحلية (بدون اتصال بالسيرفر الخارجي)",
+        "info",
+      );
+    } else if (source === "api") {
       processLoadedData(data, "السيرفر الخارجي (API)");
-      showToast("🌐 تم جلب البيانات من السيرفر الخارجي وحفظها في قاعدة البيانات بنجاح!", "success");
+      showToast(
+        "🌐 تم جلب البيانات من السيرفر الخارجي وحفظها في قاعدة البيانات بنجاح!",
+        "success",
+      );
     } else {
       processLoadedData(data, "مصدر غير محدد");
       showToast("تمت المزامنة بنجاح! 🎉", "success");
@@ -389,7 +409,10 @@ async function handleFetchAPI() {
 function handleLocalFile(event) {
   const mode = document.getElementById("api-endpoint-select").value;
   if (!mode) {
-    showToast("⚠️ يرجى اختيار نوع الاستعلام / البيانات أولاً لتتم معالجة الملف بشكل صحيح!", "error");
+    showToast(
+      "⚠️ يرجى اختيار نوع الاستعلام / البيانات أولاً لتتم معالجة الملف بشكل صحيح!",
+      "error",
+    );
     event.target.value = ""; // Reset file input
     return;
   }
@@ -417,7 +440,10 @@ function handleLocalFile(event) {
 function processManualJSON() {
   const mode = document.getElementById("api-endpoint-select").value;
   if (!mode) {
-    showToast("⚠️ يرجى اختيار نوع الاستعلام / البيانات أولاً لتتم معالجة البيانات بشكل صحيح!", "error");
+    showToast(
+      "⚠️ يرجى اختيار نوع الاستعلام / البيانات أولاً لتتم معالجة البيانات بشكل صحيح!",
+      "error",
+    );
     return;
   }
   const inputRaw = document.getElementById("manual-json-input").value.trim();
@@ -440,15 +466,18 @@ function processManualJSON() {
 async function uploadImportedJson(data, origin) {
   try {
     const response = await fetch(`/api/products/import?origin=${origin}`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error("Import request failed");
     const resJson = await response.json();
-    showToast(`تم حفظ ${resJson.inserted} منتج جديد وتحديث ${resJson.updated} في قاعدة البيانات 💾`, "success");
+    showToast(
+      `تم حفظ ${resJson.inserted} منتج جديد وتحديث ${resJson.updated} في قاعدة البيانات 💾`,
+      "success",
+    );
   } catch (err) {
     console.warn("Failed to upload imported JSON to DB:", err);
   }
@@ -524,12 +553,15 @@ function processLoadedData(rawData, sourceInfo) {
 // =========================================
 async function fetchAndRenderAnalytics() {
   try {
-    const mode = document.getElementById("api-endpoint-select")?.value || "winning";
+    const mode =
+      document.getElementById("api-endpoint-select")?.value || "winning";
     const origin = mode === "winning" ? "Winning" : "Local";
-    
-    const response = await fetch(`/api/products/insights-charts?origin=${origin}`);
+
+    const response = await fetch(
+      `/api/products/insights-charts?origin=${origin}`,
+    );
     if (!response.ok) throw new Error("Analytics API error");
-    
+
     const analyticsData = await response.json();
     renderAnalyticsDashboard(analyticsData);
   } catch (err) {
@@ -960,7 +992,7 @@ async function setupTheme() {
   if (!btn) return;
 
   try {
-    const res = await fetch('/api/settings/app-theme');
+    const res = await fetch("/api/settings/app-theme");
     if (res.ok) {
       const data = await res.json();
       const currentTheme = data.value || "light";
@@ -976,10 +1008,10 @@ async function setupTheme() {
     const nextTheme = isDark ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", nextTheme);
     try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'app-theme', value: nextTheme })
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "app-theme", value: nextTheme }),
       });
     } catch (err) {
       console.error("Error saving theme setting:", err);
@@ -1012,7 +1044,7 @@ async function toggleSaveProduct(product) {
       product_url: product.productUrl,
       title: product.title,
       country: product.country,
-      algorithm: product.algorithm || product.algo || 'new',
+      algorithm: product.algorithm || product.algo || "new",
       ad_start_date: product.ad_start_date,
       ads_count: product.ads_count,
       unique_image_count: product.unique_image_count || 0,
@@ -1022,23 +1054,23 @@ async function toggleSaveProduct(product) {
       ad_body: product.ad_body,
       ad_image_urls: product.ad_image_urls,
       ad_video_urls: product.ad_video_urls,
-      actualPrice: product.actualPrice || product.price_1 || '0',
+      actualPrice: product.actualPrice || product.price_1 || "0",
       active_ads: product.active_ads,
-      origin: product.origin || 'Winning',
-      collection: product.collection || 'عامة'
+      origin: product.origin || "Winning",
+      collection: product.collection || "عامة",
     };
 
-    const res = await fetch('/api/products/saved/toggle', {
-      method: 'POST',
+    const res = await fetch("/api/products/saved/toggle", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     if (res.ok) {
       const data = await res.json();
-      if (data.action === 'saved') {
+      if (data.action === "saved") {
         product.saved_at = new Date().toISOString();
         product.rating = 0;
         product.notes = "";
@@ -1054,7 +1086,9 @@ async function toggleSaveProduct(product) {
         }
         showToast("تم حفظ المنتج بنجاح! ⭐", "success");
       } else {
-        savedProducts = savedProducts.filter(p => p.productUrl !== product.productUrl);
+        savedProducts = savedProducts.filter(
+          (p) => p.productUrl !== product.productUrl,
+        );
 
         if (btn) {
           btn.classList.remove("btn-success");
@@ -1064,24 +1098,37 @@ async function toggleSaveProduct(product) {
         }
         showToast("تمت إزالة المنتج من المحفوظات.", "info");
       }
-      
+
       const detailsSaveBtn = document.getElementById("details-save-btn");
-      if (detailsSaveBtn && currentProductForDetails && currentProductForDetails.productUrl === product.productUrl) {
-        const isSaved = data.action === 'saved';
+      if (
+        detailsSaveBtn &&
+        currentProductForDetails &&
+        currentProductForDetails.productUrl === product.productUrl
+      ) {
+        const isSaved = data.action === "saved";
         if (isSaved) {
           detailsSaveBtn.textContent = "⭐ محفوظ";
           detailsSaveBtn.style.background = "var(--color-success)";
           detailsSaveBtn.style.color = "white";
-          const collectionSelect = document.getElementById("details-collection-select");
+          const collectionSelect = document.getElementById(
+            "details-collection-select",
+          );
           if (collectionSelect) {
             collectionSelect.style.display = "inline-block";
-            collectionSelect.innerHTML = collections.map(c => `<option value="${c}" ${product.collection === c ? "selected" : ""}>📁 ${c}</option>`).join("");
+            collectionSelect.innerHTML = collections
+              .map(
+                (c) =>
+                  `<option value="${c}" ${product.collection === c ? "selected" : ""}>📁 ${c}</option>`,
+              )
+              .join("");
           }
         } else {
           detailsSaveBtn.textContent = "احفظ المنتج";
           detailsSaveBtn.style.background = "transparent";
           detailsSaveBtn.style.color = "var(--color-success)";
-          const collectionSelect = document.getElementById("details-collection-select");
+          const collectionSelect = document.getElementById(
+            "details-collection-select",
+          );
           if (collectionSelect) collectionSelect.style.display = "none";
         }
       }
@@ -1100,16 +1147,19 @@ let currentProductDetailsWithAnalysis = null;
 
 async function openDetailsModal(product) {
   currentProductForDetails = product;
-  
+
   const modal = document.getElementById("details-modal");
   if (!modal) return;
   modal.style.display = "flex";
-  
+
   // Set basic details
-  document.getElementById("details-title").textContent = product.title || "تفاصيل الإعلان والنشاط";
-  document.getElementById("details-info-title").textContent = product.title || "بدون عنوان";
-  document.getElementById("details-info-desc").textContent = product.ad_body || product.title || "لا يوجد نص تفصيلي للإعلان.";
-  
+  document.getElementById("details-title").textContent =
+    product.title || "تفاصيل الإعلان والنشاط";
+  document.getElementById("details-info-title").textContent =
+    product.title || "بدون عنوان";
+  document.getElementById("details-info-desc").textContent =
+    product.ad_body || product.title || "لا يوجد نص تفصيلي للإعلان.";
+
   // Populate all raw JSON properties in scrollable container
   const rawDataContainer = document.getElementById("details-raw-data-list");
   if (rawDataContainer) {
@@ -1126,18 +1176,26 @@ async function openDetailsModal(product) {
         `;
       }
     }
-    rawDataContainer.innerHTML = listHtml || `<div style="text-align: center; padding: 10px; color: var(--color-text-muted);">لا توجد بيانات إضافية</div>`;
+    rawDataContainer.innerHTML =
+      listHtml ||
+      `<div style="text-align: center; padding: 10px; color: var(--color-text-muted);">لا توجد بيانات إضافية</div>`;
   }
-  
+
   // Populate media items
   const mediaContainer = document.getElementById("details-media");
-  const imageUrls = (product.ad_image_urls || "").split(";").map(u => u.trim()).filter(Boolean);
-  const videoUrls = (product.ad_video_urls || "").split(";").map(u => u.trim()).filter(Boolean);
-  
-  const countryMeta = COUNTRIES_LIST.find(c => c.code === product.country);
+  const imageUrls = (product.ad_image_urls || "")
+    .split(";")
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const videoUrls = (product.ad_video_urls || "")
+    .split(";")
+    .map((u) => u.trim())
+    .filter(Boolean);
+
+  const countryMeta = COUNTRIES_LIST.find((c) => c.code === product.country);
   const countryFlag = countryMeta ? countryMeta.flag : "🌍";
   const overlayText = `${countryFlag} إعلان نشط`;
-  
+
   let mediaHtml = "";
   if (videoUrls.length > 0) {
     videoUrls.slice(0, 2).forEach((vUrl, i) => {
@@ -1171,17 +1229,18 @@ async function openDetailsModal(product) {
     mediaHtml = `<div class="no-media" style="grid-column: 1/-1; height: 200px;"><span>📦 لا توجد وسائط معاينة</span></div>`;
   }
   mediaContainer.innerHTML = mediaHtml;
-  
+
   // Set up Facebook library link
   let domain = "متجر خارجي";
   try {
-    if (product.productUrl) domain = new URL(product.productUrl).hostname.replace("www.", "");
+    if (product.productUrl)
+      domain = new URL(product.productUrl).hostname.replace("www.", "");
   } catch (e) {}
   const fbBtn = document.getElementById("details-fb-library-btn");
   if (fbBtn) {
     fbBtn.href = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=MA&q=${encodeURIComponent(product.title || "")}`;
   }
-  
+
   // Update store list button state
   const storeBtn = document.getElementById("details-store-btn");
   const isStoreAdded = watchedStores.includes(domain);
@@ -1194,18 +1253,27 @@ async function openDetailsModal(product) {
       storeBtn.className = "btn btn-secondary";
     }
   }
-  
+
   // Update save button and collection dropdown state
   const saveBtn = document.getElementById("details-save-btn");
   const collectionSelect = document.getElementById("details-collection-select");
-  const isSaved = savedProducts.some(p => p.productUrl === product.productUrl);
-  
+  const isSaved = savedProducts.some(
+    (p) => p.productUrl === product.productUrl,
+  );
+
   if (collectionSelect) {
     // We want the user to be able to save it under any collection, even if not yet saved!
     collectionSelect.style.display = "inline-block";
-    const productInSaved = savedProducts.find(p => p.productUrl === product.productUrl);
+    const productInSaved = savedProducts.find(
+      (p) => p.productUrl === product.productUrl,
+    );
     const savedCol = productInSaved ? productInSaved.collection : "عامة";
-    collectionSelect.innerHTML = collections.map(c => `<option value="${c}" ${savedCol === c ? "selected" : ""}>📁 ${c}</option>`).join("");
+    collectionSelect.innerHTML = collections
+      .map(
+        (c) =>
+          `<option value="${c}" ${savedCol === c ? "selected" : ""}>📁 ${c}</option>`,
+      )
+      .join("");
   }
 
   if (saveBtn) {
@@ -1229,23 +1297,23 @@ async function openDetailsModal(product) {
       ⏳ جاري تحميل مخطط النشاط...
     </div>
   `;
-  
+
   // Fetch activity from local API (cached or from external)
   let activityEntries = await fetchActivityData(product.productUrl, false);
-  
+
   if (!activityEntries || activityEntries.length === 0) {
     activityEntries = generateSimulatedActivity(product);
   }
-  
+
   renderTimelineAndMetrics(product, activityEntries);
 }
 
 function generateSimulatedActivity(product) {
   // Seed a simple PRNG from product_url for deterministic output
   let seed = 0;
-  const url = product.productUrl || product.product_url || '';
+  const url = product.productUrl || product.product_url || "";
   for (let i = 0; i < url.length; i++) {
-    seed = ((seed << 5) - seed) + url.charCodeAt(i);
+    seed = (seed << 5) - seed + url.charCodeAt(i);
     seed = seed & seed;
   }
   function pseudoRand() {
@@ -1256,7 +1324,7 @@ function generateSimulatedActivity(product) {
   const entries = [];
   const totalAds = product.ads_count || 12;
   const videoUrls = (product.ad_video_urls || "").split(";").filter(Boolean);
-  
+
   let baseDate = new Date();
   if (product.ad_start_date) {
     const pDate = new Date(product.ad_start_date);
@@ -1264,7 +1332,7 @@ function generateSimulatedActivity(product) {
   } else {
     baseDate.setDate(baseDate.getDate() - 180);
   }
-  
+
   // Interval 1: Launch peak
   const numInt1 = Math.max(1, Math.floor(totalAds * 0.4));
   for (let i = 0; i < numInt1; i++) {
@@ -1275,10 +1343,10 @@ function generateSimulatedActivity(product) {
     entries.push({
       ad_start_date: start.toISOString().split("T")[0],
       ad_end_date: end.toISOString().split("T")[0],
-      ad_video_urls: videoUrls[i % videoUrls.length] || ""
+      ad_video_urls: videoUrls[i % videoUrls.length] || "",
     });
   }
-  
+
   // Interval 2: Stagnation & Reactivation gap
   const numInt2 = Math.max(1, Math.floor(totalAds * 0.4));
   const gap1 = 45;
@@ -1290,10 +1358,10 @@ function generateSimulatedActivity(product) {
     entries.push({
       ad_start_date: start.toISOString().split("T")[0],
       ad_end_date: end.toISOString().split("T")[0],
-      ad_video_urls: videoUrls[(i + numInt1) % videoUrls.length] || ""
+      ad_video_urls: videoUrls[(i + numInt1) % videoUrls.length] || "",
     });
   }
-  
+
   // Interval 3: Current peak
   const numInt3 = Math.max(1, totalAds - numInt1 - numInt2);
   const gap2 = 120;
@@ -1305,73 +1373,78 @@ function generateSimulatedActivity(product) {
     entries.push({
       ad_start_date: start.toISOString().split("T")[0],
       ad_end_date: end.toISOString().split("T")[0],
-      ad_video_urls: videoUrls[(i + numInt1 + numInt2) % videoUrls.length] || ""
+      ad_video_urls:
+        videoUrls[(i + numInt1 + numInt2) % videoUrls.length] || "",
     });
   }
-  
+
   return entries;
 }
 
 function renderTimelineAndMetrics(product, entries) {
   entries.sort((a, b) => new Date(a.ad_start_date) - new Date(b.ad_start_date));
-  
+
   const dates = [];
-  entries.forEach(e => {
+  entries.forEach((e) => {
     if (e.ad_start_date) dates.push(new Date(e.ad_start_date));
     if (e.ad_end_date) dates.push(new Date(e.ad_end_date));
   });
-  
+
   const minDate = dates.length > 0 ? new Date(Math.min(...dates)) : new Date();
   const maxDate = dates.length > 0 ? new Date(Math.max(...dates)) : new Date();
-  
+
   const timeSpanMs = maxDate - minDate;
   const daysTotal = Math.max(15, Math.ceil(timeSpanMs / (1000 * 60 * 60 * 24)));
-  
+
   const numColumns = 12;
   const daysPerCol = Math.ceil(daysTotal / numColumns);
   const columnData = [];
   const today = new Date();
-  
+
   for (let i = 0; i < numColumns; i++) {
     const colStart = new Date(minDate);
     colStart.setDate(colStart.getDate() + i * daysPerCol);
     const colEnd = new Date(colStart);
     colEnd.setDate(colEnd.getDate() + daysPerCol);
-    
+
     let activeCount = 0;
     let endedInCol = 0;
     let startedInCol = 0;
-    
-    entries.forEach(e => {
+
+    entries.forEach((e) => {
       const eStart = new Date(e.ad_start_date);
       const eEnd = e.ad_end_date ? new Date(e.ad_end_date) : today;
-      
+
       if (eStart <= colEnd && eEnd >= colStart) {
         activeCount++;
       }
-      
-      if (e.ad_end_date && new Date(e.ad_end_date) >= colStart && new Date(e.ad_end_date) <= colEnd) {
+
+      if (
+        e.ad_end_date &&
+        new Date(e.ad_end_date) >= colStart &&
+        new Date(e.ad_end_date) <= colEnd
+      ) {
         endedInCol++;
       }
-      
+
       if (eStart >= colStart && eStart <= colEnd) {
         startedInCol++;
       }
     });
-    
+
     columnData.push({
       label: `${colStart.getDate()} ${getMonthNameAr(colStart.getMonth())}`,
       activeCount,
       ended: endedInCol > 0,
       started: startedInCol > 0,
       start: colStart,
-      end: colEnd
+      end: colEnd,
     });
   }
-  
+
   let reactivations = 0;
   let inGap = false;
-  
+
   columnData.forEach((col, idx) => {
     if (col.activeCount === 0) {
       inGap = true;
@@ -1381,16 +1454,16 @@ function renderTimelineAndMetrics(product, entries) {
       col.isReactivation = true;
     }
   });
-  
-  const maxActive = Math.max(...columnData.map(c => c.activeCount), 1);
+
+  const maxActive = Math.max(...columnData.map((c) => c.activeCount), 1);
   const chartContainer = document.getElementById("details-chart");
-  
+
   let chartHtml = "";
-  columnData.forEach(col => {
+  columnData.forEach((col) => {
     const heightPercent = (col.activeCount / maxActive) * 100;
     const isReact = col.isReactivation ? "reactivation" : "";
     const dotHtml = col.ended ? `<div class="details-chart-dot"></div>` : "";
-    
+
     chartHtml += `
       <div class="details-chart-bar-wrapper">
         <div class="chart-tooltip">${col.label}: ${col.activeCount} إعلان نشط</div>
@@ -1402,24 +1475,38 @@ function renderTimelineAndMetrics(product, entries) {
     `;
   });
   chartContainer.innerHTML = chartHtml;
-  
-  const uniqueVideos = [...new Set(entries.map(e => e.ad_video_urls).filter(Boolean))].length || 1;
+
+  const uniqueVideos =
+    [...new Set(entries.map((e) => e.ad_video_urls).filter(Boolean))].length ||
+    1;
   const adsCount = entries.length || product.ads_count || 12;
   const avgCreatives = product.avg_creatives || 2.1;
-  
+
   const viewsMinVal = (adsCount * 9.5 + uniqueVideos * 5) * 1000;
   const viewsMaxVal = viewsMinVal * 10;
   const formattedViews = formatMetricRange(viewsMinVal, viewsMaxVal);
   const formatEng = formatMetricRange(viewsMinVal * 0.07, viewsMaxVal * 0.07);
-  
+
   document.getElementById("details-views").textContent = formattedViews;
   document.getElementById("details-engagement").textContent = formatEng;
-  document.getElementById("details-first-seen").textContent = formatArDateString(minDate);
-  document.getElementById("details-last-seen").textContent = formatArDateString(maxDate);
-  document.getElementById("details-max-creatives").textContent = `${adsCount} كرياتيف`;
-  document.getElementById("details-reactivations").textContent = `${reactivations} أحداث`;
-  
-  const analysisText = generateAdAnalysis(adsCount, reactivations, avgCreatives);
+  document.getElementById("details-first-seen").textContent =
+    formatArDateString(minDate);
+  document.getElementById("details-last-seen").textContent =
+    formatArDateString(maxDate);
+  document.getElementById("details-max-creatives").textContent =
+    `${adsCount} كرياتيف`;
+  document.getElementById("details-reactivations").textContent =
+    `${reactivations} أحداث`;
+
+  const analysisText = generateAdAnalysis(
+    adsCount,
+    reactivations,
+    avgCreatives,
+    product,
+    columnData,
+    minDate,
+    maxDate,
+  );
   document.getElementById("details-analysis-text").innerHTML = analysisText;
 
   // Build the complete database capsule containing fetched & computed metrics
@@ -1434,8 +1521,8 @@ function renderTimelineAndMetrics(product, entries) {
       creatives_count: adsCount,
       unique_videos_count: uniqueVideos,
       reactivations_count: reactivations,
-      marketing_analysis: analysisText.replace(/<[^>]*>/g, '') // Strip HTML tags
-    }
+      marketing_analysis: analysisText.replace(/<[^>]*>/g, ""), // Strip HTML tags
+    },
   };
 
   // Re-populate all properties in scrollable container to include computed fields
@@ -1456,7 +1543,9 @@ function renderTimelineAndMetrics(product, entries) {
       }
     }
     // Display computed metrics
-    for (const [key, value] of Object.entries(currentProductDetailsWithAnalysis.computed_metrics)) {
+    for (const [key, value] of Object.entries(
+      currentProductDetailsWithAnalysis.computed_metrics,
+    )) {
       if (value !== null && value !== undefined && value !== "") {
         let valStr = String(value);
         if (valStr.length > 80) valStr = valStr.slice(0, 80) + "...";
@@ -1468,12 +1557,27 @@ function renderTimelineAndMetrics(product, entries) {
         `;
       }
     }
-    rawDataContainer.innerHTML = listHtml || `<div style="text-align: center; padding: 10px; color: var(--color-text-muted);">لا توجد بيانات إضافية</div>`;
+    rawDataContainer.innerHTML =
+      listHtml ||
+      `<div style="text-align: center; padding: 10px; color: var(--color-text-muted);">لا توجد بيانات إضافية</div>`;
   }
 }
 
 function getMonthNameAr(monthIdx) {
-  const arMonths = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+  const arMonths = [
+    "يناير",
+    "فبراير",
+    "مارس",
+    "أبريل",
+    "مايو",
+    "يونيو",
+    "يوليو",
+    "أغسطس",
+    "سبتمبر",
+    "أكتوبر",
+    "نوفمبر",
+    "ديسمبر",
+  ];
   return arMonths[monthIdx];
 }
 
@@ -1490,15 +1594,103 @@ function formatMetricRange(min, max) {
   return `${formatNum(min)} - ${formatNum(max)}`;
 }
 
-function generateAdAnalysis(adCount, reactCount, avgCreatives) {
-  let text = `قام المعلن باختيار مكثف <b>(High Peak)</b> من خلال تفعيل <b>${adCount} إعلان نشط</b> بمتوسط <b>${avgCreatives} مشاهد إبداعية (Creatives)</b> للمنتج، ثم أوقف الإعلانات الخاسرة. ويركز الآن فقط على الإعلانات الرابحة لزيادة المبيعات <b>(Scaling)</b>. `;
-  
-  if (reactCount > 0) {
-    text += `نلاحظ وجود <b>إعادة نشاط (${reactCount} أحداث)</b> قوية للترويج بعد فترة توقف ملحوظة. هذه إشارة ذهبية قوية جداً لربحية المنتج؛ حيث توقفت الإعلانات مؤقتاً (ربما بسبب نفاد المخزون) ثم عادت بقوة بمجرد توفر السلعة من جديد، مما يؤكد الطلب العالي عليها!`;
-  } else {
-    text += `تظهر البيانات استمرارية إعلانية منتظمة بدون انقطاع، وهي إشارة ممتازة تدل على استقرار الأرباح ومبيعات تصاعدية مستمرة تجعل من السهل اتخاذ قرار فوري بالدفع واختيار هذا المنتج.`;
+function generateAdAnalysis(
+  adCount,
+  reactCount,
+  avgCreatives,
+  product,
+  columnData,
+  minDate,
+  maxDate,
+) {
+  // --- استخراج إشارات من بيانات حقيقية ---
+  const isActive =
+    product?.active_ads === true ||
+    product?.active_ads === 1 ||
+    product?.active_ads === "t";
+  const startDate = minDate || new Date();
+  const endDate = maxDate || new Date();
+  const lifeSpanDays = Math.round(
+    (endDate - startDate) / (1000 * 60 * 60 * 24),
+  );
+  const lifeSpanText =
+    lifeSpanDays >= 30
+      ? `${Math.floor(lifeSpanDays / 30)} شهر`
+      : `${lifeSpanDays} يوم`;
+
+  // --- تحليل شكل المنحنى من columnData ---
+  let trend = "unknown";
+  let peakCol = 0;
+  let peakIdx = 0;
+
+  if (columnData && columnData.length >= 3) {
+    const counts = columnData.map((c) => c.activeCount);
+    peakCol = Math.max(...counts);
+    peakIdx = counts.indexOf(peakCol);
+
+    const firstHalf = counts.slice(0, Math.floor(counts.length / 2));
+    const secondHalf = counts.slice(Math.floor(counts.length / 2));
+    const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+    const lastVal = counts[counts.length - 1];
+    const nonZero = counts.filter((c) => c > 0).length;
+
+    if (nonZero <= 2) {
+      trend = "testing"; // اختبار محدود
+    } else if (peakIdx <= 2 && secondAvg < firstAvg * 0.5) {
+      trend = "peak_then_drop"; // ذروة مبكرة ثم انخفاض
+    } else if (secondAvg > firstAvg * 1.3) {
+      trend = "scaling"; // تصاعد = scaling
+    } else if (lastVal === 0 && !isActive) {
+      trend = "stopped"; // توقف كامل
+    } else if (reactCount > 0) {
+      trend = "reactivated"; // إعادة تنشيط
+    } else if (Math.abs(secondAvg - firstAvg) / Math.max(firstAvg, 1) < 0.3) {
+      trend = "stable"; // استقرار
+    } else {
+      trend = "fluctuating"; // تذبذب
+    }
   }
-  return text;
+
+  // --- بناء التحليل بناءً على الإشارات الحقيقية ---
+  let badge = "";
+  let text = "";
+
+  switch (trend) {
+    case "scaling":
+      badge = `<span class="strategy-badge" style="background:rgba(16,185,129,0.15);color:var(--color-success)">🚀 توسع نشط (Scaling)</span>`;
+      text = `يشهد هذا الإعلان <b>تصاعداً ملحوظاً</b> في عدد الكرياتيف النشطة مع مرور الوقت، وهي علامة واضحة على <b>Scaling</b> — أي أن المعلن يضخ ميزانيات متزايدة لأن الأداء مربح. المنتج نشط منذ <b>${lifeSpanText}</b> بمعدل <b>${avgCreatives} كرياتيف</b>، وهذا مستوى ثقة عالٍ.`;
+      break;
+    case "peak_then_drop":
+      badge = `<span class="strategy-badge" style="background:rgba(245,158,11,0.15);color:var(--color-warning)">⚡ ذروة ثم تصفية (Testing → Filtering)</span>`;
+      text = `بدأ المعلن بـ<b>اختبار مكثف (High Peak)</b> في مرحلة الإطلاق ثم أوقف الإعلانات الخاسرة تدريجياً. الحالة الحالية <b>${isActive ? "🟢 لا يزال نشطاً" : "🔴 متوقف حالياً"}</b>. إذا كانت الإعلانات المتبقية لا تزال تعمل فهذا يعني أن المعلن وصل لـ<b>Winning Creatives</b>.`;
+      break;
+    case "testing":
+      badge = `<span class="strategy-badge" style="background:rgba(99,102,241,0.15);color:#6366f1">🔬 مرحلة اختبار (Testing Phase)</span>`;
+      text = `يبدو أن المعلن لا يزال في <b>مرحلة اختبار السوق</b> — عدد الإعلانات محدود (<b>${adCount} إعلان</b>) ومدة النشاط <b>${lifeSpanText}</b>. لم تصل الحملة بعد لمرحلة الـ Scaling، لكن وجودها يعني أن المعلن يدرس الاستجابة.`;
+      break;
+    case "stopped":
+      badge = `<span class="strategy-badge" style="background:rgba(239,68,68,0.15);color:var(--color-error)">⏸️ متوقف (Paused)</span>`;
+      text = `<b>الإعلانات متوقفة حالياً</b> بعد فترة نشاط امتدت <b>${lifeSpanText}</b>. السبب المحتمل: <b>نفاد المخزون</b>، إعادة هيكلة الحملة، أو انتهاء الموسم. المنتج كان يُعلَن عنه بـ<b>${adCount} إعلان</b> — إذا عاد النشاط فهو إشارة شراء قوية.`;
+      break;
+    case "reactivated":
+      badge = `<span class="strategy-badge" style="background:rgba(16,185,129,0.2);color:var(--color-success)">🔄 إعادة تنشيط (${reactCount}x)</span>`;
+      text = `<b>🔥 الإشارة الذهبية!</b> رُصدت <b>${reactCount} أحداث إعادة تنشيط</b> بعد فترات خمول — وهذا الدليل الأقوى على ربحية المنتج. المعلن أوقف الحملة مؤقتاً (غالباً بسبب <b>نفاد المخزون</b>) ثم أعادها بمجرد توفر البضاعة. مدة الحياة الكلية للإعلان: <b>${lifeSpanText}</b>.`;
+      break;
+    case "stable":
+      badge = `<span class="strategy-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6">📊 استقرار (Steady State)</span>`;
+      text = `يُظهر هذا الإعلان <b>استقراراً إعلانياً منتظماً</b> على مدار <b>${lifeSpanText}</b> بمعدل <b>${avgCreatives} كرياتيف</b>. الاستقرار = ربحية متواصلة، لأن المعلنين لا يستمرون في الدفع لإعلانات خاسرة.`;
+      break;
+    case "fluctuating":
+      badge = `<span class="strategy-badge" style="background:rgba(245,158,11,0.15);color:var(--color-warning)">📈 متذبذب (A/B Testing)</span>`;
+      text = `يتذبذب نشاط الإعلان بشكل غير منتظم على مدار <b>${lifeSpanText}</b>، مما يشير إلى <b>اختبارات A/B مستمرة</b> — المعلن يجرب مواد إبداعية مختلفة لإيجاد أفضل صيغة. <b>${adCount} إعلان</b> بمتوسط <b>${avgCreatives} كرياتيف</b>.`;
+      break;
+    default:
+      badge = `<span class="strategy-badge">📋 بيانات غير كافية</span>`;
+      text = `البيانات المتاحة تشمل <b>${adCount} إعلان</b> بمتوسط <b>${avgCreatives} كرياتيف</b> ومدة <b>${lifeSpanText}</b>. <b>الحالة: ${isActive ? "🟢 نشط" : "🔴 متوقف"}</b>. لتحليل أعمق يُفضَّل الضغط على "🔄 تحديث النشاط" لجلب البيانات الحية.`;
+  }
+
+  return `${badge}<p style="margin-top:10px">${text}</p>`;
 }
 
 function closeDetailsModal() {
@@ -1529,29 +1721,32 @@ window.addEventListener("click", (event) => {
 
 async function toggleStoreListAction() {
   if (!currentProductForDetails) return;
-  
+
   let domain = "متجر خارجي";
   try {
     if (currentProductForDetails.productUrl) {
-      domain = new URL(currentProductForDetails.productUrl).hostname.replace("www.", "");
+      domain = new URL(currentProductForDetails.productUrl).hostname.replace(
+        "www.",
+        "",
+      );
     }
   } catch (e) {}
-  
+
   const btn = document.getElementById("details-store-btn");
-  
+
   try {
-    const res = await fetch('/api/products/watchlist/toggle', {
-      method: 'POST',
+    const res = await fetch("/api/products/watchlist/toggle", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ domain })
+      body: JSON.stringify({ domain }),
     });
-    
+
     if (res.ok) {
       const data = await res.json();
-      if (data.action === 'removed') {
-        watchedStores = watchedStores.filter(d => d !== domain);
+      if (data.action === "removed") {
+        watchedStores = watchedStores.filter((d) => d !== domain);
         if (btn) {
           btn.textContent = "➕ إضافة المتجر للقائمة";
           btn.className = "btn btn-secondary";
@@ -1575,19 +1770,29 @@ async function toggleStoreListAction() {
 }
 
 function showProductAnalysisToast() {
-  showToast("📊 جاري بدء تحليل أداء المنتج بالذكاء الاصطناعي وتجهيز لوحة المؤشرات...", "info");
+  showToast(
+    "📊 جاري بدء تحليل أداء المنتج بالذكاء الاصطناعي وتجهيز لوحة المؤشرات...",
+    "info",
+  );
 }
 
 function showAdAnalysisToast() {
-  showToast("✨ جاري فحص زوايا التسويق، العروض والـ Copywriting الخاص بالإعلان...", "success");
+  showToast(
+    "✨ جاري فحص زوايا التسويق، العروض والـ Copywriting الخاص بالإعلان...",
+    "success",
+  );
 }
 
 function downloadProductMedia() {
   if (!currentProductForDetails) return;
-  const videoUrls = (currentProductForDetails.ad_video_urls || "").split(";").filter(Boolean);
-  const imageUrls = (currentProductForDetails.ad_image_urls || "").split(";").filter(Boolean);
+  const videoUrls = (currentProductForDetails.ad_video_urls || "")
+    .split(";")
+    .filter(Boolean);
+  const imageUrls = (currentProductForDetails.ad_image_urls || "")
+    .split(";")
+    .filter(Boolean);
   const mediaUrl = videoUrls[0] || imageUrls[0];
-  
+
   if (mediaUrl) {
     const a = document.createElement("a");
     a.href = mediaUrl;
@@ -1606,21 +1811,23 @@ async function handleDetailsCollectionChange() {
   if (!currentProductForDetails) return;
   const select = document.getElementById("details-collection-select");
   if (!select) return;
-  
+
   const colName = select.value;
-  
-  const p = savedProducts.find(x => x.productUrl === currentProductForDetails.productUrl);
+
+  const p = savedProducts.find(
+    (x) => x.productUrl === currentProductForDetails.productUrl,
+  );
   if (p) {
     try {
-      const res = await fetch('/api/products/saved/collection', {
-        method: 'POST',
+      const res = await fetch("/api/products/saved/collection", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           product_url: p.productUrl,
-          collection: colName
-        })
+          collection: colName,
+        }),
       });
       if (res.ok) {
         p.collection = colName;
@@ -1638,7 +1845,8 @@ async function handleDetailsCollectionChange() {
 }
 
 function downloadProductDataJSON() {
-  const targetData = currentProductDetailsWithAnalysis || currentProductForDetails;
+  const targetData =
+    currentProductDetailsWithAnalysis || currentProductForDetails;
   if (!targetData) {
     showToast("لا توجد بيانات منتج صالحة للتحميل.", "warning");
     return;
@@ -1648,7 +1856,7 @@ function downloadProductDataJSON() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `product_data_${currentProductForDetails.title ? currentProductForDetails.title.slice(0, 15).replace(/\s+/g, '_') : 'ad'}_${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `product_data_${currentProductForDetails.title ? currentProductForDetails.title.slice(0, 15).replace(/\s+/g, "_") : "ad"}_${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1659,11 +1867,11 @@ function downloadProductDataJSON() {
 async function fetchActivityData(productUrl, refresh = false) {
   try {
     const params = new URLSearchParams({ product_url: productUrl });
-    if (refresh) params.set('refresh', '1');
+    if (refresh) params.set("refresh", "1");
     const res = await fetch(`/api/products/activity?${params.toString()}`);
     if (!res.ok) return null;
     const result = await res.json();
-    if (result.source === 'error') return null;
+    if (result.source === "error") return null;
     return result.activity || null;
   } catch (e) {
     console.warn("Failed to fetch activity data", e);
