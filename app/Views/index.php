@@ -17,7 +17,7 @@
       rel="stylesheet"
     />
 
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.1" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.2" />
   </head>
   <body>
     <div class="app-shell">
@@ -828,6 +828,6 @@
     <script>
       window.INITIAL_PRODUCTS_FROM_DB = <?= isset($initialData) ? json_encode($initialData) : 'null' ?>;
     </script>
-    <script src="<?= base_url('index.js') ?>?v=1.1"></script>
+    <script src="<?= base_url('index.js') ?>?v=1.2"></script>
   </body>
 </html>

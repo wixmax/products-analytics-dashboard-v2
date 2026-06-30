@@ -14,7 +14,7 @@
       rel="stylesheet"
     />
 
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.1" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.2" />
     <style>
       .rating-stars {
         display: flex;
@@ -465,6 +465,6 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="<?= base_url('saved-ads.js') ?>?v=1.1"></script>
+    <script src="<?= base_url('saved-ads.js') ?>?v=1.2"></script>
   </body>
 </html>

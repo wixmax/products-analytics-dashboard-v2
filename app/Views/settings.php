@@ -14,7 +14,7 @@
       rel="stylesheet"
     />
 
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.1" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.2" />
     <style>
       .settings-container {
         max-width: 800px;

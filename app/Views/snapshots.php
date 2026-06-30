@@ -13,7 +13,7 @@
       rel="stylesheet"
     />
 
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.1" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.2" />
     <style>
       .snapshots-header {
         display: flex;
@@ -271,6 +271,6 @@
     <!-- Toast -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="<?= base_url('snapshots.js') ?>?v=1.0"></script>
+    <script src="<?= base_url('snapshots.js') ?>?v=1.1"></script>
   </body>
 </html>
