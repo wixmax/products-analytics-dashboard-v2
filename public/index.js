@@ -1307,7 +1307,30 @@ async function openDetailsModal(product) {
   `;
 
   // Fetch activity from local API (cached or from external)
-  let activityEntries = await fetchActivityData(product.productUrl, false);
+  let resData = await fetchActivityData(product.productUrl, false);
+  let activityEntries = null;
+  let backendStrategy = null;
+
+  if (resData) {
+    activityEntries = resData.activity;
+    backendStrategy = resData.strategy_analysis;
+  }
+
+  if (!activityEntries || activityEntries.length === 0) {
+    activityEntries = generateSimulatedActivity(product);
+  }
+
+  // تمرير البيانات إلى دالة الرسم
+  renderTimelineAndMetrics(product, activityEntries);
+
+  // تفعيل التحليل الواقعي القادم من الـ Controller فوراً إذا وُجد
+  if (backendStrategy) {
+    const badgeElem = document.querySelector(".strategy-badge");
+    if (badgeElem) badgeElem.textContent = backendStrategy.badge;
+
+    const textElem = document.getElementById("details-analysis-text");
+    if (textElem) textElem.textContent = backendStrategy.text;
+  }
 
   if (!activityEntries || activityEntries.length === 0) {
     activityEntries = generateSimulatedActivity(product);
@@ -1872,6 +1895,7 @@ function downloadProductDataJSON() {
   showToast("تم تحميل بيانات المنتج بصيغة JSON! 📥", "success");
 }
 
+// الكود الجديد للدالة بعد التعديل
 async function fetchActivityData(productUrl, refresh = false) {
   try {
     const params = new URLSearchParams({ product_url: productUrl });
@@ -1880,13 +1904,19 @@ async function fetchActivityData(productUrl, refresh = false) {
     if (!res.ok) return null;
     const result = await res.json();
     if (result.source === "error") return null;
-    return result.activity || null;
+
+    // التعديل: إرجاع كائن يحتوي على النشاط والتحليل الذكي معاً
+    return {
+      activity: result.activity || null,
+      strategy_analysis: result.strategy_analysis || null,
+    };
   } catch (e) {
     console.warn("Failed to fetch activity data", e);
     return null;
   }
 }
 
+// ابحث عن الدالة الحالية واستبدلها بالتالي:
 async function refreshActivityData() {
   if (!currentProductForDetails) return;
   const product = currentProductForDetails;
@@ -1895,10 +1925,29 @@ async function refreshActivityData() {
       ⏳ جاري تحديث بيانات النشاط...
     </div>
   `;
-  let activityEntries = await fetchActivityData(product.productUrl, true);
+
+  let resData = await fetchActivityData(product.productUrl, true);
+  let activityEntries = null;
+  let backendStrategy = null;
+
+  if (resData) {
+    activityEntries = resData.activity;
+    backendStrategy = resData.strategy_analysis;
+  }
+
   if (!activityEntries || activityEntries.length === 0) {
     activityEntries = generateSimulatedActivity(product);
   }
+
   renderTimelineAndMetrics(product, activityEntries);
-  showToast("✅ تم تحديث بيانات النشاط", "success");
+
+  if (backendStrategy) {
+    const badgeElem = document.querySelector(".strategy-badge");
+    if (badgeElem) badgeElem.textContent = backendStrategy.badge;
+
+    const textElem = document.getElementById("details-analysis-text");
+    if (textElem) textElem.textContent = backendStrategy.text;
+  }
+
+  showToast("✅ تم تحديث بيانات النشاط والتحليل الاستراتيجي", "success");
 }

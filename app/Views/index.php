@@ -583,7 +583,7 @@
                   margin-top: 8px;
                 "
               >
-                قام المعلن باختيار مكثف (High Peak)، ثم أوقف الإعلانات الخاسرة.
+                قام المعلن باختيار مكثف (High hhhh Peak)، ثم أوقف الإعلانات الخاسرة.
                 ويركز الآن فقط على الإعلانات الرابحة لزيادة المبيعات (Scaling).
                 هذه إشارة قوية جداً لمنتج مربح. توقفت الإعلانات ثم عادت أو
                 اختفت، هذا يعني غالباً أن المنتج نفذ من المخزون.
@@ -828,6 +828,6 @@
     <script>
       window.INITIAL_PRODUCTS_FROM_DB = <?= isset($initialData) ? json_encode($initialData) : 'null' ?>;
     </script>
-    <script src="<?= base_url('index.js') ?>?v=1.2"></script>
+    <script src="<?= base_url('index.js') ?>?v=1.3"></script>
   </body>
 </html>
