@@ -167,5 +167,41 @@ async function runSync() {
   }
 }
 
+// =========================================
+// Theme Engine (same as index.js / saved-ads.js)
+// =========================================
+async function setupTheme() {
+  const btn = document.getElementById("theme-toggle-btn");
+  if (!btn) return;
+
+  try {
+    const res = await fetch("/api/settings/app-theme");
+    if (res.ok) {
+      const data = await res.json();
+      document.documentElement.setAttribute("data-theme", data.value || "light");
+    }
+  } catch (err) {
+    console.error("Error fetching theme setting:", err);
+  }
+
+  btn.onclick = async () => {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const nextTheme = isDark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "app-theme", value: nextTheme }),
+      });
+    } catch (err) {
+      console.error("Error saving theme:", err);
+    }
+  };
+}
+
 // Load on page load
-document.addEventListener('DOMContentLoaded', loadSnapshots);
+document.addEventListener('DOMContentLoaded', () => {
+  setupTheme();
+  loadSnapshots();
+});

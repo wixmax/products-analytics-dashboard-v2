@@ -222,6 +222,7 @@
               جميع نسخ JSON المحفوظة عند كل عملية جلب من API، مرتبة حسب الأحدث
             </p>
           </div>
+          <button class="theme-toggle" id="theme-toggle-btn" aria-label="تبديل الثيم">🌓</button>
         </div>
 
         <!-- Controls -->
