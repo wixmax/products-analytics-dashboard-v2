@@ -1183,14 +1183,22 @@ async function openDetailsModal(product) {
 
   // Populate media items
   const mediaContainer = document.getElementById("details-media");
-  const imageUrls = (product.ad_image_urls || "")
-    .split(";")
-    .map((u) => u.trim())
-    .filter(Boolean);
-  const videoUrls = (product.ad_video_urls || "")
-    .split(";")
-    .map((u) => u.trim())
-    .filter(Boolean);
+  const imageUrls = [
+    ...new Set(
+      (product.ad_image_urls || "")
+        .split(";")
+        .map((u) => u.trim())
+        .filter(Boolean),
+    ),
+  ];
+  const videoUrls = [
+    ...new Set(
+      (product.ad_video_urls || "")
+        .split(";")
+        .map((u) => u.trim())
+        .filter(Boolean),
+    ),
+  ];
 
   const countryMeta = COUNTRIES_LIST.find((c) => c.code === product.country);
   const countryFlag = countryMeta ? countryMeta.flag : "🌍";
@@ -1479,9 +1487,8 @@ function renderTimelineAndMetrics(product, entries) {
   const uniqueVideos =
     [...new Set(entries.map((e) => e.ad_video_urls).filter(Boolean))].length ||
     1;
-  const adsCount = entries.length || product.ads_count || 12;
-  const avgCreatives =
-    product.avg_creatives || product.ads_count || entries.length || 1;
+  const adsCount = product.ads_count || entries.length || 12;
+  const avgCreatives = product.avg_creatives || 1;
 
   const viewsMinVal = (adsCount * 9.5 + uniqueVideos * 5) * 1000;
   const viewsMaxVal = viewsMinVal * 10;
