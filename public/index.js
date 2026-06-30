@@ -165,9 +165,8 @@ function initFiltersPanel() {
 
   // Render Countries select
   const countryContainer = document.getElementById("api-filter-country");
-  let countryHtml = `<option value="all" selected>الكل (All Countries)</option>`;
-  countryHtml += COUNTRIES_LIST.map(
-    (c) => `<option value="${c.code}">${c.flag} ${c.name} (${c.code})</option>`,
+  let countryHtml = COUNTRIES_LIST.map(
+    (c) => `<option value="${c.code}" selected>${c.flag} ${c.name} (${c.code})</option>`,
   ).join("");
   countryContainer.innerHTML = countryHtml;
 }
@@ -230,10 +229,7 @@ function getActiveFiltersObject() {
     (opt) => opt.value,
   );
   let country = "";
-  if (
-    selectedCountryValues.length === 0 ||
-    selectedCountryValues.includes("all")
-  ) {
+  if (selectedCountryValues.length === 0) {
     country = COUNTRIES_LIST.map((c) => c.code).join(";");
   } else {
     country = selectedCountryValues.join(";");
@@ -1245,6 +1241,18 @@ async function openDetailsModal(product) {
 }
 
 function generateSimulatedActivity(product) {
+  // Seed a simple PRNG from product_url for deterministic output
+  let seed = 0;
+  const url = product.productUrl || product.product_url || '';
+  for (let i = 0; i < url.length; i++) {
+    seed = ((seed << 5) - seed) + url.charCodeAt(i);
+    seed = seed & seed;
+  }
+  function pseudoRand() {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  }
+
   const entries = [];
   const totalAds = product.ads_count || 12;
   const videoUrls = (product.ad_video_urls || "").split(";").filter(Boolean);
@@ -1263,7 +1271,7 @@ function generateSimulatedActivity(product) {
     const start = new Date(baseDate);
     start.setDate(start.getDate() + i * 2);
     const end = new Date(start);
-    end.setDate(end.getDate() + 15 + Math.floor(Math.random() * 20));
+    end.setDate(end.getDate() + 15 + Math.floor(pseudoRand() * 20));
     entries.push({
       ad_start_date: start.toISOString().split("T")[0],
       ad_end_date: end.toISOString().split("T")[0],
@@ -1278,7 +1286,7 @@ function generateSimulatedActivity(product) {
     const start = new Date(baseDate);
     start.setDate(start.getDate() + gap1 + i * 3);
     const end = new Date(start);
-    end.setDate(end.getDate() + 20 + Math.floor(Math.random() * 30));
+    end.setDate(end.getDate() + 20 + Math.floor(pseudoRand() * 30));
     entries.push({
       ad_start_date: start.toISOString().split("T")[0],
       ad_end_date: end.toISOString().split("T")[0],
@@ -1289,12 +1297,11 @@ function generateSimulatedActivity(product) {
   // Interval 3: Current peak
   const numInt3 = Math.max(1, totalAds - numInt1 - numInt2);
   const gap2 = 120;
-  const today = new Date();
   for (let i = 0; i < numInt3; i++) {
     const start = new Date(baseDate);
     start.setDate(start.getDate() + gap2 + i * 4);
     const end = new Date();
-    end.setDate(today.getDate() + 5 + i * 2);
+    end.setDate(end.getDate() + 5 + i * 2);
     entries.push({
       ad_start_date: start.toISOString().split("T")[0],
       ad_end_date: end.toISOString().split("T")[0],

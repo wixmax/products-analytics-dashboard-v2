@@ -36,9 +36,14 @@ class Products extends ResourceController
                     ->groupEnd();
         }
 
-        // Country
+        // Country (semicolon-separated for multiple selection)
         if (!empty($country) && $country !== 'all') {
-            $builder->where('country', $country);
+            $countries = explode(';', $country);
+            if (count($countries) > 1) {
+                $builder->whereIn('country', $countries);
+            } else {
+                $builder->where('country', $country);
+            }
         }
 
         // API version filter
@@ -405,20 +410,62 @@ class Products extends ResourceController
             $origin = 'Winning';
         }
 
+        // Extract filters from URL input if present
+        $requestedVersion = null;
+        $requestedCountry = null;
+        $parsedUrl = parse_url($url, PHP_URL_QUERY);
+        if ($parsedUrl) {
+            parse_str($parsedUrl, $queryParams);
+            if (isset($queryParams['input'])) {
+                $inputDecoded = json_decode($queryParams['input'], true);
+                if (is_array($inputDecoded)) {
+                    $json = $inputDecoded[0]['json'] ?? [];
+                    if (isset($json['v'])) {
+                        $requestedVersion = $json['v'];
+                    }
+                    if (isset($json['country'])) {
+                        $requestedCountry = $json['country'];
+                    }
+                }
+            }
+        }
+
         $settingModel = new \App\Models\SettingModel();
         $dataSourceSetting = $settingModel->find('data-source');
         $dataSource = $dataSourceSetting ? $dataSourceSetting['value'] : 'database';
 
         $model = new ProductModel();
         
-        // Check if we have products of this origin in the database
-        if ($dataSource === 'database') {
+        // Use DB cache only if no specific version requested or requested version matches stored data
+        $useDbCache = ($dataSource === 'database');
+        if ($useDbCache && $requestedVersion !== null) {
+            // Check if we have products with this api_version
+            $countWithVersion = $model->where('origin', $origin)
+                                      ->where('api_version', $requestedVersion)
+                                      ->countAllResults();
+            if ($countWithVersion === 0) {
+                $useDbCache = false;
+            }
+        }
+
+        if ($useDbCache) {
             $count = $model->where('origin', $origin)->countAllResults();
             if ($count > 0) {
             // Fetch from database instead of calling the external API
-            $products = $model->where('origin', $origin)
-                              ->orderBy('ads_count', 'DESC')
-                              ->findAll();
+            $builder = $model->where('origin', $origin);
+            if ($requestedVersion !== null) {
+                $builder->where('api_version', $requestedVersion);
+            }
+            if ($requestedCountry !== null) {
+                $countries = explode(';', $requestedCountry);
+                if (count($countries) > 1) {
+                    $builder->whereIn('country', $countries);
+                } else {
+                    $builder->where('country', $requestedCountry);
+                }
+            }
+            $products = $builder->orderBy('ads_count', 'DESC')
+                                ->findAll();
 
             $formatted = [
                 'result' => [
@@ -1005,10 +1052,10 @@ class Products extends ResourceController
         $model = new ProductModel();
         $product = $model->where('product_url', $productUrl)->first();
 
-        // Return cached data if exists and no refresh requested
+        // Return cached data only if it's non-empty and no refresh requested
         if (!$refresh && $product && !empty($product['activity_data'])) {
             $data = json_decode($product['activity_data'], true);
-            if ($data !== null) {
+            if (is_array($data) && count($data) > 0) {
                 return $this->respond([
                     'source' => 'cache',
                     'activity' => $data,
@@ -1031,7 +1078,11 @@ class Products extends ResourceController
             ]);
 
             if ($response->getStatusCode() !== 200) {
-                return $this->fail('External API request failed', 502);
+                return $this->respond([
+                    'source' => 'api_error',
+                    'error' => 'External API returned status ' . $response->getStatusCode(),
+                    'activity' => [],
+                ]);
             }
 
             $rawBody = $response->getBody();
@@ -1039,8 +1090,8 @@ class Products extends ResourceController
             $base = is_array($parsed) ? ($parsed[0] ?? null) : $parsed;
             $activity = $base['result']['data']['json'] ?? [];
 
-            // Save to database
-            if ($product) {
+            // Only cache if we got real data
+            if (!empty($activity) && $product) {
                 $model->update($product['id'], ['activity_data' => json_encode($activity)]);
             }
 
