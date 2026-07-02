@@ -15,7 +15,7 @@
     />
 
     <link rel="stylesheet" href="https://vjs.zencdn.net/8.16.1/video-js.css" />
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.4" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.5" />
     <style>
       .rating-stars {
         display: flex;
@@ -538,6 +538,6 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
-    <script src="<?= base_url('saved-ads.js') ?>?v=1.7"></script>
+    <script src="<?= base_url('saved-ads.js') ?>?v=1.8"></script>
   </body>
 </html>

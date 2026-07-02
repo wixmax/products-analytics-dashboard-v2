@@ -527,7 +527,7 @@ function processLoadedData(rawData, sourceInfo) {
         ad_video_urls: p.ad_video_urls || "",
         actualPrice: p.actualPrice || p.price_1 || 0,
         active_ads: p.active_ads !== undefined ? p.active_ads : true,
-        api_version: p.api_version || '',
+        api_version: p.api_version || "",
       };
     });
 
@@ -849,9 +849,10 @@ function renderProductGrid(products) {
       if (videoUrls.length > 0) {
         mediaHtml = `
       <div class="media-badge">🎥 فيديو (${videoUrls.length})</div>
-      <video id="vjs-${safeId}" class="video-js vjs-big-play-centered" preload="none" controls playsinline${imageUrls[0] ? ` poster="${imageUrls[0]}"` : ""}>
-        <source src="${videoUrls[0]}" type="video/mp4">
-      </video>
+      <div class="vid-placeholder" data-vid-src="${videoUrls[0]}" data-vid-poster="${imageUrls[0] || ""}" id="vp-${safeId}">
+        ${imageUrls[0] ? `<img src="${imageUrls[0]}" alt="" class="vid-placeholder-img">` : `<div class="vid-placeholder-bg"></div>`}
+        <div class="vid-play-btn">▶</div>
+      </div>
     `;
       } else if (imageUrls.length > 0) {
         mediaHtml = `
@@ -906,7 +907,7 @@ function renderProductGrid(products) {
         <button onclick='openIndexInfoModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.6rem; font-size: 0.7rem;">ℹ️ معلومات</button>
         <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">📊 تفاصيل</button>
         ${saveBtnHtml}
-        ${videoUrls.length > 0 ? `<a href="${videoUrls[0]}" target="_blank" class="btn btn-secondary" style="flex:0; aspect-ratio:1; padding: 0.4rem; display:flex; align-items:center; justify-content:center;" title="فتح الفيديو">🔗</a>` : ""}
+        ${videoUrls.length < 0 ? `<a href="${videoUrls[0]}" target="_blank" class="btn btn-secondary" style="flex:0; aspect-ratio:1; padding: 0.4rem; display:flex; align-items:center; justify-content:center;" title="فتح الفيديو">🔗</a>` : ""}
       </div>
     </article>
   `;
@@ -915,16 +916,70 @@ function renderProductGrid(products) {
   initVideoJs();
 }
 
+let vidObserver = null;
+
 function initVideoJs(scope) {
-  (scope || document).querySelectorAll('video.video-js').forEach(el => {
+  if (!vidObserver && typeof IntersectionObserver !== "undefined") {
+    vidObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const ph = entry.target;
+            loadVideoPlaceholder(ph);
+            vidObserver.unobserve(ph);
+          }
+        });
+      },
+      { rootMargin: "200px" },
+    );
+  }
+
+  (scope || document).querySelectorAll("video.video-js").forEach((el) => {
     if (el.dataset.vjsInited) return;
-    el.dataset.vjsInited = '1';
+    el.dataset.vjsInited = "1";
     try {
-      if (typeof videojs === 'function') {
-        videojs(el, { fluid: true, controls: true });
+      if (typeof videojs === "function") {
+        videojs(el, { fluid: true, controls: true, preload: "none" });
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   });
+
+  (scope || document)
+    .querySelectorAll(".vid-placeholder:not([data-vid-loaded])")
+    .forEach((el) => {
+      el.dataset.vidLoaded = "1";
+      if (vidObserver) {
+        vidObserver.observe(el);
+      } else {
+        loadVideoPlaceholder(el);
+      }
+    });
+}
+
+function loadVideoPlaceholder(ph) {
+  const src = ph.dataset.vidSrc;
+  const poster = ph.dataset.vidPoster;
+  const vid = document.createElement("video");
+  vid.id = ph.id ? ph.id.replace("vp-", "vjs-") : "";
+  vid.className = "video-js vjs-big-play-centered";
+  vid.controls = true;
+  vid.playsInline = true;
+  vid.preload = "none";
+  if (poster) vid.poster = poster;
+  const source = document.createElement("source");
+  source.src = src;
+  source.type = "video/mp4";
+  vid.appendChild(source);
+  ph.parentNode.replaceChild(vid, ph);
+  try {
+    if (typeof videojs === "function") {
+      videojs(vid, { fluid: true, controls: true, preload: "none" });
+    }
+  } catch (e) {
+    /* ignore */
+  }
 }
 
 // =========================================
@@ -1738,19 +1793,25 @@ function openIndexInfoModal(p) {
       if (diffDays === 0) timeAgoText = " (اليوم)";
       else if (diffDays === 1) timeAgoText = " (أمس)";
       else if (diffDays < 7) timeAgoText = ` (منذ ${diffDays} أيام)`;
-      else if (diffDays < 30) timeAgoText = ` (منذ ${Math.floor(diffDays / 7)} أسبوع)`;
+      else if (diffDays < 30)
+        timeAgoText = ` (منذ ${Math.floor(diffDays / 7)} أسبوع)`;
       else timeAgoText = ` (منذ ${Math.floor(diffDays / 30)} شهر)`;
     }
   }
 
-  document.getElementById("index-info-title").textContent = p.title || "بدون عنوان";
+  document.getElementById("index-info-title").textContent =
+    p.title || "بدون عنوان";
   document.getElementById("index-info-domain").textContent = `🏪 ${domain}`;
   document.getElementById("index-info-ads").textContent = p.ads_count || 0;
   document.getElementById("index-info-images").textContent = imageUrls.length;
-  document.getElementById("index-info-creatives").textContent = p.avg_creatives || 1;
-  document.getElementById("index-info-date").textContent = `${p.ad_start_date || "--"}${timeAgoText}`;
-  document.getElementById("index-info-ad-title").textContent = `💬 ${p.ad_title || "نص الإعلان"}`;
-  document.getElementById("index-info-ad-body").textContent = p.ad_body || "لا يوجد نص تفصيلي.";
+  document.getElementById("index-info-creatives").textContent =
+    p.avg_creatives || 1;
+  document.getElementById("index-info-date").textContent =
+    `${p.ad_start_date || "--"}${timeAgoText}`;
+  document.getElementById("index-info-ad-title").textContent =
+    `💬 ${p.ad_title || "نص الإعلان"}`;
+  document.getElementById("index-info-ad-body").textContent =
+    p.ad_body || "لا يوجد نص تفصيلي.";
 
   document.getElementById("index-info-visit-btn").onclick = () => {
     if (p.productUrl) window.open(p.productUrl, "_blank");

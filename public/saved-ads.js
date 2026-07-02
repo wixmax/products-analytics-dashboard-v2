@@ -193,7 +193,7 @@ function renderSavedGrid() {
                 <div class="product-media">
                     ${
                       videoUrls.length > 0
-                        ? `<video id="vjs-${safeId}" class="video-js vjs-big-play-centered" controls playsinline${imageUrls[0] ? ` poster="${imageUrls[0]}"` : ""}><source src="${videoUrls[0]}" type="video/mp4"></video>`
+                        ? `<div class="vid-placeholder" data-vid-src="${videoUrls[0]}" data-vid-poster="${imageUrls[0] || ""}" id="vp-${safeId}">${imageUrls[0] ? `<img src="${imageUrls[0]}" alt="" class="vid-placeholder-img">` : `<div class="vid-placeholder-bg"></div>`}<div class="vid-play-btn">▶</div></div>`
                         : imageUrls.length > 0
                           ? `<img src="${imageUrls[0]}" alt="${p.title}">`
                           : '<div class="no-media"><span>📦 لا توجد وسائط</span></div>'
@@ -230,14 +230,34 @@ function renderSavedGrid() {
 }
 
 function initVideoJs(scope) {
+  if (!vidObserver && typeof IntersectionObserver !== 'undefined') {
+    vidObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          loadVideoPlaceholder(entry.target);
+          vidObserver.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: '200px' });
+  }
+
   (scope || document).querySelectorAll('video.video-js').forEach(el => {
     if (el.dataset.vjsInited) return;
     el.dataset.vjsInited = '1';
     try {
       if (typeof videojs === 'function') {
-        videojs(el, { fluid: true, controls: true });
+        videojs(el, { fluid: true, controls: true, preload: 'none' });
       }
     } catch (e) { /* ignore */ }
+  });
+
+  (scope || document).querySelectorAll('.vid-placeholder:not([data-vid-loaded])').forEach(el => {
+    el.dataset.vidLoaded = '1';
+    if (vidObserver) {
+      vidObserver.observe(el);
+    } else {
+      loadVideoPlaceholder(el);
+    }
   });
 }
 
@@ -1091,6 +1111,30 @@ async function toggleStoreListAction() {
     console.error("Error toggling store watchlist:", err);
     showToast("تعذر الاتصال بالسيرفر لتعديل قائمة المتاجر.", "error");
   }
+}
+
+let vidObserver = null;
+
+function loadVideoPlaceholder(ph) {
+  const src = ph.dataset.vidSrc;
+  const poster = ph.dataset.vidPoster;
+  const vid = document.createElement('video');
+  vid.id = ph.id ? ph.id.replace('vp-', 'vjs-') : '';
+  vid.className = 'video-js vjs-big-play-centered';
+  vid.controls = true;
+  vid.playsInline = true;
+  vid.preload = 'none';
+  if (poster) vid.poster = poster;
+  const source = document.createElement('source');
+  source.src = src;
+  source.type = 'video/mp4';
+  vid.appendChild(source);
+  ph.parentNode.replaceChild(vid, ph);
+  try {
+    if (typeof videojs === 'function') {
+      videojs(vid, { fluid: true, controls: true, preload: 'none' });
+    }
+  } catch (e) { /* ignore */ }
 }
 
 let currentInfoProduct = null;

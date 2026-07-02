@@ -18,7 +18,7 @@
     />
 
     <link rel="stylesheet" href="https://vjs.zencdn.net/8.16.1/video-js.css" />
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.4" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.5" />
   </head>
   <body>
     <div class="app-shell">
@@ -872,6 +872,6 @@
       window.INITIAL_PRODUCTS_FROM_DB = <?= isset($initialData) ? json_encode($initialData) : 'null' ?>;
     </script>
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
-    <script src="<?= base_url('index.js') ?>?v=1.8"></script>
+    <script src="<?= base_url('index.js') ?>?v=1.9"></script>
   </body>
 </html>
