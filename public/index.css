@@ -664,6 +664,15 @@ textarea:focus {
   object-fit: cover;
 }
 
+.product-media .video-js {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.product-media .video-js .vjs-poster {
+  background-size: cover;
+}
+
 .no-media {
   width: 100%;
   height: 100%;
