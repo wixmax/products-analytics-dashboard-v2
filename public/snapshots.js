@@ -77,6 +77,7 @@ function renderSnapshots(snapshots) {
         <div class="snapshot-actions">
           <button onclick="viewSnapshotJson(${s.id})">📄 عرض JSON</button>
           <button class="btn-restore" onclick="restoreSnapshot(${s.id})">🔄 استعادة</button>
+          <button style="background:var(--color-error);color:white;border-color:var(--color-error)" onclick="deleteSnapshot(${s.id})">🗑️ حذف</button>
         </div>
       </div>
     `;
@@ -128,6 +129,19 @@ async function restoreSnapshot(id) {
     if (!res.ok) throw new Error('فشل الاستعادة');
     const result = await res.json();
     showToast(`✅ تمت الاستعادة: ${result.inserted} إدراج، ${result.updated} تحديث`);
+    loadSnapshots();
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
+async function deleteSnapshot(id) {
+  if (!confirm(`هل أنت متأكد من حذف اللقطة #${id}؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+
+  try {
+    const res = await fetch(`/api/products/snapshots/${id}/delete`, { method: 'POST' });
+    if (!res.ok) throw new Error('فشل الحذف');
+    showToast(`✅ تم حذف اللقطة #${id}`);
     loadSnapshots();
   } catch (e) {
     showToast('⚠️ ' + e.message, 'error');

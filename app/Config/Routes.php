@@ -42,6 +42,7 @@ $routes->get('/api/products/versions', 'Products::versions');
 $routes->get('/api/products/snapshots', 'Products::snapshots');
 $routes->get('/api/products/snapshots/(:num)', 'Products::getSnapshot/$1');
 $routes->post('/api/products/snapshots/(:num)/restore', 'Products::restoreSnapshot/$1');
+$routes->post('/api/products/snapshots/(:num)/delete', 'Products::deleteSnapshot/$1');
 
 // Activity Data Endpoints
 $routes->get('/api/products/activity', 'Products::activity');

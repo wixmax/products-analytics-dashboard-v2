@@ -385,6 +385,29 @@ class Products extends ResourceController
         ]);
     }
 
+    public function deleteSnapshot($id = null)
+    {
+        if (!$id) {
+            $id = $this->request->getVar('id');
+        }
+        if (!$id) {
+            return $this->fail('Snapshot ID is required');
+        }
+
+        $snapshotModel = new SnapshotModel();
+        $snapshot = $snapshotModel->find($id);
+        if (!$snapshot) {
+            return $this->failNotFound('Snapshot not found');
+        }
+
+        $snapshotModel->delete($id);
+
+        return $this->respond([
+            'success' => true,
+            'message' => "Snapshot #{$id} deleted"
+        ]);
+    }
+
     public function sync()
     {
         $syncService = new SyncService();
