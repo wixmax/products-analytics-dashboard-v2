@@ -256,6 +256,15 @@
                 </div>
                 <button class="btn btn-secondary" onclick="clearData('watchlist')">تفريغ قائمة المراقبة</button>
               </div>
+
+              <!-- Item 5: Clear JS Cache -->
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">🧹 تفريغ كاش ملفات JS في المتصفح</span>
+                  <span class="action-item-desc">مسح الملفات المخزنة (CSS/JS) من المتصفح وإعادة تحميل آخر إصدار من السيرفر. استخدم هذا بعد تحديث الكود للتأكد من تشغيل الإصدار الجديد.</span>
+                </div>
+                <button class="btn btn-secondary" onclick="clearBrowserCache()">🧹 تفريغ الكاش</button>
+              </div>
             </div>
           </div>
 
@@ -388,6 +397,25 @@
           console.error("Error saving setting:", err);
           showToast("خطأ في الاتصال بالسيرفر.", "error");
         }
+      }
+
+      // Clear Browser Cache (JS/CSS)
+      async function clearBrowserCache() {
+        if (!confirm('هل تريد مسح الكاش المخزن في المتصفح (CSS/JS) وإعادة تحميل أحدث إصدار؟')) return;
+
+        try {
+          // Clear Cache Storage API if available
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+          }
+        } catch (e) {
+          console.error('Cache API error:', e);
+        }
+
+        // Reload with a fresh cache-busting parameter
+        const t = Date.now();
+        window.location.href = window.location.pathname + '?v=' + t;
       }
 
       // Handle Data Cleaning Operations
