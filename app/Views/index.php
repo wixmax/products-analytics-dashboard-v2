@@ -872,6 +872,6 @@
       window.INITIAL_PRODUCTS_FROM_DB = <?= isset($initialData) ? json_encode($initialData) : 'null' ?>;
     </script>
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
-    <script src="<?= base_url('index.js') ?>?v=1.6"></script>
+    <script src="<?= base_url('index.js') ?>?v=1.7"></script>
   </body>
 </html>

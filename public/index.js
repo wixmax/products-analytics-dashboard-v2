@@ -840,6 +840,10 @@ function renderProductGrid(products) {
         }
       }
 
+      const safeId = p.productUrl
+        ? btoa(unescape(encodeURIComponent(p.productUrl))).replace(/[/+=]/g, "")
+        : Math.random().toString(36).slice(2);
+
       // Setup Media HTML (Show Video first if available, else image, else fallback)
       let mediaHtml = "";
       if (videoUrls.length > 0) {
@@ -862,9 +866,6 @@ function renderProductGrid(products) {
     `;
       }
 
-      const safeId = p.productUrl
-        ? btoa(unescape(encodeURIComponent(p.productUrl))).replace(/[/+=]/g, "")
-        : Math.random().toString(36).slice(2);
       const isSaved = savedProducts.some(
         (saved) => saved.productUrl === p.productUrl,
       );
