@@ -1118,37 +1118,72 @@ let vidObserver = null;
 function loadVideoPlaceholder(ph) {
   const src = ph.dataset.vidSrc;
   const poster = ph.dataset.vidPoster;
+  if (poster) {
+    const vid = createVidEl(ph.id, src, poster);
+    ph.parentNode.replaceChild(vid, ph);
+    initVjs(vid);
+    return;
+  }
+  const temp = document.createElement('video');
+  temp.muted = true;
+  temp.preload = 'metadata';
+  const srcEl = document.createElement('source');
+  srcEl.src = src;
+  srcEl.type = 'video/mp4';
+  temp.appendChild(srcEl);
+  let done = false;
+  const capture = () => {
+    if (done) return;
+    done = true;
+    let captured = '';
+    try {
+      const c = document.createElement('canvas');
+      c.width = temp.videoWidth || 320;
+      c.height = temp.videoHeight || 568;
+      c.getContext('2d').drawImage(temp, 0, 0, c.width, c.height);
+      captured = c.toDataURL('image/jpeg', 0.6);
+    } catch(e) {}
+    const vid = createVidEl(ph.id, src, captured);
+    ph.parentNode.replaceChild(vid, ph);
+    initVjs(vid);
+    temp.remove();
+  };
+  temp.addEventListener('loadedmetadata', () => {
+    try { temp.currentTime = 0.3; } catch(e) {}
+  }, { once: true });
+  temp.addEventListener('seeked', capture, { once: true });
+  temp.addEventListener('canplay', capture, { once: true });
+  temp.addEventListener('loadeddata', capture, { once: true });
+  setTimeout(() => {
+    if (!done) {
+      done = true;
+      const vid = createVidEl(ph.id, src, '');
+      ph.parentNode.replaceChild(vid, ph);
+      initVjs(vid);
+      temp.remove();
+    }
+  }, 4000);
+}
+
+function createVidEl(id, src, posterUrl) {
   const vid = document.createElement('video');
-  vid.id = ph.id ? ph.id.replace('vp-', 'vjs-') : '';
+  vid.id = id ? id.replace('vp-', 'vjs-') : '';
   vid.className = 'video-js vjs-big-play-centered';
   vid.controls = true;
   vid.playsInline = true;
+  vid.preload = 'none';
+  if (posterUrl) vid.poster = posterUrl;
   const source = document.createElement('source');
   source.src = src;
   source.type = 'video/mp4';
   vid.appendChild(source);
-  if (poster) {
-    vid.poster = poster;
-    vid.preload = 'none';
-  } else {
-    vid.preload = 'metadata';
-    vid.addEventListener('loadedmetadata', () => {
-      try { vid.currentTime = 0.5; } catch(e) {}
-    }, { once: true });
-    vid.addEventListener('seeked', () => {
-      try {
-        const c = document.createElement('canvas');
-        c.width = vid.videoWidth || 320;
-        c.height = vid.videoHeight || 568;
-        c.getContext('2d').drawImage(vid, 0, 0, c.width, c.height);
-        vid.poster = c.toDataURL('image/jpeg', 0.6);
-      } catch(e) { /* ignore */ }
-      vid.preload = 'none';
-    }, { once: true });
-  }
-  ph.parentNode.replaceChild(vid, ph);
+  return vid;
+}
+
+function initVjs(vid) {
   try {
-    if (typeof videojs === 'function') {
+    if (typeof videojs === 'function' && !vid.dataset.vjsInited) {
+      vid.dataset.vjsInited = '1';
       videojs(vid, { fluid: true, controls: true, preload: 'none' });
     }
   } catch (e) { /* ignore */ }
