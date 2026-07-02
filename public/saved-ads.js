@@ -1123,12 +1123,29 @@ function loadVideoPlaceholder(ph) {
   vid.className = 'video-js vjs-big-play-centered';
   vid.controls = true;
   vid.playsInline = true;
-  vid.preload = 'none';
-  if (poster) vid.poster = poster;
   const source = document.createElement('source');
   source.src = src;
   source.type = 'video/mp4';
   vid.appendChild(source);
+  if (poster) {
+    vid.poster = poster;
+    vid.preload = 'none';
+  } else {
+    vid.preload = 'metadata';
+    vid.addEventListener('loadedmetadata', () => {
+      try { vid.currentTime = 0.5; } catch(e) {}
+    }, { once: true });
+    vid.addEventListener('seeked', () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = vid.videoWidth || 320;
+        c.height = vid.videoHeight || 568;
+        c.getContext('2d').drawImage(vid, 0, 0, c.width, c.height);
+        vid.poster = c.toDataURL('image/jpeg', 0.6);
+      } catch(e) { /* ignore */ }
+      vid.preload = 'none';
+    }, { once: true });
+  }
   ph.parentNode.replaceChild(vid, ph);
   try {
     if (typeof videojs === 'function') {
