@@ -193,7 +193,7 @@ function renderSavedGrid() {
                 <div class="product-media">
                     ${
                       videoUrls.length > 0
-                        ? `<video id="vjs-${safeId}" class="video-js vjs-big-play-centered" controls playsinline poster="${imageUrls[0] || ""}"><source src="${videoUrls[0]}" type="video/mp4"></video>`
+                        ? `<video id="vjs-${safeId}" class="video-js vjs-big-play-centered" controls playsinline${imageUrls[0] ? ` poster="${imageUrls[0]}"` : ""}><source src="${videoUrls[0]}" type="video/mp4"></video>`
                         : imageUrls.length > 0
                           ? `<img src="${imageUrls[0]}" alt="${p.title}">`
                           : '<div class="no-media"><span>📦 لا توجد وسائط</span></div>'

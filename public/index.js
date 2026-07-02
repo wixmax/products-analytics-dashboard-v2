@@ -849,7 +849,7 @@ function renderProductGrid(products) {
       if (videoUrls.length > 0) {
         mediaHtml = `
       <div class="media-badge">🎥 فيديو (${videoUrls.length})</div>
-      <video id="vjs-${safeId}" class="video-js vjs-big-play-centered" preload="none" controls playsinline poster="${imageUrls[0] || ""}">
+      <video id="vjs-${safeId}" class="video-js vjs-big-play-centered" preload="none" controls playsinline${imageUrls[0] ? ` poster="${imageUrls[0]}"` : ""}>
         <source src="${videoUrls[0]}" type="video/mp4">
       </video>
     `;
