@@ -41,6 +41,8 @@ $routes->post('/api/products/watchlist/toggle', 'Products::toggleWatchlist');
 $routes->get('/api/products/versions', 'Products::versions');
 $routes->get('/api/products/snapshots', 'Products::snapshots');
 $routes->get('/api/products/snapshots/(:num)', 'Products::getSnapshot/$1');
+$routes->post('/api/products/snapshots/import', 'Products::importSnapshot');
+$routes->post('/api/products/saved/import', 'Products::importSavedAds');
 $routes->post('/api/products/snapshots/(:num)/restore', 'Products::restoreSnapshot/$1');
 $routes->post('/api/products/snapshots/(:num)/delete', 'Products::deleteSnapshot/$1');
 

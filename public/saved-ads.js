@@ -189,7 +189,7 @@ function renderSavedGrid() {
       const escapedUrlForNotes = (p.productUrl || "").replace(/'/g, "\\'");
 
       return `
-            <article class="product-card" id="card-${safeId}">
+            <article class="product-card saved-product-card" id="card-${safeId}">
                 <div class="product-media">
                     ${
                       videoUrls.length > 0
@@ -208,62 +208,19 @@ function renderSavedGrid() {
                     <div class="media-badge" style="top: auto; bottom: 10px;">⭐ محفوظة</div>
                 </div>
                 <div class="card-body">
-                    <div class="p-meta-info">
-                        <span class="alg-badge">${p.algorithm || "new"}</span>
-                        <span>📅 إطلاق: ${p.ad_start_date || "--"}${timeAgoText}</span>
-                    </div>
                     <h4 class="p-title" title="${p.title}">${p.title}</h4>
-                    <div style="color: var(--color-text-muted); font-size: 0.8rem; margin-top: -6px;">🏪 ${domain}</div>
-
-                    <div class="p-stats" style="margin: 10px 0;">
-                        <div class="p-stat-box">
-                            <span class="p-stat-val">${p.ads_count || 0}</span>
-                            <span class="p-stat-lbl">الإعلانات</span>
-                        </div>
-                        <div class="p-stat-box">
-                            <span class="p-stat-val">${imageUrls.length}</span>
-                            <span class="p-stat-lbl">الصور</span>
-                        </div>
-                        <div class="p-stat-box">
-                            <span class="p-stat-val">${p.avg_creatives || 1}</span>
-                            <span class="p-stat-lbl">الإبداعية</span>
-                        </div>
-                    </div>
-
-                    <div class="ad-copy-section">
-                        <div class="ad-copy-title">💬 ${p.ad_title || "نص الإعلان"}</div>
-                        <p class="ad-copy-text" style="-webkit-line-clamp: 2;">${p.ad_body || "لا يوجد نص تفصيلي."}</p>
-                    </div>
-                    
-                    <div style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--border-color);">
-                        <label style="font-size: 0.75rem; color: var(--color-primary);">تقييمك الشخصي:</label>
-                        <div class="rating-stars">${starsHtml}</div>
-                    </div>
-
-                    <div>
-                        <textarea class="notes-area" placeholder="أضف ملاحظاتك أو استراتيجيتك هنا..." onchange="updateNotes('${escapedUrlForNotes}', this.value)">${p.notes || ""}</textarea>
+                    <div style="color: var(--color-text-muted); font-size: 0.75rem; margin-top: -4px;">🏪 ${domain}</div>
+                    <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                        <span class="alg-badge" style="font-size: 0.65rem;">${p.algorithm || "new"}</span>
+                        ${p.api_version ? `<span class="snapshot-badge" style="background:rgba(99,102,241,0.1);color:#6366f1;padding:2px 8px;border-radius:var(--radius-full);font-size:0.65rem;">🔖 ${p.api_version}</span>` : ''}
                     </div>
                 </div>
-                <div class="card-footer" style="flex-wrap: wrap; gap: 8px;">
-                    <div style="width: 100%; margin-bottom: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                        <div>
-                            <label style="font-size: 0.7rem; color: var(--color-text-muted); display: block; margin-bottom: 2px;">الحالة:</label>
-                            <select onchange="updateStatus('${escapedUrlForDelete}', this.value)" style="font-size: 0.75rem; padding: 4px; width: 100%;">
-                                <option value="active" ${(p.status || "active") === "active" ? "selected" : ""}>🟢 نشط</option>
-                                <option value="tested" ${p.status === "tested" ? "selected" : ""}>🧪 تمت التجربة</option>
-                                <option value="archived" ${p.status === "archived" ? "selected" : ""}>📁 مؤرشف</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="font-size: 0.7rem; color: var(--color-text-muted); display: block; margin-bottom: 2px;">المجموعة:</label>
-                            <select onchange="updateProductCollection('${escapedUrlForDelete}', this.value)" style="font-size: 0.75rem; padding: 4px; width: 100%;">
-                                ${collections.map((c) => `<option value="${c}" ${(p.collection || "عامة") === c ? "selected" : ""}>📁 ${c}</option>`).join("")}
-                            </select>
-                        </div>
-                    </div>
-                    <a href="${p.productUrl}" target="_blank" class="btn btn-primary" style="flex: 1 1 40%; min-width: 100px;">🛒 زيارة المنتج</a>
-                    <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1 1 40%; min-width: 100px; font-size: 0.8rem; padding: 0.5rem 1rem;">🔍 تفاصيل أكثر</button>
-                    <button class="btn btn-secondary" onclick="removeFromSaved('${escapedUrlForDelete}')" title="إزالة من المحفوظات" style="flex: 0 0 auto; aspect-ratio: 1; padding: 0.5rem; display: flex; align-items: center; justify-content: center;">🗑️</button>
+                <div class="card-footer" style="gap: 6px; padding: 8px;">
+                    <a href="${p.productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">🛒 زيارة</a>
+                    <button onclick='openInfoModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.6rem; font-size: 0.7rem;">ℹ️ معلومات</button>
+                    <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">📊 تفاصيل أكثر</button>
+                    <button onclick="exportSingleSavedProduct('${escapedUrlForDelete}')" class="btn btn-secondary" title="تصدير JSON" style="flex: 0 0 auto; aspect-ratio: 1; padding: 0.4rem; display: flex; align-items: center; justify-content: center;">📥</button>
+                    <button class="btn btn-secondary" onclick="removeFromSaved('${escapedUrlForDelete}')" title="إزالة من المحفوظات" style="flex: 0 0 auto; aspect-ratio: 1; padding: 0.4rem; display: flex; align-items: center; justify-content: center;">🗑️</button>
                 </div>
             </article>
         `;
@@ -356,6 +313,27 @@ async function updateProductCollection(url, collectionName) {
   }
 }
 
+async function importSavedAdsFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+
+  try {
+    const text = await file.text();
+    const res = await fetch('/api/products/saved/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_json: text })
+    });
+    if (!res.ok) throw new Error('فشل الاستيراد');
+    const result = await res.json();
+    showToast(`✅ تم استيراد ${result.inserted} منتج جديد، تحديث ${result.updated} منتج`);
+    loadSavedProducts();
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
 function downloadSavedJSON() {
   if (currentFiltered.length === 0) {
     showToast("لا توجد بيانات مفلترة لتحميلها!", "warning");
@@ -372,6 +350,23 @@ function downloadSavedJSON() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast("تم تحميل ملف JSON بنجاح 📥", "success");
+}
+
+async function exportSingleSavedProduct(url) {
+  const p = savedProducts.find(pr => pr.productUrl === url);
+  if (!p) { showToast('المنتج غير موجود', 'warning'); return; }
+  const dataStr = JSON.stringify(p, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const urlBlob = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = urlBlob;
+  const safeTitle = (p.title || 'product').replace(/[^\w\s\-]/g, '_').slice(0, 40);
+  a.download = `${safeTitle}_${(p.ad_start_date || '').slice(0, 10) || 'nodate'}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(urlBlob);
+  showToast('✅ تم تصدير المنتج');
 }
 
 async function removeFromSaved(url) {
@@ -1083,6 +1078,116 @@ async function toggleStoreListAction() {
     showToast("تعذر الاتصال بالسيرفر لتعديل قائمة المتاجر.", "error");
   }
 }
+
+let currentInfoProduct = null;
+
+function openInfoModal(p) {
+  currentInfoProduct = p;
+  const modal = document.getElementById("saved-info-modal");
+  if (!modal) return;
+
+  const imageUrls = (p.ad_image_urls || "").split(";").filter(Boolean);
+  const videoUrls = (p.ad_video_urls || "").split(";").filter(Boolean);
+
+  let domain = "متجر خارجي";
+  try {
+    if (p.productUrl)
+      domain = new URL(p.productUrl).hostname.replace("www.", "");
+  } catch (e) {}
+
+  let timeAgoText = "";
+  if (p.ad_start_date) {
+    const startDate = new Date(p.ad_start_date);
+    if (!isNaN(startDate.getTime())) {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      startDate.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor((now - startDate) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) timeAgoText = " (اليوم)";
+      else if (diffDays === 1) timeAgoText = " (أمس)";
+      else if (diffDays < 7) timeAgoText = ` (منذ ${diffDays} أيام)`;
+      else if (diffDays < 30) timeAgoText = ` (منذ ${Math.floor(diffDays / 7)} أسبوع)`;
+      else timeAgoText = ` (منذ ${Math.floor(diffDays / 30)} شهر)`;
+    }
+  }
+
+  document.getElementById("saved-info-title").textContent = p.title || "بدون عنوان";
+  document.getElementById("saved-info-domain").textContent = `🏪 ${domain}`;
+  document.getElementById("saved-info-ads").textContent = p.ads_count || 0;
+  document.getElementById("saved-info-images").textContent = imageUrls.length;
+  document.getElementById("saved-info-creatives").textContent = p.avg_creatives || 1;
+  document.getElementById("saved-info-date").textContent = `${p.ad_start_date || "--"}${timeAgoText}`;
+  document.getElementById("saved-info-ad-title").textContent = `💬 ${p.ad_title || "نص الإعلان"}`;
+  document.getElementById("saved-info-ad-body").textContent = p.ad_body || "لا يوجد نص تفصيلي.";
+
+  // Rating stars
+  let starsHtml = "";
+  const escUrl = (p.productUrl || "").replace(/'/g, "\\'");
+  for (let i = 1; i <= 5; i++) {
+    starsHtml += `<span class="star ${i <= (p.rating || 0) ? "filled" : ""}" onclick="setInfoRating('${escUrl}', ${i})">★</span>`;
+  }
+  document.getElementById("saved-info-stars").innerHTML = starsHtml;
+
+  // Notes
+  document.getElementById("saved-info-notes").value = p.notes || "";
+
+  // Status
+  document.getElementById("saved-info-status").value = p.status || "active";
+
+  // Collection
+  const collSelect = document.getElementById("saved-info-collection");
+  collSelect.innerHTML = collections.map((c) =>
+    `<option value="${c}" ${(p.collection || "عامة") === c ? "selected" : ""}>📁 ${c}</option>`
+  ).join("");
+
+  // Visit button
+  document.getElementById("saved-info-visit-btn").onclick = () => {
+    if (p.productUrl) window.open(p.productUrl, "_blank");
+  };
+
+  modal.style.display = "flex";
+}
+
+function closeInfoModal() {
+  const modal = document.getElementById("saved-info-modal");
+  if (modal) modal.style.display = "none";
+  currentInfoProduct = null;
+}
+
+async function setInfoRating(url, rating) {
+  await setRating(url, rating);
+  if (currentInfoProduct) {
+    currentInfoProduct.rating = rating;
+    openInfoModal(currentInfoProduct);
+  }
+}
+
+function handleInfoNotesChange(val) {
+  if (!currentInfoProduct) return;
+  const url = (currentInfoProduct.productUrl || "").replace(/'/g, "\\'");
+  updateNotes(url, val);
+  currentInfoProduct.notes = val;
+}
+
+function handleInfoStatusChange(val) {
+  if (!currentInfoProduct) return;
+  const url = (currentInfoProduct.productUrl || "").replace(/'/g, "\\'");
+  updateStatus(url, val);
+  currentInfoProduct.status = val;
+}
+
+function handleInfoCollectionChange(val) {
+  if (!currentInfoProduct) return;
+  const url = (currentInfoProduct.productUrl || "").replace(/'/g, "\\'");
+  updateProductCollection(url, val);
+  currentInfoProduct.collection = val;
+}
+
+// Close info modal when clicking overlay
+document.addEventListener("click", (event) => {
+  const modal = document.getElementById("saved-info-modal");
+  if (event.target === modal) closeInfoModal();
+});
 
 function showProductAnalysisToast() {
   showToast(

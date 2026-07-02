@@ -240,6 +240,13 @@
           <button class="btn btn-primary" onclick="runSync()" id="sync-btn">
             🚀 Sync from API
           </button>
+          <button class="btn btn-success" onclick="exportSnapshotsJSON()">
+            📥 تصدير JSON
+          </button>
+          <button class="btn btn-secondary" onclick="document.getElementById('snapshot-import-input').click()">
+            📂 استيراد JSON
+          </button>
+          <input type="file" id="snapshot-import-input" accept=".json" style="display:none" onchange="importSnapshotFile(event)">
         </div>
 
         <!-- Version chips -->
@@ -271,6 +278,6 @@
     <!-- Toast -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="<?= base_url('snapshots.js') ?>?v=1.1"></script>
+    <script src="<?= base_url('snapshots.js') ?>?v=1.3"></script>
   </body>
 </html>

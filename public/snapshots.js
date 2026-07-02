@@ -76,6 +76,7 @@ function renderSnapshots(snapshots) {
         </div>
         <div class="snapshot-actions">
           <button onclick="viewSnapshotJson(${s.id})">📄 عرض JSON</button>
+          <button onclick="exportSingleSnapshot(${s.id})">📥 تصدير</button>
           <button class="btn-restore" onclick="restoreSnapshot(${s.id})">🔄 استعادة</button>
           <button style="background:var(--color-error);color:white;border-color:var(--color-error)" onclick="deleteSnapshot(${s.id})">🗑️ حذف</button>
         </div>
@@ -129,6 +130,77 @@ async function restoreSnapshot(id) {
     if (!res.ok) throw new Error('فشل الاستعادة');
     const result = await res.json();
     showToast(`✅ تمت الاستعادة: ${result.inserted} إدراج، ${result.updated} تحديث`);
+    loadSnapshots();
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
+async function exportSingleSnapshot(id) {
+  try {
+    const res = await fetch(`/api/products/snapshots/${id}`);
+    if (!res.ok) throw new Error('فشل جلب اللقطة');
+    const s = await res.json();
+    const dataStr = JSON.stringify(JSON.parse(s.raw_json || '{}'), null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snapshot_${s.id}_${s.origin}_${s.api_version || 'noversion'}_${(s.created_at || '').slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('✅ تم تصدير اللقطة');
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
+async function exportSnapshotsJSON() {
+  showToast('⏳ جاري تجهيز بيانات التصدير...', 'info');
+  try {
+    const res = await fetch('/api/products/snapshots?include_raw=1');
+    if (!res.ok) throw new Error('فشل جلب البيانات');
+    const data = await res.json();
+    if (!data || data.length === 0) {
+      showToast('لا توجد لقطات للتصدير', 'warning');
+      return;
+    }
+    const dataStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snapshots_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('✅ تم تصدير اللقطات مع البيانات الكاملة');
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
+async function importSnapshotFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+
+  try {
+    const text = await file.text();
+    const origin = prompt('أدخل المصدر (Local, Winning, China, Japan):', 'Local') || 'Local';
+    const apiVersion = prompt('أدخل إصدار API (اختياري):', '') || '';
+
+    const res = await fetch('/api/products/snapshots/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_json: text, origin, api_version: apiVersion })
+    });
+    if (!res.ok) throw new Error('فشل الاستيراد');
+    const result = await res.json();
+    showToast(`✅ تم استيراد اللقطة #${result.id} بنجاح`);
     loadSnapshots();
   } catch (e) {
     showToast('⚠️ ' + e.message, 'error');

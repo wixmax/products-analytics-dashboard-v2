@@ -257,6 +257,7 @@ class Products extends ResourceController
     {
         $snapshotModel = new SnapshotModel();
         $origin = $this->request->getVar('origin') ?? '';
+        $includeRaw = $this->request->getVar('include_raw') === '1';
 
         $builder = $snapshotModel->orderBy('created_at', 'DESC');
         if (!empty($origin)) {
@@ -264,11 +265,15 @@ class Products extends ResourceController
         }
         $snapshots = $builder->findAll();
 
-        // Remove raw_json from listing for performance, include only metadata
-        $result = array_map(function ($s) {
-            unset($s['raw_json']);
-            return $s;
-        }, $snapshots);
+        if (!$includeRaw) {
+            // Remove raw_json from listing for performance, include only metadata
+            $result = array_map(function ($s) {
+                unset($s['raw_json']);
+                return $s;
+            }, $snapshots);
+        } else {
+            $result = $snapshots;
+        }
 
         return $this->respond($result);
     }
@@ -380,6 +385,120 @@ class Products extends ResourceController
         return $this->respond([
             'success' => true,
             'message' => "Snapshot #{$id} restored: {$inserted} inserted, {$updated} updated",
+            'inserted' => $inserted,
+            'updated' => $updated
+        ]);
+    }
+
+    public function importSnapshot()
+    {
+        $json = $this->request->getJSON(true);
+        $rawJson = $json['raw_json'] ?? $this->request->getVar('raw_json') ?? '';
+        if (empty($rawJson)) {
+            return $this->fail('raw_json is required');
+        }
+
+        $origin = $json['origin'] ?? $this->request->getVar('origin') ?? 'Local';
+        $apiVersion = $json['api_version'] ?? $this->request->getVar('api_version') ?? '';
+
+        // Validate JSON
+        $decoded = json_decode($rawJson, true);
+        if ($decoded === null) {
+            return $this->fail('Invalid JSON');
+        }
+
+        $snapshotModel = new SnapshotModel();
+        $productCount = 0;
+
+        // Try to determine product count from structure
+        $base = is_array($decoded) ? ($decoded[0] ?? null) : $decoded;
+        $targetData = $base['result']['data']['json'] ?? null;
+        if ($targetData) {
+            $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+            if (is_array($rawList)) {
+                $productCount = count($rawList);
+            }
+        }
+
+        $dataToSave = [
+            'origin' => $origin,
+            'api_version' => $apiVersion,
+            'raw_json' => $rawJson,
+            'product_count' => $productCount,
+        ];
+
+        $snapshotModel->insert($dataToSave);
+
+        return $this->respond([
+            'success' => true,
+            'message' => "Snapshot imported: {$productCount} products",
+            'id' => $snapshotModel->getInsertID()
+        ]);
+    }
+
+    public function importSavedAds()
+    {
+        $json = $this->request->getJSON(true);
+        $rawJson = $json['raw_json'] ?? $this->request->getVar('raw_json') ?? '';
+        if (empty($rawJson)) {
+            return $this->fail('raw_json is required');
+        }
+
+        $decoded = json_decode($rawJson, true);
+        if ($decoded === null) {
+            return $this->fail('Invalid JSON');
+        }
+
+        // Expecting an array of product objects (like saved products export)
+        $products = is_array($decoded) ? $decoded : [$decoded];
+        $model = new ProductModel();
+        $inserted = 0;
+        $updated = 0;
+
+        foreach ($products as $p) {
+            $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
+            if (empty($productUrl)) continue;
+
+            $existing = $model->where('product_url', $productUrl)->first();
+
+            $dataToSave = [
+                'title' => $p['title'] ?? 'بدون عنوان',
+                'product_url' => $productUrl,
+                'country' => $p['country'] ?? '',
+                'algo' => $p['algorithm'] ?? $p['algo'] ?? 'new',
+                'ad_start_date' => $this->cleanDateStr($p['ad_start_date'] ?? null),
+                'ads_count' => intval($p['ads_count'] ?? 0),
+                'unique_image_count' => intval($p['unique_image_count'] ?? 0),
+                'unique_video_count' => intval($p['unique_video_count'] ?? 0),
+                'avg_creatives' => floatval($p['avg_creatives'] ?? 1),
+                'ads_per_unique_url' => floatval($p['ads_per_unique_url'] ?? 1),
+                'ad_title' => $p['ad_title'] ?? '',
+                'ad_body' => $p['ad_body'] ?? '',
+                'ad_image_urls' => is_array($p['ad_image_urls'] ?? null) ? implode(';', $p['ad_image_urls']) : ($p['ad_image_urls'] ?? ''),
+                'ad_video_urls' => is_array($p['ad_video_urls'] ?? null) ? implode(';', $p['ad_video_urls']) : ($p['ad_video_urls'] ?? ''),
+                'price_1' => strval($p['price_1'] ?? $p['actualPrice'] ?? $p['price'] ?? '0'),
+                'active_ads' => isset($p['active_ads']) ? (bool)$p['active_ads'] : true,
+                'api_version' => $p['api_version'] ?? '',
+                'is_saved' => true,
+                'saved_at' => date('Y-m-d H:i:s'),
+                'collection' => $p['collection'] ?? 'عامة',
+                'saved_status' => 'active',
+                'rating' => intval($p['rating'] ?? 0),
+                'notes' => $p['notes'] ?? '',
+            ];
+
+            if ($existing) {
+                $model->update($existing['id'], $dataToSave);
+                $updated++;
+            } else {
+                $model->insert($dataToSave);
+                $inserted++;
+            }
+        }
+
+        return $this->respond([
+            'success' => true,
+            'message' => "Imported {$inserted} new, updated {$updated} existing",
             'inserted' => $inserted,
             'updated' => $updated
         ]);
@@ -510,6 +629,7 @@ class Products extends ResourceController
                                     'ad_video_urls' => $p['ad_video_urls'],
                                     'actualPrice' => floatval($p['price_1']),
                                     'active_ads' => (bool)$p['active_ads'],
+                                    'api_version' => $p['api_version'] ?? '',
                                 ];
                             }, $products)
                         ]
@@ -538,9 +658,17 @@ class Products extends ResourceController
             return $this->fail('Failed to fetch or parse tRPC data from external API');
         }
 
-        // Add source indicator to distinguish from database responses
+        // Add source indicator and inject api_version into each product entry
         if (is_array($data) && isset($data[0])) {
             $data[0]['source'] = 'api';
+            if ($requestedVersion) {
+                $entries = &$data[0]['result']['data']['json']['productsEntries'] ?? [];
+                if (is_array($entries)) {
+                    foreach ($entries as &$entry) {
+                        $entry['api_version'] = $requestedVersion;
+                    }
+                }
+            }
         }
 
         return $this->respond($data);
@@ -714,11 +842,15 @@ class Products extends ResourceController
             // PostgreSQL returns boolean as 't'/'f' strings, PHP needs explicit check
             $currentlySaved = filter_var($existing['is_saved'], FILTER_VALIDATE_BOOLEAN);
             $newSavedState = !$currentlySaved;
-            $model->update($existing['id'], [
+            $updateData = [
                 'is_saved' => $newSavedState,
                 'saved_at' => $newSavedState ? date('Y-m-d H:i:s') : null,
                 'collection' => $newSavedState ? ($existing['collection'] ?: 'عامة') : $existing['collection'],
-            ]);
+            ];
+            if (!empty($product['api_version'])) {
+                $updateData['api_version'] = $product['api_version'];
+            }
+            $model->update($existing['id'], $updateData);
             return $this->respond([
                 'success' => true,
                 'is_saved' => $newSavedState,
@@ -746,6 +878,7 @@ class Products extends ResourceController
                 'price_1' => strval($product['price_1'] ?? $product['actualPrice'] ?? $product['price'] ?? '0'),
                 'active_ads' => isset($product['active_ads']) ? (bool)$product['active_ads'] : true,
                 'origin' => $origin,
+                'api_version' => $product['api_version'] ?? '',
                 'is_saved' => true,
                 'saved_at' => date('Y-m-d H:i:s'),
                 'collection' => $product['collection'] ?? 'عامة',

@@ -651,6 +651,12 @@ textarea:focus {
   overflow: hidden;
 }
 
+.saved-product-card .product-media,
+.index-product-card .product-media {
+  height: auto;
+  aspect-ratio: 9 / 16;
+}
+
 .product-media video,
 .product-media img {
   width: 100%;

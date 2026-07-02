@@ -17,7 +17,7 @@
       rel="stylesheet"
     />
 
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.2" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.3" />
   </head>
   <body>
     <div class="app-shell">
@@ -822,12 +822,54 @@
       </div>
     </div>
 
+    <!-- Info Modal for index products -->
+    <div class="modal-overlay" id="index-info-modal" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 200;">
+      <div class="modal-card" style="background: var(--bg-card); padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); width: 90%; max-width: 520px; box-shadow: var(--shadow-lg); transition: var(--transition-all); max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+          <div style="flex: 1; min-width: 0;">
+            <h3 id="index-info-title" style="font-weight: 700; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">-</h3>
+            <div id="index-info-domain" style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 2px;">-</div>
+          </div>
+          <button class="details-modal-close" onclick="closeIndexInfoModal()">&times;</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1rem;">
+          <div class="p-stat-box" style="background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); text-align: center;">
+            <span class="p-stat-val" id="index-info-ads">0</span>
+            <span class="p-stat-lbl">الإعلانات</span>
+          </div>
+          <div class="p-stat-box" style="background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); text-align: center;">
+            <span class="p-stat-val" id="index-info-images">0</span>
+            <span class="p-stat-lbl">الصور</span>
+          </div>
+          <div class="p-stat-box" style="background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); text-align: center;">
+            <span class="p-stat-val" id="index-info-creatives">0</span>
+            <span class="p-stat-lbl">الإبداعية</span>
+          </div>
+          <div class="p-stat-box" style="background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); text-align: center;">
+            <span class="p-stat-val" id="index-info-date">--</span>
+            <span class="p-stat-lbl">تاريخ الإطلاق</span>
+          </div>
+        </div>
+
+        <div class="ad-copy-section" style="margin-bottom: 1rem;">
+          <div class="ad-copy-title" id="index-info-ad-title">💬 نص الإعلان</div>
+          <p class="ad-copy-text" id="index-info-ad-body" style="font-size: 0.85rem; line-height: 1.6; color: var(--color-text-main);">لا يوجد نص تفصيلي.</p>
+        </div>
+
+        <div style="display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+          <button class="btn btn-primary" id="index-info-visit-btn" style="font-size: 0.85rem;">🛒 زيارة المنتج</button>
+          <button class="btn btn-secondary" onclick="closeIndexInfoModal()" style="font-size: 0.85rem;">إغلاق</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
     <script>
       window.INITIAL_PRODUCTS_FROM_DB = <?= isset($initialData) ? json_encode($initialData) : 'null' ?>;
     </script>
-    <script src="<?= base_url('index.js') ?>?v=1.3"></script>
+    <script src="<?= base_url('index.js') ?>?v=1.6"></script>
   </body>
 </html>

@@ -527,6 +527,7 @@ function processLoadedData(rawData, sourceInfo) {
         ad_video_urls: p.ad_video_urls || "",
         actualPrice: p.actualPrice || p.price_1 || 0,
         active_ads: p.active_ads !== undefined ? p.active_ads : true,
+        api_version: p.api_version || '',
       };
     });
 
@@ -877,7 +878,7 @@ function renderProductGrid(products) {
       `;
 
       return `
-    <article class="product-card" id="product-${safeId}">
+    <article class="product-card index-product-card" id="product-${safeId}">
       <div class="product-media">
         ${mediaHtml}
         <div class="status-badge ${p.active_ads ? "active" : "inactive"}">
@@ -889,53 +890,22 @@ function renderProductGrid(products) {
         </div>
       </div>
       <div class="card-body">
-        <div class="p-meta-info">
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <span class="alg-badge">${p.algorithm || "new"}</span>
-          </div>
-          <span>📅 إطلاق: ${p.ad_start_date || "--"}${timeAgoText}</span>
-        </div>
         <h4 class="p-title" title="${p.title}">${p.title || "بدون عنوان"}</h4>
-        <div style="color: var(--color-text-muted); font-size: 0.8rem; margin-top: -6px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="color: var(--color-text-muted); font-size: 0.75rem; margin-top: -2px; display: flex; justify-content: space-between; align-items: center;">
           <a href="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=MA&q=${encodeURIComponent(domain || "")}" 
              target="_blank" 
              style="color: var(--color-primary); text-decoration: none; font-weight: bold; font-size: 0.75rem; transition: var(--transition-all);"
              onmouseover="this.style.color='var(--color-primary-hover)'"
              onmouseout="this.style.color='var(--color-primary)'">🏪 ${domain}</a>
-          <a href="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=MA&q=${encodeURIComponent(p.title || "")}" 
-             target="_blank" 
-             style="color: var(--color-primary); text-decoration: none; font-weight: bold; font-size: 0.75rem; transition: var(--transition-all);"
-             onmouseover="this.style.color='var(--color-primary-hover)'"
-             onmouseout="this.style.color='var(--color-primary)'">
-            🔍 بحث في فيسبوك
-          </a>
-        </div>
-        
-        <div class="p-stats">
-          <div class="p-stat-box">
-            <span class="p-stat-val">${p.ads_count || 0}</span>
-            <span class="p-stat-lbl">الإعلانات</span>
-          </div>
-          <div class="p-stat-box">
-            <span class="p-stat-val">${imageUrls.length}</span>
-            <span class="p-stat-lbl">الصور</span>
-          </div>
-          <div class="p-stat-box">
-            <span class="p-stat-val">${p.avg_creatives || 1}</span>
-            <span class="p-stat-lbl">الإبداعية</span>
-          </div>
-        </div>
-
-        <div class="ad-copy-section">
-          <div class="ad-copy-title">💬 ${p.ad_title || "نص الإعلان"}</div>
-          <p class="ad-copy-text" title="${p.ad_body || ""}">${p.ad_body || "لا يوجد نص تفصيلي للإعلان."}</p>
+          <span style="font-size: 0.65rem; color: var(--color-text-muted);">${p.ad_start_date || "--"}${timeAgoText}</span>
         </div>
       </div>
-      <div class="card-footer" style="flex-wrap: wrap;">
-        <a href="${p.productUrl}" target="_blank" class="btn btn-primary" style="flex: 1 1 45%; min-width: 100px;">🛒 زيارة المنتج</a>
-        <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1 1 45%; min-width: 100px;">🔍 تفاصيل أكثر</button>
+      <div class="card-footer" style="gap: 6px; padding: 8px;">
+        <a href="${p.productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">🛒 زيارة</a>
+        <button onclick='openIndexInfoModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.6rem; font-size: 0.7rem;">ℹ️ معلومات</button>
+        <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">📊 تفاصيل</button>
         ${saveBtnHtml}
-        ${videoUrls.length > 0 ? `<a href="${videoUrls[0]}" target="_blank" class="btn btn-secondary" style="flex:0; aspect-ratio:1; padding: 0.5rem; display:flex; align-items:center; justify-content:center;" title="فتح الفيديو">🔗</a>` : ""}
+        ${videoUrls.length > 0 ? `<a href="${videoUrls[0]}" target="_blank" class="btn btn-secondary" style="flex:0; aspect-ratio:1; padding: 0.4rem; display:flex; align-items:center; justify-content:center;" title="فتح الفيديو">🔗</a>` : ""}
       </div>
     </article>
   `;
@@ -1058,6 +1028,7 @@ async function toggleSaveProduct(product) {
       active_ads: product.active_ads,
       origin: product.origin || "Winning",
       collection: product.collection || "عامة",
+      api_version: product.api_version || "",
     };
 
     const res = await fetch("/api/products/saved/toggle", {
@@ -1728,6 +1699,61 @@ function closeDetailsModal() {
   const modal = document.getElementById("details-modal");
   if (modal) modal.style.display = "none";
 }
+
+function openIndexInfoModal(p) {
+  const modal = document.getElementById("index-info-modal");
+  if (!modal) return;
+
+  const imageUrls = (p.ad_image_urls || "").split(";").filter(Boolean);
+
+  let domain = "متجر خارجي";
+  try {
+    if (p.productUrl)
+      domain = new URL(p.productUrl).hostname.replace("www.", "");
+  } catch (e) {}
+
+  let timeAgoText = "";
+  if (p.ad_start_date) {
+    const startDate = new Date(p.ad_start_date);
+    if (!isNaN(startDate.getTime())) {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      startDate.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor((now - startDate) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) timeAgoText = " (اليوم)";
+      else if (diffDays === 1) timeAgoText = " (أمس)";
+      else if (diffDays < 7) timeAgoText = ` (منذ ${diffDays} أيام)`;
+      else if (diffDays < 30) timeAgoText = ` (منذ ${Math.floor(diffDays / 7)} أسبوع)`;
+      else timeAgoText = ` (منذ ${Math.floor(diffDays / 30)} شهر)`;
+    }
+  }
+
+  document.getElementById("index-info-title").textContent = p.title || "بدون عنوان";
+  document.getElementById("index-info-domain").textContent = `🏪 ${domain}`;
+  document.getElementById("index-info-ads").textContent = p.ads_count || 0;
+  document.getElementById("index-info-images").textContent = imageUrls.length;
+  document.getElementById("index-info-creatives").textContent = p.avg_creatives || 1;
+  document.getElementById("index-info-date").textContent = `${p.ad_start_date || "--"}${timeAgoText}`;
+  document.getElementById("index-info-ad-title").textContent = `💬 ${p.ad_title || "نص الإعلان"}`;
+  document.getElementById("index-info-ad-body").textContent = p.ad_body || "لا يوجد نص تفصيلي.";
+
+  document.getElementById("index-info-visit-btn").onclick = () => {
+    if (p.productUrl) window.open(p.productUrl, "_blank");
+  };
+
+  modal.style.display = "flex";
+}
+
+function closeIndexInfoModal() {
+  const modal = document.getElementById("index-info-modal");
+  if (modal) modal.style.display = "none";
+}
+
+// Close index info modal when clicking overlay
+document.addEventListener("click", (event) => {
+  const modal = document.getElementById("index-info-modal");
+  if (event.target === modal) closeIndexInfoModal();
+});
 
 function openDetailsHelpModal() {
   const modal = document.getElementById("details-help-modal");
