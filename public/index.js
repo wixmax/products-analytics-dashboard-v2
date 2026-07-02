@@ -845,7 +845,7 @@ function renderProductGrid(products) {
       if (videoUrls.length > 0) {
         mediaHtml = `
       <div class="media-badge">🎥 فيديو (${videoUrls.length})</div>
-      <video preload="none" controls poster="${imageUrls[0] || ""}">
+      <video id="vjs-${safeId}" class="video-js vjs-big-play-centered" preload="none" controls playsinline poster="${imageUrls[0] || ""}">
         <source src="${videoUrls[0]}" type="video/mp4">
       </video>
     `;
@@ -911,6 +911,19 @@ function renderProductGrid(products) {
   `;
     })
     .join("");
+  initVideoJs();
+}
+
+function initVideoJs(scope) {
+  (scope || document).querySelectorAll('video.video-js').forEach(el => {
+    if (el.dataset.vjsInited) return;
+    el.dataset.vjsInited = '1';
+    try {
+      if (typeof videojs === 'function') {
+        videojs(el, { fluid: true, controls: true });
+      }
+    } catch (e) { /* ignore */ }
+  });
 }
 
 // =========================================
@@ -1180,7 +1193,7 @@ async function openDetailsModal(product) {
     videoUrls.forEach((vUrl, i) => {
       mediaHtml += `
         <div class="details-media-item">
-          <video controls autoplay muted loop>
+          <video class="video-js vjs-big-play-centered" controls autoplay muted loop playsinline>
             <source src="${vUrl}" type="video/mp4">
           </video>
           <div class="details-media-overlay-text">${overlayText}</div>
@@ -1208,6 +1221,7 @@ async function openDetailsModal(product) {
     mediaHtml = `<div class="no-media" style="grid-column: 1/-1; height: 200px;"><span>📦 لا توجد وسائط معاينة</span></div>`;
   }
   mediaContainer.innerHTML = mediaHtml;
+  initVideoJs(mediaContainer);
 
   // Set up Facebook library link
   let domain = "متجر خارجي";
