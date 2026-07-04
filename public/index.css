@@ -733,6 +733,34 @@ textarea:focus {
   box-shadow: 0 6px 25px rgba(0,0,0,0.6);
 }
 
+.vid-placeholder-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+}
+
+/* Flatpickr dark theme tweaks for sidebar */
+.sidebar .flatpickr-input {
+  background: #1e1e2f;
+  border: 1px solid #333;
+  color: #eee;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+.sidebar .flatpickr-input:focus {
+  border-color: #6c63ff;
+  outline: none;
+}
+
 .no-media {
   width: 100%;
   height: 100%;

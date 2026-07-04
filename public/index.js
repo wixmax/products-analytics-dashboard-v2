@@ -86,8 +86,6 @@ async function loadInitialDatabaseData() {
 function toggleApiMode() {
   const mode = document.getElementById("api-endpoint-select").value;
   const insightsEls = document.querySelectorAll(".insights-only");
-  const vInput = document.getElementById("filter-v");
-  const apiVersion = "1.10-12026-05-15";
 
   if (!mode) {
     insightsEls.forEach((el) => (el.style.display = "none"));
@@ -97,22 +95,14 @@ function toggleApiMode() {
 
   if (mode === "winning") {
     insightsEls.forEach((el) => (el.style.display = "none"));
-    // Preset v version for winning products if default
-    if (vInput.value === "1.3--5") {
-      vInput.value = apiVersion;
-    }
   } else {
     insightsEls.forEach((el) => {
-      // Handle restore display properly
       if (el.style.gridTemplateColumns) {
         el.style.display = "grid";
       } else {
         el.style.display = "flex";
       }
     });
-    if (vInput.value === apiVersion) {
-      vInput.value = "1.3--5";
-    }
   }
 
   updateGeneratedURL();
@@ -127,10 +117,27 @@ window.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   setupTheme();
 
+  // Initialize Flatpickr for date picker
+  flatpickr("#filter-date", {
+    dateFormat: "Y-m-d",
+    allowInput: true,
+    onChange: (dates, dateStr) => {
+      if (dateStr) localStorage.setItem("api_filter_date", dateStr);
+      else localStorage.removeItem("api_filter_date");
+      updateGeneratedURL();
+    }
+  });
+
   // Restore cached API version if available
-  const cachedV = localStorage.getItem("api_version_v");
-  if (cachedV) {
-    document.getElementById("filter-v").value = cachedV;
+  const cachedVersion = localStorage.getItem("api_version_v");
+  if (cachedVersion) {
+    document.getElementById("filter-version").value = cachedVersion;
+  }
+
+  // Restore cached date if available
+  const cachedDate = localStorage.getItem("api_filter_date");
+  if (cachedDate) {
+    document.getElementById("filter-date")._flatpickr?.setDate(cachedDate);
   }
 
   // Restore cached Countries if available
@@ -186,7 +193,7 @@ function initEventListeners() {
     "filter-priceFrom",
     "filter-priceTo",
     "filter-weeks",
-    "filter-v",
+    "filter-version",
     "filter-transformation",
     "api-endpoint-select",
     "api-filter-category",
@@ -194,8 +201,8 @@ function initEventListeners() {
   ];
   filterElements.forEach((id) => {
     document.getElementById(id).addEventListener("input", (e) => {
-      // If it's the V input, save to cache
-      if (id === "filter-v") {
+      // If it's the version input, save to cache
+      if (id === "filter-version") {
         localStorage.setItem("api_version_v", e.target.value);
       }
       // If it's the Country select, save to cache
@@ -243,7 +250,9 @@ function getActiveFiltersObject() {
     country = selectedCountryValues.join(";");
   }
 
-  const v = document.getElementById("filter-v").value || "1.3--5";
+  const versionNum = document.getElementById("filter-version").value || "1.10";
+  const dateStr = document.getElementById("filter-date").value || "";
+  const v = dateStr ? `${versionNum}-${dateStr}` : versionNum;
 
   if (mode === "winning") {
     return {
@@ -939,11 +948,16 @@ function initVideoJs(scope) {
     el.dataset.vjsInited = "1";
     try {
       if (typeof videojs === "function") {
-        videojs(el, { fluid: true, controls: true, preload: "none" });
+        const player = videojs(el, { fluid: true, controls: true, preload: "none" });
+        player.on('play', () => {
+          const all = videojs.getPlayers();
+          Object.keys(all).forEach(id => {
+            const p = all[id];
+            if (p !== player && !p.paused()) p.pause();
+          });
+        });
       }
-    } catch (e) {
-      /* ignore */
-    }
+    } catch (e) { /* ignore */ }
   });
 
   (scope || document)
@@ -967,46 +981,24 @@ function loadVideoPlaceholder(ph) {
     initVjs(vid);
     return;
   }
-  // No poster: try to capture a frame before swapping
-  const temp = document.createElement('video');
-  temp.muted = true;
-  temp.preload = 'metadata';
-  const srcEl = document.createElement('source');
-  srcEl.src = src;
-  srcEl.type = 'video/mp4';
-  temp.appendChild(srcEl);
-  let done = false;
-  const capture = () => {
-    if (done) return;
-    done = true;
-    let captured = '';
-    try {
-      const c = document.createElement('canvas');
-      c.width = temp.videoWidth || 320;
-      c.height = temp.videoHeight || 568;
-      c.getContext('2d').drawImage(temp, 0, 0, c.width, c.height);
-      captured = c.toDataURL('image/jpeg', 0.6);
-    } catch(e) {}
-    const vid = createVidEl(ph.id, src, captured);
-    ph.parentNode.replaceChild(vid, ph);
-    initVjs(vid);
-    temp.remove();
-  };
-  temp.addEventListener('loadedmetadata', () => {
-    try { temp.currentTime = 0.3; } catch(e) {}
-  }, { once: true });
-  temp.addEventListener('seeked', capture, { once: true });
-  temp.addEventListener('canplay', capture, { once: true });
-  temp.addEventListener('loadeddata', capture, { once: true });
-  setTimeout(() => {
-    if (!done) {
-      done = true;
-      const vid = createVidEl(ph.id, src, '');
-      ph.parentNode.replaceChild(vid, ph);
-      initVjs(vid);
-      temp.remove();
-    }
-  }, 4000);
+  // No poster: keep gradient+play overlay, put Video.js behind it
+  ph.style.display = 'block';
+  ph.style.position = 'relative';
+  ph.innerHTML = '';
+  const vid = createVidEl(ph.id, src, '');
+  vid.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;';
+  ph.appendChild(vid);
+  const overlay = document.createElement('div');
+  overlay.className = 'vid-placeholder-overlay';
+  overlay.innerHTML = '<div class="vid-placeholder-bg"></div><div class="vid-play-btn">▶</div>';
+  ph.appendChild(overlay);
+  const player = initVjs(vid);
+  overlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    overlay.style.display = 'none';
+    const p = player || videojs.getPlayer(vid.id) || videojs(vid);
+    if (p && typeof p.play === 'function') p.play();
+  });
 }
 
 function createVidEl(id, src, posterUrl) {
@@ -1028,7 +1020,15 @@ function initVjs(vid) {
   try {
     if (typeof videojs === 'function' && !vid.dataset.vjsInited) {
       vid.dataset.vjsInited = '1';
-      videojs(vid, { fluid: true, controls: true, preload: 'none' });
+      const player = videojs(vid, { fluid: true, controls: true, preload: 'none' });
+      player.on('play', () => {
+        const all = videojs.getPlayers();
+        Object.keys(all).forEach(id => {
+          const p = all[id];
+          if (p !== player && !p.paused()) p.pause();
+        });
+      });
+      return player;
     }
   } catch (e) { /* ignore */ }
 }

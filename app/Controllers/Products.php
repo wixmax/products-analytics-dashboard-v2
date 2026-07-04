@@ -581,7 +581,7 @@ class Products extends ResourceController
         
         // Use DB cache only if no specific version requested or requested version matches stored data
         $useDbCache = ($dataSource === 'database');
-        if ($useDbCache && $requestedVersion !== null) {
+        if ($useDbCache && $requestedVersion !== null && $requestedVersion !== '') {
             // Check if we have products with this api_version
             $countWithVersion = $model->where('origin', $origin)
                                       ->where('api_version', $requestedVersion)
@@ -596,7 +596,7 @@ class Products extends ResourceController
             if ($count > 0) {
             // Fetch from database instead of calling the external API
             $builder = $model->where('origin', $origin);
-            if ($requestedVersion !== null) {
+            if ($requestedVersion !== null && $requestedVersion !== '') {
                 $builder->where('api_version', $requestedVersion);
             }
             if ($requestedCountry !== null) {

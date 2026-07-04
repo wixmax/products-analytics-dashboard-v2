@@ -13,7 +13,7 @@
       rel="stylesheet"
     />
 
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.2" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.6" />
     <style>
       .snapshots-header {
         display: flex;

@@ -246,7 +246,14 @@ function initVideoJs(scope) {
     el.dataset.vjsInited = '1';
     try {
       if (typeof videojs === 'function') {
-        videojs(el, { fluid: true, controls: true, preload: 'none' });
+        const player = videojs(el, { fluid: true, controls: true, preload: 'none' });
+        player.on('play', () => {
+          const all = videojs.getPlayers();
+          Object.keys(all).forEach(id => {
+            const p = all[id];
+            if (p !== player && !p.paused()) p.pause();
+          });
+        });
       }
     } catch (e) { /* ignore */ }
   });
@@ -1124,45 +1131,23 @@ function loadVideoPlaceholder(ph) {
     initVjs(vid);
     return;
   }
-  const temp = document.createElement('video');
-  temp.muted = true;
-  temp.preload = 'metadata';
-  const srcEl = document.createElement('source');
-  srcEl.src = src;
-  srcEl.type = 'video/mp4';
-  temp.appendChild(srcEl);
-  let done = false;
-  const capture = () => {
-    if (done) return;
-    done = true;
-    let captured = '';
-    try {
-      const c = document.createElement('canvas');
-      c.width = temp.videoWidth || 320;
-      c.height = temp.videoHeight || 568;
-      c.getContext('2d').drawImage(temp, 0, 0, c.width, c.height);
-      captured = c.toDataURL('image/jpeg', 0.6);
-    } catch(e) {}
-    const vid = createVidEl(ph.id, src, captured);
-    ph.parentNode.replaceChild(vid, ph);
-    initVjs(vid);
-    temp.remove();
-  };
-  temp.addEventListener('loadedmetadata', () => {
-    try { temp.currentTime = 0.3; } catch(e) {}
-  }, { once: true });
-  temp.addEventListener('seeked', capture, { once: true });
-  temp.addEventListener('canplay', capture, { once: true });
-  temp.addEventListener('loadeddata', capture, { once: true });
-  setTimeout(() => {
-    if (!done) {
-      done = true;
-      const vid = createVidEl(ph.id, src, '');
-      ph.parentNode.replaceChild(vid, ph);
-      initVjs(vid);
-      temp.remove();
-    }
-  }, 4000);
+  ph.style.display = 'block';
+  ph.style.position = 'relative';
+  ph.innerHTML = '';
+  const vid = createVidEl(ph.id, src, '');
+  vid.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;';
+  ph.appendChild(vid);
+  const overlay = document.createElement('div');
+  overlay.className = 'vid-placeholder-overlay';
+  overlay.innerHTML = '<div class="vid-placeholder-bg"></div><div class="vid-play-btn">▶</div>';
+  ph.appendChild(overlay);
+  const player = initVjs(vid);
+  overlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    overlay.style.display = 'none';
+    const p = player || videojs.getPlayer(vid.id) || videojs(vid);
+    if (p && typeof p.play === 'function') p.play();
+  });
 }
 
 function createVidEl(id, src, posterUrl) {
@@ -1184,7 +1169,15 @@ function initVjs(vid) {
   try {
     if (typeof videojs === 'function' && !vid.dataset.vjsInited) {
       vid.dataset.vjsInited = '1';
-      videojs(vid, { fluid: true, controls: true, preload: 'none' });
+      const player = videojs(vid, { fluid: true, controls: true, preload: 'none' });
+      player.on('play', () => {
+        const all = videojs.getPlayers();
+        Object.keys(all).forEach(id => {
+          const p = all[id];
+          if (p !== player && !p.paused()) p.pause();
+        });
+      });
+      return player;
     }
   } catch (e) { /* ignore */ }
 }

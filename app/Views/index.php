@@ -18,7 +18,9 @@
     />
 
     <link rel="stylesheet" href="https://vjs.zencdn.net/8.16.1/video-js.css" />
-    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.5" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" />
+    <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.6" />
   </head>
   <body>
     <div class="app-shell">
@@ -36,11 +38,11 @@
         <div class="form-group">
           <label for="api-endpoint-select">🎯 نوع الاستعلام / البيانات</label>
           <select id="api-endpoint-select" onchange="toggleApiMode()">
-            <option value="" disabled selected>
+            <option value="" disabled>
               -- اختر نوع الاستعلام / البيانات أولاً --
             </option>
             <option value="insights">Overview Insights (مؤشرات السوق)</option>
-            <option value="winning">Winning Products (المنتجات الرابحة)</option>
+            <option value="winning" selected>Winning Products (المنتجات الرابحة)</option>
           </select>
           <a href="<?= base_url('snapshots') ?>" class="btn btn-secondary btn-block" style="text-align:center;margin-top:8px;font-size:0.85rem;display:flex;align-items:center;justify-content:center;gap:6px">
             📸 لقطات البيانات (Snapshots)
@@ -116,14 +118,19 @@
           class="form-group"
           style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px"
         >
-          <div class="insights-only">
-            <label for="filter-weeks">عدد الأسابيع</label>
-            <input type="number" id="filter-weeks" value="12" min="1" />
+          <div>
+            <label for="filter-date">📅 التاريخ</label>
+            <input type="text" id="filter-date" class="flatpickr-date" placeholder="اختر تاريخاً" />
           </div>
           <div>
-            <label for="filter-v">نسخة API (v)</label>
-            <input type="text" id="filter-v" value="1.3--5" />
+            <label for="filter-version">🔢 رقم الإصدار (v)</label>
+            <input type="text" id="filter-version" value="1.10" placeholder="مثال: 1.10" />
           </div>
+        </div>
+
+        <div class="form-group insights-only">
+          <label for="filter-weeks">عدد الأسابيع</label>
+          <input type="number" id="filter-weeks" value="12" min="1" />
         </div>
 
         <div class="form-group insights-only">
@@ -872,6 +879,7 @@
       window.INITIAL_PRODUCTS_FROM_DB = <?= isset($initialData) ? json_encode($initialData) : 'null' ?>;
     </script>
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
-    <script src="<?= base_url('index.js') ?>?v=2.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="<?= base_url('index.js') ?>?v=2.5"></script>
   </body>
 </html>
