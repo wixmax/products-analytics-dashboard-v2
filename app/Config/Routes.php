@@ -29,7 +29,10 @@ $routes->group('admin', ['filter' => 'group:superadmin,admin'], function($routes
     $routes->get('users', '\App\Controllers\Admin\UsersController::index');
     $routes->post('users/update-role', '\App\Controllers\Admin\UsersController::updateRole');
     $routes->post('users/toggle-status', '\App\Controllers\Admin\UsersController::toggleStatus');
+    $routes->post('users/impersonate', '\App\Controllers\Admin\UsersController::impersonate');
+    $routes->post('users/change-password', '\App\Controllers\Admin\UsersController::changePassword');
 });
+$routes->get('admin/users/stop-impersonating', '\App\Controllers\Admin\UsersController::stopImpersonating');
 
 $routes->get('/', 'Home::index');
 $routes->get('/saved-ads', 'Home::savedAds');

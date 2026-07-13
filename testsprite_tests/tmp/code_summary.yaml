@@ -1,0 +1,101 @@
+version: "2"
+type: frontend
+tech_stack:
+  - PHP
+  - CodeIgniter 4
+  - PostgreSQL
+  - Vanilla JS
+  - Vanilla CSS
+  - Bootstrap/Tailwind CSS
+  - Shield Auth
+routes:
+  - path: /login
+    file: app/Views/auth/login.php
+    auth_required: false
+    description: User login page
+  - path: /register
+    file: app/Views/auth/register.php
+    auth_required: false
+    description: User registration page
+  - path: /
+    file: app/Views/index.php
+    auth_required: true
+    description: Main products analytics dashboard
+  - path: /saved-ads
+    file: app/Views/saved-ads.php
+    auth_required: true
+    description: Saved ad campaigns and products list
+  - path: /international-products
+    file: app/Views/international-products.php
+    auth_required: true
+    description: International winning products listing
+  - path: /settings
+    file: app/Views/settings.php
+    auth_required: true
+    description: Account settings and profile management
+  - path: /snapshots
+    file: app/Views/snapshots.php
+    auth_required: true
+    description: Database snapshot imports and exports
+  - path: /workspace
+    file: app/Views/auth/workspace.php
+    auth_required: true
+    description: Workspace management and member invites
+  - path: /admin/users
+    file: app/Views/admin/users.php
+    auth_required: true
+    description: Admin users list and roles management
+features:
+  - name: User Authentication
+    description: Registering and logging in users
+    files:
+      - app/Controllers/Auth/LoginController.php
+      - app/Views/auth/login.php
+    entry_route: /login
+    user_interactions:
+      - Fill email input field
+      - Fill password input field
+      - Click login button
+    api_calls:
+      - method: POST
+        endpoint: /login
+    auth_required: false
+  - name: Products Dashboard
+    description: Showing analytical insights, charts, and product listing
+    files:
+      - app/Views/index.php
+      - public/index.js
+      - public/analysis-helper.js
+    entry_route: /
+    user_interactions:
+      - Filter products by country, category, and date range
+      - Toggle collapse of the filter panel
+      - Click on a product to open details modal and view timeline chart and marketing strategy analysis
+    api_calls:
+      - method: GET
+        endpoint: /api/products
+      - method: GET
+        endpoint: /api/products/stats
+    auth_required: true
+  - name: Saved Ads
+    description: Manage saved ads, rating, notes, and collections
+    files:
+      - app/Views/saved-ads.php
+      - public/saved-ads.js
+      - public/analysis-helper.js
+    entry_route: /saved-ads
+    user_interactions:
+      - Click on a saved product to view its metrics and marketing strategy analysis
+      - Edit rating stars or notes
+      - Update product actual price
+    api_calls:
+      - method: GET
+        endpoint: /api/products/saved
+      - method: POST
+        endpoint: /api/products/saved/rating
+      - method: POST
+        endpoint: /api/products/saved/notes
+      - method: POST
+        endpoint: /api/products/saved/price
+    auth_required: true
+known_limitations: []

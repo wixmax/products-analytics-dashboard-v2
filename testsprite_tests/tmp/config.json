@@ -1,0 +1,19 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:9090",
+  "loginUser": "testuser",
+  "loginPassword": "password123",
+  "executionArgs": {
+    "projectName": "products-analytics-dashboard",
+    "projectPath": "c:\\Users\\Faical\\Documents\\Php Projects\\products-analytics-dashboard",
+    "testIds": [],
+    "additionalInstruction": "Ensure the tests register a new user on `/register` first if not logged in, using email \"testuser@example.com\", username \"testuser\", and password \"Password123!\". Then, use those credentials to log in and test the / and /saved-ads pages.",
+    "serverMode": "development",
+    "envs": {
+      "API_KEY": "sk-user-pTLWV_fiCu3UU7A_qjRnP4jMDyygDtwrB6Zyy4S6uNEmx3Tl6ykwlGKJDCiENkY1N3mC1gMvm_5iXm9NKs774cWCTOHRfSV3e5P3aP8rHI_Zr41UjxonDr7kO8zDnY2kIKo"
+    }
+  },
+  "serverPort": 5289
+}

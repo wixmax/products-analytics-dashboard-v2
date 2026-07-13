@@ -145,9 +145,48 @@
         font-family: inherit;
         font-size: 0.8rem;
       }
+      /* Modal Styles */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease-out;
+      }
+      .modal-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 1.75rem;
+        width: 90%;
+        max-width: 450px;
+        box-shadow: var(--shadow-lg);
+        animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes slideUp {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
     </style>
   </head>
   <body>
+    <?php if (session()->has('impersonator_user_id')): ?>
+      <div style="background: linear-gradient(90deg, #f59e0b, #d97706); color: white; padding: 10px 20px; text-align: center; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 15px; z-index: 9999; font-size: 0.9rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <span>⚠️ أنت تتصفح النظام حالياً بصفتك: <strong><?= esc(auth()->user()->username) ?></strong> (محاكاة حساب)</span>
+        <a href="<?= base_url('admin/users/stop-impersonating') ?>" style="background: white; color: #b45309; padding: 4px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8rem; font-weight: 700; transition: all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">العودة لحساب المسؤول 🚪</a>
+      </div>
+    <?php endif; ?>
     <div class="app-shell">
       <!-- Sidebar Panel -->
       <aside class="sidebar">
@@ -280,6 +319,8 @@
                     <th>الحالة</th>
                     <th>تحديث الصلاحية</th>
                     <th>التحكم بالحالة</th>
+                    <th>تغيير كلمة المرور</th>
+                    <th>محاكاة الحساب</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -330,6 +371,24 @@
                           <span style="color:var(--color-text-muted); font-size:0.8rem;">(حسابك الحالي)</span>
                         <?php endif; ?>
                       </td>
+                      <td>
+                        <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.2); color: var(--color-primary); width: 120px;" onclick="openPasswordModal(<?= $u['id'] ?>, '<?= esc($u['username'], 'js') ?>')">
+                          🔑 تغيير كلمة المرور
+                        </button>
+                      </td>
+                      <td>
+                        <?php if ((int)$u['id'] !== (int)auth()->id()): ?>
+                          <form action="<?= base_url('admin/users/impersonate') ?>" method="POST" style="display:inline;">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="user_id" value="<?= $u['id'] ?>" />
+                            <button type="submit" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); color: var(--color-warning); width: 100px;">
+                              🔑 دخول كعضو
+                            </button>
+                          </form>
+                        <?php else: ?>
+                          <span style="color:var(--color-text-muted); font-size:0.8rem;">-</span>
+                        <?php endif; ?>
+                      </td>
                     </tr>
                   <?php endforeach; ?>
                 </tbody>
@@ -374,6 +433,62 @@
           }
         };
       }
+
+      function openPasswordModal(userId, username) {
+        document.getElementById('modal-user-id').value = userId;
+        document.getElementById('modal-username').innerText = username;
+        document.getElementById('new_password').value = '';
+        document.getElementById('new_password_confirm').value = '';
+        document.getElementById('password-modal').style.display = 'flex';
+      }
+
+      function closePasswordModal() {
+        document.getElementById('password-modal').style.display = 'none';
+      }
+
+      function validatePasswordForm() {
+        const pass = document.getElementById('new_password').value;
+        const confirm = document.getElementById('new_password_confirm').value;
+        if (pass !== confirm) {
+          alert('كلمتا المرور غير متطابقتين!');
+          return false;
+        }
+        return true;
+      }
     </script>
+
+    <!-- Password Reset Modal -->
+    <div class="modal-overlay" id="password-modal" style="display: none;">
+      <div class="modal-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+          <h3 style="font-weight: 700; font-size: 1.1rem; color: var(--color-text-main);">🔑 تغيير كلمة المرور للمستخدم</h3>
+          <button style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--color-text-main)" onclick="closePasswordModal()">×</button>
+        </div>
+        <form action="<?= base_url('admin/users/change-password') ?>" method="POST" id="password-form" onsubmit="return validatePasswordForm()">
+          <?= csrf_field() ?>
+          <input type="hidden" name="user_id" id="modal-user-id" value="" />
+          
+          <div style="margin-bottom: 1rem;">
+            <span style="font-size: 0.85rem; color: var(--color-text-muted);">اسم المستخدم:</span>
+            <strong id="modal-username" style="font-size: 0.9rem; color: var(--color-text-main); margin-right: 5px;"></strong>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 1rem;">
+            <label for="new_password" style="font-size: 0.85rem; font-weight: 600; color: var(--color-text-main);">كلمة المرور الجديدة</label>
+            <input type="password" name="password" id="new_password" required minlength="8" placeholder="8 رموز على الأقل" style="padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-family: inherit; font-size: 0.9rem;" />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 1.5rem;">
+            <label for="new_password_confirm" style="font-size: 0.85rem; font-weight: 600; color: var(--color-text-main);">تأكيد كلمة المرور الجديدة</label>
+            <input type="password" name="password_confirm" id="new_password_confirm" required minlength="8" placeholder="تأكيد كلمة المرور" style="padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-family: inherit; font-size: 0.9rem;" />
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" class="btn btn-secondary" onclick="closePasswordModal()">إلغاء</button>
+            <button type="submit" class="btn btn-primary">حفظ كلمة المرور 💾</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </body>
 </html>
