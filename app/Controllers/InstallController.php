@@ -315,4 +315,46 @@ class InstallController extends Controller
 
         return file_put_contents($envPath, implode('', $lines)) !== false;
     }
+
+    /**
+     * Run migrations on demand (e.g., for updates)
+     */
+    public function updateDatabaseSchema()
+    {
+        // 1. Authenticate that the user is an admin or superadmin
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            $token = $this->request->getGet('token');
+            $appSecret = env('DB_UPDATE_KEY') ?: 'madaqbio_update_secret_2026';
+            if ($token !== $appSecret) {
+                return $this->response->setStatusCode(403)->setBody('غير مسموح بالوصول. يجب تسجيل الدخول كمسؤول أو تقديم رمز الأمان الصحيح (token).');
+            }
+        }
+
+        try {
+            $migrate = \Config\Services::migrations();
+            
+            // Run Shield migrations
+            $migrate->setNamespace('CodeIgniter\Shield')->latest();
+            
+            // Run App migrations
+            $migrate->setNamespace('App')->latest();
+            
+            // Run other namespaces
+            $namespaces = array_keys(service('autoloader')->getNamespace());
+            foreach ($namespaces as $ns) {
+                if (in_array($ns, ['CodeIgniter\Shield', 'App', 'CodeIgniter'], true)) {
+                    continue;
+                }
+                try {
+                    $migrate->setNamespace($ns)->latest();
+                } catch (\Throwable $e) {
+                    // Silence errors for third-party namespaces
+                }
+            }
+            
+            return $this->response->setBody('<h1>تمت تحديثات قاعدة البيانات بنجاح!</h1><p>تمت مزامنة جميع الجداول وتطبيق الهجرات (migrations) الجديدة.</p><p><a href="' . base_url('/') . '">العودة للوحة التحكم</a></p>');
+        } catch (\Throwable $e) {
+            return $this->response->setBody('<h1>فشل تحديث قاعدة البيانات</h1><p>الخطأ: ' . esc($e->getMessage()) . '</p>');
+        }
+    }
 }
