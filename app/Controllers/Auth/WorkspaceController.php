@@ -36,6 +36,15 @@ class WorkspaceController extends BaseController
             $userModel = new \App\Models\UserModel();
             $userModel->bypassTenant()->update($user->id, ['tenant_id' => $tenantId]);
             $user->tenant_id = $tenantId;
+
+            // Also insert into tenant_users as owner
+            $db->table('tenant_users')->insert([
+                'tenant_id'  => $tenantId,
+                'user_id'    => $user->id,
+                'role'       => 'owner',
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
         }
 
         // Fetch current tenant
@@ -45,10 +54,39 @@ class WorkspaceController extends BaseController
         $userModel = new \App\Models\UserModel();
         $members = $userModel->bypassTenant()->where('tenant_id', $user->tenant_id)->findAll();
 
+        // Fetch all workspaces this user is member of
+        $workspaces = $db->table('tenant_users')
+            ->select('tenants.id, tenants.name, tenants.slug, tenant_users.role')
+            ->join('tenants', 'tenants.id = tenant_users.tenant_id')
+            ->where('tenant_users.user_id', $user->id)
+            ->get()
+            ->getResultArray();
+
+        // Safety fallback: if user's current tenant is not in the workspaces list, add it
+        $hasCurrent = false;
+        foreach ($workspaces as $w) {
+            if ((int)$w['id'] === (int)$user->tenant_id) {
+                $hasCurrent = true;
+                break;
+            }
+        }
+        if (!$hasCurrent && !empty($user->tenant_id)) {
+            $currentTenantData = $db->table('tenants')->where('id', $user->tenant_id)->get()->getRowArray();
+            if ($currentTenantData) {
+                $workspaces[] = [
+                    'id'   => $currentTenantData['id'],
+                    'name' => $currentTenantData['name'],
+                    'slug' => $currentTenantData['slug'],
+                    'role' => 'owner'
+                ];
+            }
+        }
+
         return view('auth/workspace', [
-            'tenant'  => $tenant,
-            'members' => $members,
-            'user'    => $user,
+            'tenant'     => $tenant,
+            'members'    => $members,
+            'user'       => $user,
+            'workspaces' => $workspaces,
         ]);
     }
 
@@ -115,6 +153,23 @@ class WorkspaceController extends BaseController
             return redirect()->back()->withInput()->with('error', 'المستخدم عضو بالفعل في مساحة العمل هذه.');
         }
 
+        // Add member to tenant_users if not already there
+        $db = \Config\Database::connect();
+        $isMember = $db->table('tenant_users')
+            ->where('tenant_id', $tenantId)
+            ->where('user_id', $targetUser->id)
+            ->countAllResults() > 0;
+
+        if (!$isMember) {
+            $db->table('tenant_users')->insert([
+                'tenant_id'  => $tenantId,
+                'user_id'    => $targetUser->id,
+                'role'       => 'member',
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
         // Assign the user to the current tenant
         $userModel->bypassTenant()->update($targetUser->id, ['tenant_id' => $tenantId]);
 
@@ -164,9 +219,58 @@ class WorkspaceController extends BaseController
 
         $newTenantId = $db->insertID('tenants_id_seq');
 
+        // Delete membership from the current tenant
+        $db->table('tenant_users')
+            ->where('tenant_id', $tenantId)
+            ->where('user_id', $userId)
+            ->delete();
+
+        // Add membership as owner to the new tenant
+        $db->table('tenant_users')->insert([
+            'tenant_id'  => $newTenantId,
+            'user_id'    => $userId,
+            'role'       => 'owner',
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+
         // Move target user to the new workspace
         $userModel->bypassTenant()->update($targetUser->id, ['tenant_id' => $newTenantId]);
 
         return redirect()->back()->with('message', 'تمت إزالة العضو من مساحة العمل بنجاح ونقله لمساحة عمل مستقلة.');
+    }
+
+    /**
+     * Switch active workspace/tenant.
+     */
+    public function switchWorkspace(): RedirectResponse
+    {
+        if (!auth()->loggedIn()) {
+            return redirect()->route('login');
+        }
+
+        $user = auth()->user();
+        $targetTenantId = (int)$this->request->getPost('tenant_id');
+
+        if (empty($targetTenantId)) {
+            return redirect()->back()->with('error', 'مساحة العمل غير صالحة.');
+        }
+
+        // Verify that the user is a member of the target tenant
+        $db = \Config\Database::connect();
+        $isMember = $db->table('tenant_users')
+            ->where('tenant_id', $targetTenantId)
+            ->where('user_id', $user->id)
+            ->countAllResults() > 0;
+
+        if (!$isMember) {
+            return redirect()->back()->with('error', 'ليس لديك صلاحية للوصول لمساحة العمل هذه.');
+        }
+
+        // Update user's active tenant_id
+        $userModel = new \App\Models\UserModel();
+        $userModel->bypassTenant()->update($user->id, ['tenant_id' => $targetTenantId]);
+
+        return redirect()->back()->with('message', 'تم تبديل مساحة العمل بنجاح! 🔄');
     }
 }

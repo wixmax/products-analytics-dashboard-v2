@@ -87,4 +87,13 @@ Events::on('register', static function (\CodeIgniter\Shield\Entities\User $user)
     // Update user's tenant_id
     $userModel = new \App\Models\UserModel();
     $userModel->bypassTenant()->update($user->id, ['tenant_id' => $tenantId]);
+
+    // Insert user into tenant_users as owner
+    $db->table('tenant_users')->insert([
+        'tenant_id'  => $tenantId,
+        'user_id'    => $user->id,
+        'role'       => 'owner',
+        'created_at' => date('Y-m-d H:i:s'),
+        'updated_at' => date('Y-m-d H:i:s'),
+    ]);
 });

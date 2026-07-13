@@ -145,7 +145,78 @@
     </style>
   </head>
   <body>
-    <div class="app-shell" style="grid-template-columns: 1fr">
+    <div class="app-shell">
+      <!-- Sidebar Panel -->
+      <aside class="sidebar">
+        <div class="logo-container">
+          <div class="logo-icon">⚡</div>
+          <div class="logo-text">
+            <h1>Overview Insights</h1>
+            <p>مساحة العمل</p>
+          </div>
+        </div>
+
+        <!-- Sidebar Navigation Menu -->
+        <nav class="sidebar-nav">
+          <a href="<?= base_url('/') ?>" class="sidebar-nav-item <?= current_url() == base_url() || current_url() == base_url('/') ? 'active' : '' ?>">
+            📊 لوحة التحكم
+          </a>
+          <a href="<?= base_url('saved-ads') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'saved-ads') !== false ? 'active' : '' ?>">
+            ⭐ الإعلانات المحفوظة
+          </a>
+          <a href="<?= base_url('international-products') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'international-products') !== false ? 'active' : '' ?>">
+            🌏 منتجات الصين واليابان
+          </a>
+          <a href="<?= base_url('snapshots') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'snapshots') !== false ? 'active' : '' ?>">
+            📸 لقطات البيانات
+          </a>
+          <a href="<?= base_url('settings') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'settings') !== false ? 'active' : '' ?>">
+            ⚙️ إعدادات النظام
+          </a>
+          <a href="<?= base_url('workspace') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'workspace') !== false ? 'active' : '' ?>">
+            📁 مساحة العمل
+          </a>
+          <a href="<?= base_url('profile') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'profile') !== false ? 'active' : '' ?>">
+            👤 الملف الشخصي
+          </a>
+          <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin')): ?>
+            <a href="<?= base_url('admin/users') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'admin/users') !== false ? 'active' : '' ?>">
+              🛡️ إدارة الأعضاء
+            </a>
+          <?php endif; ?>
+        </nav>
+
+        <!-- Sidebar Footer (User Profile Card) -->
+        <?php if (auth()->loggedIn()): ?>
+          <?php
+            $db = \Config\Database::connect();
+            $activeTenant = !empty(auth()->user()->tenant_id) ? $db->table('tenants')->where('id', auth()->user()->tenant_id)->get()->getRow() : null;
+          ?>
+          <div class="sidebar-user-card" style="margin-top: auto;">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+              <div class="user-avatar-small" style="width: 38px; height: 38px; font-size: 1.1rem; flex-shrink: 0; background: var(--color-primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                <?= strtoupper(substr(esc(auth()->user()->username ?? 'U'), 0, 1)) ?>
+              </div>
+              <div style="display: flex; flex-direction: column; min-width: 0;">
+                <span class="user-name-small" style="font-weight: 700; font-size: 0.85rem; color: var(--color-text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  <?= esc(auth()->user()->username) ?>
+                </span>
+                <?php if ($activeTenant): ?>
+                  <span style="font-size: 0.7rem; color: var(--color-text-muted); display: flex; align-items: center; gap: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= esc($activeTenant->name) ?>">
+                    📁 <?= esc($activeTenant->name) ?>
+                  </span>
+                <?php endif; ?>
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <a href="<?= base_url('profile') ?>" class="btn btn-secondary" style="padding: 6px; font-size: 0.9rem; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" title="الملف الشخصي">👤</a>
+              <a href="<?= base_url('logout') ?>" class="btn btn-error" style="padding: 6px; font-size: 0.9rem; border-radius: 50%; width: 32px; height: 32px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: var(--color-error); display: flex; align-items: center; justify-content: center;" title="تسجيل الخروج">🚪</a>
+            </div>
+          </div>
+        <?php endif; ?>
+      </aside>
+
+      <!-- Main Area -->
       <main class="main-content">
         <!-- Top Navigation -->
         <div class="top-nav">
@@ -165,9 +236,6 @@
           </div>
 
           <div class="actions-group">
-            <a href="<?= base_url('/') ?>" class="btn btn-secondary"
-              >🏠 العودة للوحة التحكم</a
-            >
             <button class="theme-toggle" id="theme-toggle-btn">🌓</button>
           </div>
         </div>
@@ -195,6 +263,52 @@
               <?php endforeach; ?>
             </div>
           <?php endif; ?>
+
+          <!-- Card 0: Switch Workspace -->
+          <div class="workspace-card" style="border-color: var(--color-primary);">
+            <div class="workspace-card-title" style="color: var(--color-primary)">
+              🔄 التبديل بين مساحات العمل
+            </div>
+            <p class="workspace-card-desc">
+              اختر مساحة العمل التي ترغب في تصفح بياناتها وتعديلها حالياً.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 1rem;">
+              <?php foreach ($workspaces as $ws): ?>
+                <?php $isActive = (int)$ws['id'] === (int)$tenant->id; ?>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid <?= $isActive ? 'var(--color-success)' : 'var(--border-color)' ?>; background: <?= $isActive ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-input)' ?>; transition: var(--transition-all);">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="font-size: 1.5rem;"><?= $isActive ? '✅' : '📁' ?></div>
+                    <div>
+                      <span style="font-weight: 700; font-size: 0.95rem; color: var(--color-text-main);">
+                        <?= esc($ws['name']) ?>
+                      </span>
+                      <span class="badge-role" style="margin-right: 8px; font-size: 0.7rem; background: <?= $ws['role'] === 'owner' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(245, 158, 11, 0.12)' ?>; color: <?= $ws['role'] === 'owner' ? 'var(--color-primary)' : '#f59e0b' ?>;">
+                        <?= esc($ws['role'] === 'owner' ? 'مالك' : 'عضو مشارك') ?>
+                      </span>
+                      <?php if ($isActive): ?>
+                        <span class="badge-self" style="margin-right: 4px; font-size: 0.7rem;">المساحة النشطة</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  
+                  <?php if (!$isActive): ?>
+                    <form action="<?= base_url('workspace/switch') ?>" method="POST" style="margin: 0;">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="tenant_id" value="<?= esc($ws['id']) ?>" />
+                      <button type="submit" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;">
+                        🔄 انتقال
+                      </button>
+                    </form>
+                  <?php else: ?>
+                    <span style="color: var(--color-success); font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 4px;">
+                      🟢 نشطة حالياً
+                    </span>
+                  <?php endif; ?>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
 
           <!-- Card 1: Tenant Information -->
           <div class="workspace-card">

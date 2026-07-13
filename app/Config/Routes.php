@@ -22,6 +22,7 @@ $routes->get('workspace', '\App\Controllers\Auth\WorkspaceController::index');
 $routes->post('workspace/update', '\App\Controllers\Auth\WorkspaceController::update');
 $routes->post('workspace/invite', '\App\Controllers\Auth\WorkspaceController::inviteMember');
 $routes->post('workspace/remove-member/(:num)', '\App\Controllers\Auth\WorkspaceController::removeMember/$1');
+$routes->post('workspace/switch', '\App\Controllers\Auth\WorkspaceController::switchWorkspace');
 
 // Admin Panel User Management
 $routes->group('admin', ['filter' => 'group:superadmin,admin'], function($routes) {

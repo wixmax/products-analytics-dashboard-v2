@@ -34,143 +34,64 @@
           </div>
         </div>
 
-        <!-- API Mode Selector -->
-        <div class="form-group">
-          <label for="api-endpoint-select">🎯 نوع الاستعلام / البيانات</label>
-          <select id="api-endpoint-select" onchange="toggleApiMode()">
-            <option value="" disabled>
-              -- اختر نوع الاستعلام / البيانات أولاً --
-            </option>
-            <option value="insights">Overview Insights (مؤشرات السوق)</option>
-            <option value="winning" selected>Winning Products (المنتجات الرابحة)</option>
-          </select>
-          <a href="<?= base_url('snapshots') ?>" class="btn btn-secondary btn-block" style="text-align:center;margin-top:8px;font-size:0.85rem;display:flex;align-items:center;justify-content:center;gap:6px">
-            📸 لقطات البيانات (Snapshots)
+        <!-- Sidebar Navigation Menu -->
+        <nav class="sidebar-nav">
+          <a href="<?= base_url('/') ?>" class="sidebar-nav-item <?= current_url() == base_url() || current_url() == base_url('/') ? 'active' : '' ?>">
+            📊 لوحة التحكم
           </a>
-        </div>
-
-        <!-- Form Inputs for filters -->
-        <div class="form-group insights-only">
-          <label for="filter-title">الكلمة المفتاحية (Title)</label>
-          <input
-            type="text"
-            id="filter-title"
-            value=""
-            placeholder="مثلاً: brush, car, tool..."
-          />
-          <a
-            href="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=MA&q="
-            target="_blank"
-            id="fb-search-link"
-            style="
-              margin-top: 4px;
-              display: inline-flex;
-              align-items: center;
-              gap: 4px;
-              font-size: 0.8rem;
-              color: var(--color-primary);
-              text-decoration: none;
-              font-weight: bold;
-              transition: var(--transition-all);
-            "
-            onmouseover="this.style.color = 'var(--color-primary-hover)'"
-            onmouseout="this.style.color = 'var(--color-primary)'"
-          >
-            🌐 بحث في مكتبة إعلانات فيسبوك
+          <a href="<?= base_url('saved-ads') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'saved-ads') !== false ? 'active' : '' ?>">
+            ⭐ الإعلانات المحفوظة
           </a>
-        </div>
+          <a href="<?= base_url('international-products') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'international-products') !== false ? 'active' : '' ?>">
+            🌏 منتجات الصين واليابان
+          </a>
+          <a href="<?= base_url('snapshots') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'snapshots') !== false ? 'active' : '' ?>">
+            📸 لقطات البيانات
+          </a>
+          <a href="<?= base_url('settings') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'settings') !== false ? 'active' : '' ?>">
+            ⚙️ إعدادات النظام
+          </a>
+          <a href="<?= base_url('workspace') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'workspace') !== false ? 'active' : '' ?>">
+            📁 مساحة العمل
+          </a>
+          <a href="<?= base_url('profile') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'profile') !== false ? 'active' : '' ?>">
+            👤 الملف الشخصي
+          </a>
+          <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin')): ?>
+            <a href="<?= base_url('admin/users') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'admin/users') !== false ? 'active' : '' ?>">
+              🛡️ إدارة الأعضاء
+            </a>
+          <?php endif; ?>
+        </nav>
 
-        <div class="form-group">
-          <label>التصنيفات (Categories)</label>
-          <select id="api-filter-category" multiple style="min-height: 120px">
-            <!-- Will be generated via JS -->
-          </select>
-          <small style="color: var(--color-text-muted); font-size: 0.7rem"
-            >استمر بالضغط على Ctrl (أو Cmd) لتحديد أكثر من خيار</small
-          >
-        </div>
-
-        <div class="form-group">
-          <label>الدول (Countries)</label>
-          <select id="api-filter-country" multiple style="min-height: 150px">
-            <!-- Will be generated via JS -->
-          </select>
-          <small style="color: var(--color-text-muted); font-size: 0.7rem"
-            >استمر بالضغط على Ctrl (أو Cmd) لتحديد أكثر من خيار</small
-          >
-        </div>
-
-        <div
-          class="form-group insights-only"
-          style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px"
-        >
-          <div>
-            <label for="filter-priceFrom">السعر من</label>
-            <input type="number" id="filter-priceFrom" value="-1" />
+        <!-- Sidebar Footer (User Profile Card) -->
+        <?php if (auth()->loggedIn()): ?>
+          <?php
+            $db = \Config\Database::connect();
+            $activeTenant = !empty(auth()->user()->tenant_id) ? $db->table('tenants')->where('id', auth()->user()->tenant_id)->get()->getRow() : null;
+          ?>
+          <div class="sidebar-user-card" style="margin-top: auto;">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+              <div class="user-avatar-small" style="width: 38px; height: 38px; font-size: 1.1rem; flex-shrink: 0; background: var(--color-primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                <?= strtoupper(substr(esc(auth()->user()->username ?? 'U'), 0, 1)) ?>
+              </div>
+              <div style="display: flex; flex-direction: column; min-width: 0;">
+                <span class="user-name-small" style="font-weight: 700; font-size: 0.85rem; color: var(--color-text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  <?= esc(auth()->user()->username) ?>
+                </span>
+                <?php if ($activeTenant): ?>
+                  <span style="font-size: 0.7rem; color: var(--color-text-muted); display: flex; align-items: center; gap: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= esc($activeTenant->name) ?>">
+                    📁 <?= esc($activeTenant->name) ?>
+                  </span>
+                <?php endif; ?>
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <a href="<?= base_url('profile') ?>" class="btn btn-secondary" style="padding: 6px; font-size: 0.9rem; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" title="الملف الشخصي">👤</a>
+              <a href="<?= base_url('logout') ?>" class="btn btn-error" style="padding: 6px; font-size: 0.9rem; border-radius: 50%; width: 32px; height: 32px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: var(--color-error); display: flex; align-items: center; justify-content: center;" title="تسجيل الخروج">🚪</a>
+            </div>
           </div>
-          <div>
-            <label for="filter-priceTo">السعر إلى</label>
-            <input type="number" id="filter-priceTo" value="-1" />
-          </div>
-        </div>
-
-        <div
-          class="form-group"
-          style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px"
-        >
-          <div>
-            <label for="filter-date">📅 التاريخ</label>
-            <input type="text" id="filter-date" class="flatpickr-date" placeholder="اختر تاريخاً" />
-          </div>
-          <div>
-            <label for="filter-version">🔢 رقم الإصدار (v)</label>
-            <input type="text" id="filter-version" value="1.10" placeholder="مثال: 1.10" />
-          </div>
-        </div>
-
-        <div class="form-group insights-only">
-          <label for="filter-weeks">عدد الأسابيع</label>
-          <input type="number" id="filter-weeks" value="12" min="1" />
-        </div>
-
-        <div class="form-group insights-only">
-          <label for="filter-transformation">التحويل (Transformation)</label>
-          <select id="filter-transformation">
-            <option value="market-reaction" selected>market-reaction</option>
-            <option value="none">بدون تحويل</option>
-          </select>
-        </div>
-
-        <!-- URL Output & Copy Panel -->
-        <button
-          class="btn btn-primary btn-block"
-          id="apply-filters-btn"
-          onclick="handleFetchAPI()"
-        >
-          🚀 جلب البيانات من الرابط المولد
-        </button>
-        <div class="url-preview-card">
-          <label>رابط tRPC المشفر والمولد:</label>
-          <div class="url-box" id="generated-url">
-            https://www.overviewdata.io/...
-          </div>
-          <div style="display: flex; gap: 8px; margin-top: 5px">
-            <button
-              class="btn btn-secondary btn-block"
-              style="padding: 0.5rem; font-size: 0.8rem"
-              onclick="copyGeneratedURL()"
-            >
-              🔗 نسخ الرابط
-            </button>
-            <button
-              class="btn btn-primary btn-block"
-              style="padding: 0.5rem; font-size: 0.8rem"
-              onclick="openGeneratedURL()"
-            >
-              🌍 فتح في نافذة جديدة
-            </button>
-          </div>
-        </div>
+        <?php endif; ?>
       </aside>
 
       <!-- Main Area -->
@@ -193,12 +114,6 @@
           </div>
 
           <div class="actions-group">
-            <a href="<?= base_url('saved-ads') ?>" class="btn btn-secondary"
-              >⭐ الإعلانات المحفوظة</a
-            >
-            <a href="<?= base_url('international-products') ?>" class="btn btn-primary"
-              >🌏 منتجات الصين واليابان</a
-            >
             <div class="file-input-wrapper">
               <button class="btn btn-secondary">
                 📁 استيراد ملف JSON محلي
@@ -213,30 +128,6 @@
             <button class="btn btn-secondary" onclick="openManualPasteModal()">
               📝 لصق البيانات يدوياً
             </button>
-            <a href="<?= base_url('snapshots') ?>" class="btn btn-secondary">📸 اللقطات</a>
-            <a href="<?= base_url('settings') ?>" class="btn btn-secondary">⚙️ الإعدادات</a>
-            
-            <?php if (auth()->loggedIn()): ?>
-              <div class="user-profile-dropdown">
-                <button class="user-profile-dropdown-btn">
-                  <div class="user-avatar-small"><?= strtoupper(substr(esc(auth()->user()->username ?? 'U'), 0, 1)) ?></div>
-                  <span class="user-name-small"><?= esc(auth()->user()->username) ?></span>
-                  <span class="role-badge-small">
-                    <?= esc(auth()->user()->inGroup('superadmin') ? 'Superadmin' : (auth()->user()->inGroup('admin') ? 'Admin' : (auth()->user()->inGroup('developer') ? 'Developer' : (auth()->user()->inGroup('beta') ? 'Beta' : 'User')))) ?>
-                  </span>
-                  <span class="dropdown-chevron">▼</span>
-                </button>
-                <div class="user-profile-dropdown-content">
-                  <a href="<?= base_url('profile') ?>">👤 الملف الشخصي</a>
-                  <a href="<?= base_url('workspace') ?>">📁 مساحة العمل</a>
-                  <?php if (auth()->user()->inGroup('superadmin', 'admin')): ?>
-                    <a href="<?= base_url('admin/users') ?>" style="border-top: 1px solid var(--border-color);">🛡️ إدارة الأعضاء</a>
-                  <?php endif; ?>
-                  <a href="<?= base_url('logout') ?>" style="color: var(--color-error); border-top: 1px solid var(--border-color);">🚪 تسجيل الخروج</a>
-                </div>
-              </div>
-            <?php endif; ?>
-
             <button
               class="theme-toggle"
               id="theme-toggle-btn"
@@ -244,9 +135,214 @@
             >
               🌓
             </button>
-
           </div>
         </div>
+
+        <!-- Dashboard Filter Panel -->
+        <div class="dashboard-filter-card" id="dashboard-filter-panel" style="padding: 1.25rem;">
+          <div class="filter-card-header" onclick="toggleFilterPanel()" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem;">🔍</span>
+              <h3 style="font-size: 0.95rem; font-weight: 700; margin: 0; color: var(--color-text-main);">تصفية واستعلام البيانات (tRPC API Filter)</h3>
+            </div>
+            <span id="filter-toggle-icon" style="font-size: 0.9rem; color: var(--color-text-muted); font-weight: bold;">🔼</span>
+          </div>
+
+          <div id="filter-panel-body" style="display: block;">
+            <div class="dashboard-filter-grid">
+              
+              <!-- Column 1: Mode & Keyword -->
+              <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div class="form-group">
+                  <label for="api-endpoint-select">🎯 نوع الاستعلام / البيانات</label>
+                  <select id="api-endpoint-select" onchange="toggleApiMode()">
+                    <option value="" disabled>
+                      -- اختر نوع الاستعلام / البيانات أولاً --
+                    </option>
+                    <option value="insights">Overview Insights (مؤشرات السوق)</option>
+                    <option value="winning" selected>Winning Products (المنتجات الرابحة)</option>
+                  </select>
+                </div>
+                
+                <div class="form-group insights-only">
+                  <label for="filter-title">الكلمة المفتاحية (Title)</label>
+                  <input
+                    type="text"
+                    id="filter-title"
+                    value=""
+                    placeholder="مثلاً: brush, car, tool..."
+                  />
+                  <a
+                    href="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=MA&q="
+                    target="_blank"
+                    id="fb-search-link"
+                    style="
+                      margin-top: 4px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 4px;
+                      font-size: 0.8rem;
+                      color: var(--color-primary);
+                      text-decoration: none;
+                      font-weight: bold;
+                      transition: var(--transition-all);
+                    "
+                    onmouseover="this.style.color = 'var(--color-primary-hover)'"
+                    onmouseout="this.style.color = 'var(--color-primary)'"
+                  >
+                    🌐 بحث في مكتبة إعلانات فيسبوك
+                  </a>
+                </div>
+              </div>
+
+              <!-- Column 2: Categories -->
+              <div class="form-group">
+                <label>التصنيفات (Categories)</label>
+                <select id="api-filter-category" multiple style="min-height: 120px; height: 100%;">
+                  <!-- Will be generated via JS -->
+                </select>
+                <small style="color: var(--color-text-muted); font-size: 0.7rem"
+                  >استمر بالضغط على Ctrl (أو Cmd) لتحديد أكثر من خيار</small
+                >
+              </div>
+
+              <!-- Column 3: Countries -->
+              <div class="form-group">
+                <label>الدول (Countries)</label>
+                <select id="api-filter-country" multiple style="min-height: 120px; height: 100%;">
+                  <!-- Will be generated via JS -->
+                </select>
+                <small style="color: var(--color-text-muted); font-size: 0.7rem"
+                  >استمر بالضغط على Ctrl (أو Cmd) لتحديد أكثر من خيار</small
+                >
+              </div>
+
+              <!-- Column 4: Version, Date, Prices, Weeks, Transformation -->
+              <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+                  <div class="form-group">
+                    <label for="filter-date">📅 التاريخ</label>
+                    <input type="text" id="filter-date" class="flatpickr-date" placeholder="اختر تاريخاً" />
+                  </div>
+                  <div class="form-group">
+                    <label for="filter-version">🔢 رقم الإصدار (v)</label>
+                    <input type="text" id="filter-version" value="1.10" placeholder="مثال: 1.10" />
+                  </div>
+                </div>
+
+                <div class="form-group insights-only" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+                  <div>
+                    <label for="filter-priceFrom">السعر من</label>
+                    <input type="number" id="filter-priceFrom" value="-1" />
+                  </div>
+                  <div>
+                    <label for="filter-priceTo">السعر إلى</label>
+                    <input type="number" id="filter-priceTo" value="-1" />
+                  </div>
+                </div>
+
+                <div class="form-group insights-only" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+                  <div>
+                    <label for="filter-weeks">عدد الأسابيع</label>
+                    <input type="number" id="filter-weeks" value="12" min="1" />
+                  </div>
+                  <div>
+                    <label for="filter-transformation">التحويل</label>
+                    <select id="filter-transformation">
+                      <option value="market-reaction" selected>market-reaction</option>
+                      <option value="none">بدون تحويل</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Actions & URL Generation Preview Row -->
+            <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem; align-items: end; border-top: 1px solid var(--border-color); padding-top: 1.25rem; margin-top: 1.25rem;">
+              <div>
+                <button
+                  class="btn btn-primary btn-block"
+                  id="apply-filters-btn"
+                  onclick="handleFetchAPI()"
+                  style="height: 50px; font-size: 1rem;"
+                >
+                  🚀 جلب البيانات من الرابط المولد
+                </button>
+              </div>
+              
+              <div class="url-preview-card" style="padding: 0.75rem 1rem; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0;">رابط tRPC المشفر والمولد:</label>
+                  <div style="display: flex; gap: 6px;">
+                    <button
+                      class="btn btn-secondary"
+                      style="padding: 4px 10px; font-size: 0.75rem;"
+                      onclick="copyGeneratedURL()"
+                    >
+                      🔗 نسخ الرابط
+                    </button>
+                    <button
+                      class="btn btn-primary"
+                      style="padding: 4px 10px; font-size: 0.75rem;"
+                      onclick="openGeneratedURL()"
+                    >
+                      🌍 فتح في نافذة جديدة
+                    </button>
+                  </div>
+                </div>
+                <div class="url-box" id="generated-url" style="max-height: 45px; font-size: 0.75rem; padding: 6px 10px;">
+                  https://www.overviewdata.io/...
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <script>
+          function toggleFilterPanel() {
+            const panel = document.getElementById('dashboard-filter-panel');
+            const body = document.getElementById('filter-panel-body');
+            const icon = document.getElementById('filter-toggle-icon');
+            const header = document.querySelector('.filter-card-header');
+            
+            const isCollapsed = panel.classList.toggle('collapsed');
+            
+            if (isCollapsed) {
+              body.style.display = 'none';
+              icon.textContent = '🔽';
+              header.style.borderBottom = 'none';
+              header.style.marginBottom = '0';
+              header.style.paddingBottom = '0';
+              localStorage.setItem('filter_panel_collapsed', 'true');
+            } else {
+              body.style.display = 'block';
+              icon.textContent = '🔼';
+              header.style.borderBottom = '1px solid var(--border-color)';
+              header.style.marginBottom = '0.75rem';
+              header.style.paddingBottom = '0.75rem';
+              localStorage.removeItem('filter_panel_collapsed');
+            }
+          }
+
+          // Restore state on load
+          document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('filter_panel_collapsed') === 'true') {
+              const panel = document.getElementById('dashboard-filter-panel');
+              const body = document.getElementById('filter-panel-body');
+              const icon = document.getElementById('filter-toggle-icon');
+              const header = document.querySelector('.filter-card-header');
+              
+              panel.classList.add('collapsed');
+              body.style.display = 'none';
+              icon.textContent = '🔽';
+              header.style.borderBottom = 'none';
+              header.style.marginBottom = '0';
+              header.style.paddingBottom = '0';
+            }
+          });
+        </script>
 
         <!-- Statistics / Analysis Visualization -->
         <div
