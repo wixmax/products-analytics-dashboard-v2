@@ -150,7 +150,25 @@ class InstallController extends Controller
         if ($run === 'true') {
             try {
                 $migrate = \Config\Services::migrations();
-                $migrate->latest();
+                
+                // 1. Run Shield migrations first to ensure core tables (users, etc.) exist
+                $migrate->setNamespace('CodeIgniter\Shield')->latest();
+                
+                // 2. Run App migrations next
+                $migrate->setNamespace('App')->latest();
+                
+                // 3. Run any other namespaces (excluding core CodeIgniter / Shield / App which are already run)
+                $namespaces = array_keys(service('autoloader')->getNamespace());
+                foreach ($namespaces as $ns) {
+                    if (in_array($ns, ['CodeIgniter\Shield', 'App', 'CodeIgniter'], true)) {
+                        continue;
+                    }
+                    try {
+                        $migrate->setNamespace($ns)->latest();
+                    } catch (\Throwable $e) {
+                        // Silence errors for third-party namespaces that do not have migration files
+                    }
+                }
                 
                 // Successfully migrated, go to step 4
                 return redirect()->to(base_url('install/admin'));
