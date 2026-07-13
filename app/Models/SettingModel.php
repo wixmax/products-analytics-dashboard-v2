@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-use CodeIgniter\Model;
+use App\Models\TenantModel;
 
-class SettingModel extends Model
+class SettingModel extends TenantModel
 {
     protected $table            = 'settings';
-    protected $primaryKey       = 'key';
-    protected $useAutoIncrement = false;
+    protected $primaryKey       = 'id';
+    protected $useAutoIncrement = true;
     protected $returnType       = 'array';
     protected $useSoftDeletes   = false;
     protected $protectFields    = true;

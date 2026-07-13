@@ -84,10 +84,12 @@ error_log
 /phpunit
 
 #-------------------------
-# Composer
+# Composer & Node Modules
 #-------------------------
 vendor/
 vendor.zip
+node_modules/
+
 
 #-------------------------
 # IDE / Development Files

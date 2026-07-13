@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use CodeIgniter\Model;
+use App\Models\TenantModel;
 
-class ProductModel extends Model
+class ProductModel extends TenantModel
 {
     protected $table            = 'products';
     protected $primaryKey       = 'id';

@@ -34,6 +34,9 @@ class Filters extends BaseFilters
         'forcehttps'    => ForceHTTPS::class,
         'pagecache'     => PageCache::class,
         'performance'   => PerformanceMetrics::class,
+        'tenant'        => \App\Filters\TenantFilter::class,
+        'auth'          => \CodeIgniter\Shield\Filters\SessionAuth::class,
+        'role'          => \CodeIgniter\Shield\Filters\GroupFilter::class,
     ];
 
     /**
@@ -75,6 +78,19 @@ class Filters extends BaseFilters
             // 'honeypot',
             // 'csrf',
             // 'invalidchars',
+            'auth' => [
+                'except' => [
+                    'login', 'login/*', 'register', 'register/*', 'forgot', 'forgot/*',
+                    'logout', 'logout/*', 'auth/google*', 'oauth*',
+                    'api/*', 'api/products/*'
+                ]
+            ],
+            'tenant' => [
+                'except' => [
+                    'login', 'login/*', 'register', 'register/*', 'forgot', 'forgot/*',
+                    'logout', 'logout/*', 'auth/google*', 'oauth*',
+                ]
+            ],
         ],
         'after' => [
             // 'honeypot',

@@ -260,7 +260,10 @@ button:active { transform: scale(0.97); }
         <h1>URL Parameter Encoder</h1>
         <p>أداة لتشفير JSON كـ query parameter لـ tRPC requests</p>
       </div>
-      <a href="<?= base_url('/') ?>" style="text-decoration: none; background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text); padding: 0.5rem 1rem; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 500; transition: border-color 0.15s ease;" onmouseover="this.style.borderColor='var(--color-primary)'" onmouseout="this.style.borderColor='var(--color-border)'">🏠 العودة للوحة التحكم</a>
+      <div style="display: flex; gap: 8px;">
+        <a href="<?= base_url('/') ?>" style="text-decoration: none; background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text); padding: 0.5rem 1rem; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 500; transition: border-color 0.15s ease;" onmouseover="this.style.borderColor='var(--color-primary)'" onmouseout="this.style.borderColor='var(--color-border)'">🏠 العودة للوحة التحكم</a>
+        <a href="<?= base_url('logout') ?>" style="text-decoration: none; background: var(--color-error-bg); border: 1px solid var(--color-error); color: var(--color-error); padding: 0.5rem 1rem; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 500; transition: opacity 0.15s ease;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">🚪 تسجيل الخروج</a>
+      </div>
     </div>
   </header>
 

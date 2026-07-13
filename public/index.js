@@ -53,7 +53,8 @@ async function loadInitialDatabaseData() {
   try {
     const collectionsRes = await fetch("/api/products/collections");
     if (collectionsRes.ok) {
-      collections = await collectionsRes.json();
+      const data = await collectionsRes.json();
+      collections = data && data.length > 0 ? data : ["\u0639\u0627\u0645\u0629", "\u0645\u0644\u0627\u0628\u0633", "\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0627\u062a", "\u0623\u062f\u0648\u0627\u062a \u0645\u0646\u0632\u0644\u064a\u0629"];
     }
     const savedRes = await fetch("/api/products/saved");
     if (savedRes.ok) {
@@ -121,6 +122,7 @@ window.addEventListener("DOMContentLoaded", () => {
   flatpickr("#filter-date", {
     dateFormat: "Y-m-d",
     allowInput: true,
+    maxDate: "today",
     onChange: (dates, dateStr) => {
       if (dateStr) localStorage.setItem("api_filter_date", dateStr);
       else localStorage.removeItem("api_filter_date");
@@ -502,24 +504,28 @@ function processLoadedData(rawData, sourceInfo) {
   globalRawData = rawData;
   let targetData = null;
 
-  // The schema is typically [{ result: { data: { json: { productsEntries: [...] } } } }]
-  // Handle wrapped array or direct object
-  const base = Array.isArray(rawData) ? rawData[0] : rawData;
-
   try {
-    if (base?.result?.data?.json) {
-      targetData = base.result.data.json;
-    } else if (base?.data?.json) {
-      targetData = base.data.json;
-    } else if (base?.json) {
-      targetData = base.json;
-    } else {
-      // Look deeply for productsEntries
-      targetData = base;
+    let rawList = [];
+    if (Array.isArray(rawData)) {
+      if (rawData.length > 0) {
+        const first = rawData[0];
+        if (first && typeof first === "object" && (first.productUrl !== undefined || first.product_url !== undefined || first.title !== undefined || first.product_title !== undefined)) {
+          // Direct list of products
+          rawList = rawData;
+        } else {
+          // Wrapped array
+          const base = rawData[0];
+          const targetData = base?.result?.data?.json ?? base?.data?.json ?? base?.json ?? base ?? {};
+          rawList = targetData.productsEntries || targetData.results || (Array.isArray(targetData) ? targetData : []);
+        }
+      } else {
+        rawList = [];
+      }
+    } else if (rawData && typeof rawData === "object") {
+      // Single object wrapper or single product
+      const targetData = rawData.result?.data?.json ?? rawData.data?.json ?? rawData.json ?? rawData;
+      rawList = targetData.productsEntries || targetData.results || (Array.isArray(targetData) ? targetData : [targetData]);
     }
-
-    // Consolidate and map array variations to uniform naming
-    const rawList = targetData.productsEntries || targetData.results || [];
 
     allProducts = rawList.map((p) => {
       return {
@@ -1244,6 +1250,10 @@ async function openDetailsModal(product) {
   modal.style.display = "flex";
 
   // Set basic details
+  const priceInput = document.getElementById("details-price-input");
+  if (priceInput) {
+    priceInput.value = product.actualPrice || product.price_1 || "0";
+  }
   document.getElementById("details-title").textContent =
     product.title || "تفاصيل الإعلان والنشاط";
   document.getElementById("details-info-title").textContent =
@@ -2103,4 +2113,96 @@ async function refreshActivityData() {
   }
 
   showToast("✅ تم تحديث بيانات النشاط والتحليل الاستراتيجي", "success");
+}
+
+function updateDetailsRawDataView() {
+  const product = currentProductForDetails;
+  if (!product) return;
+  const rawDataContainer = document.getElementById("details-raw-data-list");
+  if (!rawDataContainer) return;
+  
+  let listHtml = "";
+  for (const [key, value] of Object.entries(product)) {
+    if (value !== null && value !== undefined && value !== "") {
+      let valStr = String(value);
+      if (valStr.length > 80) valStr = valStr.slice(0, 80) + "...";
+      listHtml += `
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding: 4px 0; font-family: sans-serif; gap: 10px;">
+          <span style="color: var(--color-primary); font-weight: 600; text-transform: capitalize;">${key}:</span>
+          <span style="word-break: break-all; text-align: right; color: var(--color-text-main); font-weight: 500;">${valStr}</span>
+        </div>
+      `;
+    }
+  }
+  if (currentProductDetailsWithAnalysis && currentProductDetailsWithAnalysis.computed_metrics) {
+    for (const [key, value] of Object.entries(
+      currentProductDetailsWithAnalysis.computed_metrics,
+    )) {
+      if (value !== null && value !== undefined && value !== "") {
+        let valStr = String(value);
+        if (valStr.length > 80) valStr = valStr.slice(0, 80) + "...";
+        listHtml += `
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding: 4px 0; font-family: sans-serif; gap: 10px; background: var(--bg-card); opacity: 0.9;">
+            <span style="color: var(--color-success); font-weight: 600; text-transform: capitalize;">computed_${key}:</span>
+            <span style="word-break: break-all; text-align: right; color: var(--color-text-main); font-weight: 500;">${valStr}</span>
+          </div>
+        `;
+      }
+    }
+  }
+  rawDataContainer.innerHTML =
+    listHtml ||
+    `<div style="text-align: center; padding: 10px; color: var(--color-text-muted);">لا توجد بيانات إضافية</div>`;
+}
+
+async function handleDetailsPriceChange(val) {
+  if (!currentProductForDetails) return;
+  
+  currentProductForDetails.actualPrice = val;
+  currentProductForDetails.price_1 = val;
+  if (currentProductDetailsWithAnalysis) {
+    currentProductDetailsWithAnalysis.actualPrice = val;
+    currentProductDetailsWithAnalysis.price_1 = val;
+  }
+  
+  if (typeof allProducts !== 'undefined') {
+    const pMain = allProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+    if (pMain) {
+      pMain.actualPrice = val;
+      pMain.price_1 = val;
+    }
+  }
+  if (typeof currentFilteredProducts !== 'undefined') {
+    const pFiltered = currentFilteredProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+    if (pFiltered) {
+      pFiltered.actualPrice = val;
+      pFiltered.price_1 = val;
+    }
+  }
+  
+  const pSaved = savedProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+  if (pSaved) {
+    pSaved.actualPrice = val;
+    pSaved.price_1 = val;
+    
+    try {
+      const res = await fetch("/api/products/saved/price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_url: pSaved.productUrl,
+          price: val
+        })
+      });
+      if (res.ok) {
+        showToast("✅ تم تحديث سعر المنتج في قاعدة البيانات", "success");
+      }
+    } catch (e) {
+      console.error("Failed to save price update to database", e);
+    }
+  } else {
+    showToast("⚠️ السعر محدث مؤقتاً. لحفظه في قاعدة البيانات بشكل دائم، يرجى حفظ المنتج أولاً.", "info");
+  }
+  
+  updateDetailsRawDataView();
 }

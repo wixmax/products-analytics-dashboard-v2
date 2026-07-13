@@ -168,6 +168,7 @@
             <a href="<?= base_url('/') ?>" class="btn btn-secondary"
               >🏠 العودة للوحة التحكم</a
             >
+            <a href="<?= base_url('logout') ?>" class="btn btn-error" style="background:rgba(239,68,68,0.12);color:var(--color-error);border-color:rgba(239,68,68,0.3);" title="تسجيل الخروج">🚪 خروج</a>
             <button class="theme-toggle" id="theme-toggle-btn">🌓</button>
           </div>
         </div>

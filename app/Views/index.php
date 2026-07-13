@@ -215,6 +215,28 @@
             </button>
             <a href="<?= base_url('snapshots') ?>" class="btn btn-secondary">📸 اللقطات</a>
             <a href="<?= base_url('settings') ?>" class="btn btn-secondary">⚙️ الإعدادات</a>
+            
+            <?php if (auth()->loggedIn()): ?>
+              <div class="user-profile-dropdown">
+                <button class="user-profile-dropdown-btn">
+                  <div class="user-avatar-small"><?= strtoupper(substr(esc(auth()->user()->username ?? 'U'), 0, 1)) ?></div>
+                  <span class="user-name-small"><?= esc(auth()->user()->username) ?></span>
+                  <span class="role-badge-small">
+                    <?= esc(auth()->user()->inGroup('superadmin') ? 'Superadmin' : (auth()->user()->inGroup('admin') ? 'Admin' : (auth()->user()->inGroup('developer') ? 'Developer' : (auth()->user()->inGroup('beta') ? 'Beta' : 'User')))) ?>
+                  </span>
+                  <span class="dropdown-chevron">▼</span>
+                </button>
+                <div class="user-profile-dropdown-content">
+                  <a href="<?= base_url('profile') ?>">👤 الملف الشخصي</a>
+                  <a href="<?= base_url('workspace') ?>">📁 مساحة العمل</a>
+                  <?php if (auth()->user()->inGroup('superadmin', 'admin')): ?>
+                    <a href="<?= base_url('admin/users') ?>" style="border-top: 1px solid var(--border-color);">🛡️ إدارة الأعضاء</a>
+                  <?php endif; ?>
+                  <a href="<?= base_url('logout') ?>" style="color: var(--color-error); border-top: 1px solid var(--border-color);">🚪 تسجيل الخروج</a>
+                </div>
+              </div>
+            <?php endif; ?>
+
             <button
               class="theme-toggle"
               id="theme-toggle-btn"
@@ -222,6 +244,7 @@
             >
               🌓
             </button>
+
           </div>
         </div>
 
@@ -643,6 +666,13 @@
             <div class="details-product-info">
               <div class="details-product-title" id="details-info-title">-</div>
               <p class="details-product-desc" id="details-info-desc">-</p>
+              
+              <!-- حقل تعديل السعر يدوياً -->
+              <div class="details-price-edit" style="margin-top: 15px; display: flex; align-items: center; gap: 10px; background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <span style="font-weight: 700; font-size: 0.85rem; color: var(--color-primary);">💰 سعر المنتج (تعديل يدوي):</span>
+                <input type="text" id="details-price-input" value="0" style="width: 100px; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-size: 0.85rem; text-align: center; font-weight: 600;" onchange="handleDetailsPriceChange(this.value)" />
+                <span style="font-size: 0.85rem; color: var(--color-text-muted);">USD / local currency</span>
+              </div>
             </div>
 
             <!-- All Data & JSON Download Section -->
@@ -880,6 +910,6 @@
     </script>
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="<?= base_url('index.js') ?>?v=2.5"></script>
+    <script src="<?= base_url('index.js') ?>?v=2.6"></script>
   </body>
 </html>

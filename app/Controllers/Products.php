@@ -26,6 +26,12 @@ class Products extends ResourceController
 
         $builder = $model->where('origin', $origin);
 
+        // Exclude tenant-saved copies from the main list so we only query master synced/imported rows
+        $builder->groupStart()
+                    ->where('is_saved', false)
+                    ->orWhere('tenant_id IS NULL')
+                ->groupEnd();
+
         // Search
         if (!empty($search)) {
             $builder->groupStart()
@@ -100,6 +106,49 @@ class Products extends ResourceController
         $total = $builder->countAllResults(false);
         $offset = ($page - 1) * $perPage;
         $products = $builder->limit($perPage, $offset)->get()->getResultArray();
+
+        $context = \App\Libraries\TenantContext::getInstance();
+        $tenantId = $context->getTenantId();
+        
+        $savedUrls = [];
+        $savedRatings = [];
+        $savedNotes = [];
+        $savedPrices = [];
+        $savedStatuses = [];
+        $savedCollections = [];
+
+        if ($tenantId !== null) {
+            $savedRows = $model->where('tenant_id', $tenantId)
+                               ->where('is_saved', true)
+                               ->findAll();
+            foreach ($savedRows as $row) {
+                $savedUrls[] = $row['product_url'];
+                $savedRatings[$row['product_url']] = intval($row['rating']);
+                $savedNotes[$row['product_url']] = $row['notes'];
+                $savedPrices[$row['product_url']] = $row['price_1'];
+                $savedStatuses[$row['product_url']] = $row['saved_status'];
+                $savedCollections[$row['product_url']] = $row['collection'];
+            }
+        }
+
+        foreach ($products as &$p) {
+            $url = $p['product_url'];
+            $isSaved = in_array($url, $savedUrls, true);
+            $p['is_saved'] = $isSaved;
+            if ($isSaved) {
+                $p['rating'] = $savedRatings[$url] ?? 0;
+                $p['notes'] = $savedNotes[$url] ?? '';
+                $p['price_1'] = $savedPrices[$url] ?? $p['price_1'];
+                $p['saved_status'] = $savedStatuses[$url] ?? 'active';
+                $p['collection'] = $savedCollections[$url] ?? 'عامة';
+            } else {
+                $p['rating'] = 0;
+                $p['notes'] = '';
+                $p['saved_status'] = 'active';
+                $p['collection'] = 'عامة';
+            }
+            $p['actualPrice'] = $p['price_1'];
+        }
 
         return $this->respond([
             'results' => $products,
@@ -322,15 +371,40 @@ class Products extends ResourceController
         }
 
         // Re-import using the importJson logic
-        $base = is_array($data) ? ($data[0] ?? null) : $data;
-        $targetData = $base['result']['data']['json'] ?? null;
-        if (!$targetData) {
-            return $this->fail('Unrecognized snapshot JSON structure');
+        $rawList = [];
+        if (is_array($data)) {
+            $isAssoc = false;
+            if (count($data) > 0) {
+                $keys = array_keys($data);
+                $isAssoc = (array_keys($keys) !== $keys);
+            }
+
+            if ($isAssoc) {
+                $targetData = $data['result']['data']['json'] ?? $data['data']['json'] ?? $data['json'] ?? $data;
+                $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                if (!is_array($rawList)) {
+                    $rawList = is_array($targetData) ? $targetData : [$data];
+                }
+            } else {
+                if (count($data) > 0) {
+                    $first = $data[0];
+                    if (is_array($first) && (isset($first['productUrl']) || isset($first['product_url']) || isset($first['title']) || isset($first['product_title']))) {
+                        $rawList = $data;
+                    } else if (is_array($first) && (isset($first['result']) || isset($first['data']) || isset($first['json']))) {
+                        $targetData = $first['result']['data']['json'] ?? $first['data']['json'] ?? $first['json'] ?? $first;
+                        $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                        if (!is_array($rawList)) {
+                            $rawList = is_array($targetData) ? $targetData : [];
+                        }
+                    } else {
+                        $rawList = $data;
+                    }
+                }
+            }
         }
 
-        $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
-        if (!is_array($rawList)) {
-            $rawList = is_array($targetData) ? $targetData : [];
+        if (empty($rawList)) {
+            return $this->fail('Unrecognized snapshot JSON structure or empty snapshot');
         }
 
         $origin = $snapshot['origin'];
@@ -411,14 +485,38 @@ class Products extends ResourceController
         $productCount = 0;
 
         // Try to determine product count from structure
-        $base = is_array($decoded) ? ($decoded[0] ?? null) : $decoded;
-        $targetData = $base['result']['data']['json'] ?? null;
-        if ($targetData) {
-            $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
-            if (is_array($rawList)) {
-                $productCount = count($rawList);
+        $rawList = [];
+        if (is_array($decoded)) {
+            $isAssoc = false;
+            if (count($decoded) > 0) {
+                $keys = array_keys($decoded);
+                $isAssoc = (array_keys($keys) !== $keys);
+            }
+
+            if ($isAssoc) {
+                $targetData = $decoded['result']['data']['json'] ?? $decoded['data']['json'] ?? $decoded['json'] ?? $decoded;
+                $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                if (!is_array($rawList)) {
+                    $rawList = is_array($targetData) ? $targetData : [$decoded];
+                }
+            } else {
+                if (count($decoded) > 0) {
+                    $first = $decoded[0];
+                    if (is_array($first) && (isset($first['productUrl']) || isset($first['product_url']) || isset($first['title']) || isset($first['product_title']))) {
+                        $rawList = $decoded;
+                    } else if (is_array($first) && (isset($first['result']) || isset($first['data']) || isset($first['json']))) {
+                        $targetData = $first['result']['data']['json'] ?? $first['data']['json'] ?? $first['json'] ?? $first;
+                        $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                        if (!is_array($rawList)) {
+                            $rawList = is_array($targetData) ? $targetData : [];
+                        }
+                    } else {
+                        $rawList = $decoded;
+                    }
+                }
             }
         }
+        $productCount = count($rawList);
 
         $dataToSave = [
             'origin' => $origin,
@@ -450,16 +548,36 @@ class Products extends ResourceController
         }
 
         // Expecting an array of product objects (like saved products export)
-        $products = is_array($decoded) ? $decoded : [$decoded];
+        $isAssoc = false;
+        if (is_array($decoded) && count($decoded) > 0) {
+            $keys = array_keys($decoded);
+            $isAssoc = (array_keys($keys) !== $keys);
+        }
+
+        $products = [];
+        if (is_array($decoded)) {
+            if ($isAssoc) {
+                $products = [$decoded];
+            } else {
+                $products = $decoded;
+            }
+        } else if ($decoded !== null) {
+            $products = [$decoded];
+        }
         $model = new ProductModel();
         $inserted = 0;
         $updated = 0;
+
+        $context = \App\Libraries\TenantContext::getInstance();
+        $tenantId = $context->getTenantId();
 
         foreach ($products as $p) {
             $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
             if (empty($productUrl)) continue;
 
-            $existing = $model->where('product_url', $productUrl)->first();
+            $existing = $model->where('product_url', $productUrl)
+                              ->where('tenant_id', $tenantId)
+                              ->first();
 
             $dataToSave = [
                 'title' => $p['title'] ?? 'بدون عنوان',
@@ -485,6 +603,7 @@ class Products extends ResourceController
                 'saved_status' => 'active',
                 'rating' => intval($p['rating'] ?? 0),
                 'notes' => $p['notes'] ?? '',
+                'tenant_id' => $tenantId
             ];
 
             if ($existing) {
@@ -506,6 +625,10 @@ class Products extends ResourceController
 
     public function deleteSnapshot($id = null)
     {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return $this->failForbidden('Only admins are allowed to delete snapshots. / لا يسمح بحذف لقطات البيانات إلا للمسؤولين.');
+        }
+
         if (!$id) {
             $id = $this->request->getVar('id');
         }
@@ -574,7 +697,7 @@ class Products extends ResourceController
         }
 
         $settingModel = new \App\Models\SettingModel();
-        $dataSourceSetting = $settingModel->find('data-source');
+        $dataSourceSetting = $settingModel->where('key', 'data-source')->first();
         $dataSource = $dataSourceSetting ? $dataSourceSetting['value'] : 'database';
 
         $model = new ProductModel();
@@ -689,15 +812,40 @@ class Products extends ResourceController
             return $this->fail('Invalid JSON structure');
         }
 
-        $base = is_array($rawData) ? ($rawData[0] ?? null) : $rawData;
-        $targetData = $base['result']['data']['json'] ?? null;
-        if (!$targetData) {
-            $targetData = $base['data']['json'] ?? $base['json'] ?? $base;
-        }
+        $rawList = [];
+        if (is_array($rawData)) {
+            $isAssoc = false;
+            if (count($rawData) > 0) {
+                $keys = array_keys($rawData);
+                $isAssoc = (array_keys($keys) !== $keys);
+            }
 
-        $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
-        if (!is_array($rawList)) {
-            $rawList = is_array($targetData) ? $targetData : [];
+            if ($isAssoc) {
+                // Wrapper object or single product object
+                $targetData = $rawData['result']['data']['json'] ?? $rawData['data']['json'] ?? $rawData['json'] ?? $rawData;
+                $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                if (!is_array($rawList)) {
+                    $rawList = is_array($targetData) ? $targetData : [$targetData];
+                }
+            } else {
+                // Sequential array
+                if (count($rawData) > 0) {
+                    $first = $rawData[0];
+                    if (is_array($first) && (isset($first['productUrl']) || isset($first['product_url']) || isset($first['title']) || isset($first['product_title']))) {
+                        // Direct list of products!
+                        $rawList = $rawData;
+                    } else if (is_array($first) && (isset($first['result']) || isset($first['data']) || isset($first['json']))) {
+                        // Wrapped batch array
+                        $targetData = $first['result']['data']['json'] ?? $first['data']['json'] ?? $first['json'] ?? $first;
+                        $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                        if (!is_array($rawList)) {
+                            $rawList = is_array($targetData) ? $targetData : [];
+                        }
+                    } else {
+                        $rawList = $rawData;
+                    }
+                }
+            }
         }
 
         $origin = $this->request->getVar('origin') ?? 'Local';
@@ -774,6 +922,11 @@ class Products extends ResourceController
 
         $builder = $model->where('is_saved', true);
 
+        $context = \App\Libraries\TenantContext::getInstance();
+        if ($context->hasTenant()) {
+            $builder->where('tenant_id', $context->getTenantId());
+        }
+
         // Search
         if (!empty($search)) {
             $builder->groupStart()
@@ -813,6 +966,9 @@ class Products extends ResourceController
         }
 
         $savedProducts = $builder->findAll();
+        foreach ($savedProducts as &$p) {
+            $p['actualPrice'] = $p['price_1'];
+        }
 
         return $this->respond($savedProducts);
     }
@@ -822,12 +978,12 @@ class Products extends ResourceController
         $model = new ProductModel();
         
         // Accept payload
-        $productUrl = $this->request->getVar('product_url');
-        if (empty($productUrl)) {
-            $json = $this->request->getJSON(true);
+        $json = $this->request->getJSON(true);
+        if (!empty($json)) {
             $productUrl = $json['product_url'] ?? $json['productUrl'] ?? null;
             $product = $json;
         } else {
+            $productUrl = $this->request->getVar('product_url');
             $product = $this->request->getPost();
         }
 
@@ -835,21 +991,67 @@ class Products extends ResourceController
             return $this->fail('Product URL is required');
         }
 
-        // Try to find existing product by product_url
-        $existing = $model->where('product_url', $productUrl)->first();
+        $context = \App\Libraries\TenantContext::getInstance();
+        $tenantId = $context->getTenantId();
+
+        // Try to find existing product by product_url and tenant_id
+        $existing = $model->where('product_url', $productUrl)
+                          ->where('tenant_id', $tenantId)
+                          ->first();
 
         if ($existing) {
             // PostgreSQL returns boolean as 't'/'f' strings, PHP needs explicit check
-            $currentlySaved = filter_var($existing['is_saved'], FILTER_VALIDATE_BOOLEAN);
+            $currentlySaved = ($existing['is_saved'] === true || $existing['is_saved'] === 't' || $existing['is_saved'] === 1 || $existing['is_saved'] === '1' || $existing['is_saved'] === 'true');
             $newSavedState = !$currentlySaved;
             $updateData = [
                 'is_saved' => $newSavedState,
                 'saved_at' => $newSavedState ? date('Y-m-d H:i:s') : null,
                 'collection' => $newSavedState ? ($existing['collection'] ?: 'عامة') : $existing['collection'],
             ];
+
+            if ($newSavedState) {
+                // Update with complete details from the request when saving
+                $origin = $product['origin'] ?? $existing['origin'] ?? 'Winning';
+                
+                if (isset($product['title'])) $updateData['title'] = $product['title'];
+                if (isset($product['country'])) $updateData['country'] = $product['country'];
+                if (isset($product['algorithm']) || isset($product['algo'])) {
+                    $updateData['algo'] = $product['algorithm'] ?? $product['algo'];
+                }
+                if (isset($product['ad_start_date'])) {
+                    $updateData['ad_start_date'] = $this->cleanDateStr($product['ad_start_date']);
+                }
+                if (isset($product['ads_count'])) $updateData['ads_count'] = intval($product['ads_count']);
+                if (isset($product['unique_image_count'])) $updateData['unique_image_count'] = intval($product['unique_image_count']);
+                if (isset($product['unique_video_count'])) $updateData['unique_video_count'] = intval($product['unique_video_count']);
+                if (isset($product['avg_creatives'])) $updateData['avg_creatives'] = floatval($product['avg_creatives']);
+                if (isset($product['ads_per_unique_url'])) $updateData['ads_per_unique_url'] = floatval($product['ads_per_unique_url']);
+                
+                if (isset($product['ad_title'])) $updateData['ad_title'] = $product['ad_title'];
+                if (isset($product['ad_body'])) $updateData['ad_body'] = $product['ad_body'];
+                
+                if (isset($product['ad_image_urls'])) {
+                    $updateData['ad_image_urls'] = is_array($product['ad_image_urls']) ? implode(';', $product['ad_image_urls']) : $product['ad_image_urls'];
+                }
+                if (isset($product['ad_video_urls'])) {
+                    $updateData['ad_video_urls'] = is_array($product['ad_video_urls']) ? implode(';', $product['ad_video_urls']) : $product['ad_video_urls'];
+                }
+                
+                if (isset($product['price_1']) || isset($product['actualPrice']) || isset($product['price'])) {
+                    $updateData['price_1'] = strval($product['price_1'] ?? $product['actualPrice'] ?? $product['price']);
+                }
+                if (isset($product['active_ads'])) $updateData['active_ads'] = (bool)$product['active_ads'];
+                if (isset($product['origin'])) $updateData['origin'] = $product['origin'];
+                
+                if ($origin === 'Winning' && isset($product['badge_algorithm'])) {
+                    $updateData['badge_algorithm'] = $product['badge_algorithm'];
+                }
+            }
+
             if (!empty($product['api_version'])) {
                 $updateData['api_version'] = $product['api_version'];
             }
+            
             $model->update($existing['id'], $updateData);
             return $this->respond([
                 'success' => true,
@@ -858,37 +1060,41 @@ class Products extends ResourceController
                 'message' => $newSavedState ? 'تم حفظ المنتج بنجاح! ⭐' : 'تمت إزالة المنتج من المحفوظات.',
             ]);
         } else {
-            // If the product doesn't exist, we insert it!
-            $origin = $product['origin'] ?? 'Winning';
+            // If the product doesn't exist for this tenant, we create a tenant-specific saved row.
+            // Let's first search for a global or any product row with this product_url to copy its basic details
+            $globalProduct = $model->where('product_url', $productUrl)->first();
+            
+            $origin = $product['origin'] ?? $globalProduct['origin'] ?? 'Winning';
             $dataToInsert = [
-                'title' => $product['title'] ?? 'بدون عنوان',
+                'title' => $product['title'] ?? $globalProduct['title'] ?? 'بدون عنوان',
                 'product_url' => $productUrl,
-                'country' => $product['country'] ?? '',
-                'algo' => $product['algorithm'] ?? $product['algo'] ?? ($origin === 'Winning' ? 'winning' : 'new'),
-                'ad_start_date' => $this->cleanDateStr($product['ad_start_date'] ?? null),
-                'ads_count' => intval($product['ads_count'] ?? 0),
-                'unique_image_count' => intval($product['unique_image_count'] ?? 0),
-                'unique_video_count' => intval($product['unique_video_count'] ?? 0),
-                'avg_creatives' => floatval($product['avg_creatives'] ?? 1),
-                'ads_per_unique_url' => floatval($product['ads_per_unique_url'] ?? 1),
-                'ad_title' => $product['ad_title'] ?? '',
-                'ad_body' => $product['ad_body'] ?? '',
-                'ad_image_urls' => is_array($product['ad_image_urls'] ?? null) ? implode(';', $product['ad_image_urls']) : ($product['ad_image_urls'] ?? ''),
-                'ad_video_urls' => is_array($product['ad_video_urls'] ?? null) ? implode(';', $product['ad_video_urls']) : ($product['ad_video_urls'] ?? ''),
-                'price_1' => strval($product['price_1'] ?? $product['actualPrice'] ?? $product['price'] ?? '0'),
-                'active_ads' => isset($product['active_ads']) ? (bool)$product['active_ads'] : true,
+                'country' => $product['country'] ?? $globalProduct['country'] ?? '',
+                'algo' => $product['algorithm'] ?? $product['algo'] ?? $globalProduct['algo'] ?? ($origin === 'Winning' ? 'winning' : 'new'),
+                'ad_start_date' => $this->cleanDateStr($product['ad_start_date'] ?? $globalProduct['ad_start_date'] ?? null),
+                'ads_count' => intval($product['ads_count'] ?? $globalProduct['ads_count'] ?? 0),
+                'unique_image_count' => intval($product['unique_image_count'] ?? $globalProduct['unique_image_count'] ?? 0),
+                'unique_video_count' => intval($product['unique_video_count'] ?? $globalProduct['unique_video_count'] ?? 0),
+                'avg_creatives' => floatval($product['avg_creatives'] ?? $globalProduct['avg_creatives'] ?? 1),
+                'ads_per_unique_url' => floatval($product['ads_per_unique_url'] ?? $globalProduct['ads_per_unique_url'] ?? 1),
+                'ad_title' => $product['ad_title'] ?? $globalProduct['ad_title'] ?? '',
+                'ad_body' => $product['ad_body'] ?? $globalProduct['ad_body'] ?? '',
+                'ad_image_urls' => is_array($product['ad_image_urls'] ?? null) ? implode(';', $product['ad_image_urls']) : ($product['ad_image_urls'] ?? $globalProduct['ad_image_urls'] ?? ''),
+                'ad_video_urls' => is_array($product['ad_video_urls'] ?? null) ? implode(';', $product['ad_video_urls']) : ($product['ad_video_urls'] ?? $globalProduct['ad_video_urls'] ?? ''),
+                'price_1' => strval($product['price_1'] ?? $product['actualPrice'] ?? $product['price'] ?? $globalProduct['price_1'] ?? '0'),
+                'active_ads' => isset($product['active_ads']) ? (bool)$product['active_ads'] : (isset($globalProduct['active_ads']) ? (bool)$globalProduct['active_ads'] : true),
                 'origin' => $origin,
-                'api_version' => $product['api_version'] ?? '',
+                'api_version' => $product['api_version'] ?? $globalProduct['api_version'] ?? '',
                 'is_saved' => true,
                 'saved_at' => date('Y-m-d H:i:s'),
                 'collection' => $product['collection'] ?? 'عامة',
                 'saved_status' => 'active',
                 'rating' => 0,
-                'notes' => ''
+                'notes' => '',
+                'tenant_id' => $tenantId
             ];
 
             if ($origin === 'Winning') {
-                $dataToInsert['badge_algorithm'] = $product['badge_algorithm'] ?? 'winning';
+                $dataToInsert['badge_algorithm'] = $product['badge_algorithm'] ?? $globalProduct['badge_algorithm'] ?? 'winning';
             }
             // Insert new product into the database
             $model->insert($dataToInsert);
@@ -914,7 +1120,12 @@ class Products extends ResourceController
             $rating = intval($json['rating'] ?? 0);
         }
 
-        $existing = $model->where('product_url', $productUrl)->first();
+        $context = \App\Libraries\TenantContext::getInstance();
+        $tenantId = $context->getTenantId();
+
+        $existing = $model->where('product_url', $productUrl)
+                          ->where('tenant_id', $tenantId)
+                          ->first();
         if (!$existing) {
             return $this->failNotFound('Product not found');
         }
@@ -935,12 +1146,43 @@ class Products extends ResourceController
             $notes = $json['notes'] ?? '';
         }
 
-        $existing = $model->where('product_url', $productUrl)->first();
+        $context = \App\Libraries\TenantContext::getInstance();
+        $tenantId = $context->getTenantId();
+
+        $existing = $model->where('product_url', $productUrl)
+                          ->where('tenant_id', $tenantId)
+                          ->first();
         if (!$existing) {
             return $this->failNotFound('Product not found');
         }
 
         $model->update($existing['id'], ['notes' => $notes]);
+        return $this->respond(['success' => true]);
+    }
+
+    public function updatePrice()
+    {
+        $model = new ProductModel();
+        $productUrl = $this->request->getVar('product_url');
+        $price = $this->request->getVar('price');
+
+        if (empty($productUrl)) {
+            $json = $this->request->getJSON(true);
+            $productUrl = $json['product_url'] ?? null;
+            $price = $json['price'] ?? '0';
+        }
+
+        $context = \App\Libraries\TenantContext::getInstance();
+        $tenantId = $context->getTenantId();
+
+        $existing = $model->where('product_url', $productUrl)
+                          ->where('tenant_id', $tenantId)
+                          ->first();
+        if (!$existing) {
+            return $this->failNotFound('Product not found');
+        }
+
+        $model->update($existing['id'], ['price_1' => strval($price)]);
         return $this->respond(['success' => true]);
     }
 
@@ -956,7 +1198,12 @@ class Products extends ResourceController
             $status = $json['status'] ?? 'active';
         }
 
-        $existing = $model->where('product_url', $productUrl)->first();
+        $context = \App\Libraries\TenantContext::getInstance();
+        $tenantId = $context->getTenantId();
+
+        $existing = $model->where('product_url', $productUrl)
+                          ->where('tenant_id', $tenantId)
+                          ->first();
         if (!$existing) {
             return $this->failNotFound('Product not found');
         }
@@ -977,7 +1224,12 @@ class Products extends ResourceController
             $collection = $json['collection'] ?? 'عامة';
         }
 
-        $existing = $model->where('product_url', $productUrl)->first();
+        $context = \App\Libraries\TenantContext::getInstance();
+        $tenantId = $context->getTenantId();
+
+        $existing = $model->where('product_url', $productUrl)
+                          ->where('tenant_id', $tenantId)
+                          ->first();
         if (!$existing) {
             return $this->failNotFound('Product not found');
         }
@@ -989,6 +1241,12 @@ class Products extends ResourceController
     public function clearSaved()
     {
         $model = new ProductModel();
+        
+        $context = \App\Libraries\TenantContext::getInstance();
+        if ($context->hasTenant()) {
+            $model->where('tenant_id', $context->getTenantId());
+        }
+
         $model->where('is_saved', true)->set([
             'is_saved' => false,
             'saved_at' => null,
@@ -1003,7 +1261,21 @@ class Products extends ResourceController
     public function collections()
     {
         $model = new \App\Models\CollectionModel();
-        $collections = $model->orderBy('id', 'ASC')->findAll();
+        // Bypass tenant scoping so collections are always accessible
+        $collections = $model->bypassTenant()->orderBy('id', 'ASC')->findAll();
+
+        // Seed default collections if the table is empty
+        if (empty($collections)) {
+            $defaults = ['عامة', 'ملابس', 'إلكترونيات', 'أدوات منزلية'];
+            foreach ($defaults as $name) {
+                $exists = $model->bypassTenant()->where('name', $name)->first();
+                if (!$exists) {
+                    $model->insert(['name' => $name]);
+                }
+            }
+            $collections = $model->bypassTenant()->orderBy('id', 'ASC')->findAll();
+        }
+
         return $this->respond(array_column($collections, 'name'));
     }
 
@@ -1057,6 +1329,12 @@ class Products extends ResourceController
 
         // Update products under this collection to 'عامة'
         $productModel = new ProductModel();
+        
+        $context = \App\Libraries\TenantContext::getInstance();
+        if ($context->hasTenant()) {
+            $productModel->where('tenant_id', $context->getTenantId());
+        }
+
         $productModel->where('collection', $name)->set(['collection' => 'عامة'])->update();
 
         return $this->respond(['success' => true]);
@@ -1104,7 +1382,7 @@ class Products extends ResourceController
     public function getSetting($key)
     {
         $model = new \App\Models\SettingModel();
-        $setting = $model->find($key);
+        $setting = $model->where('key', $key)->first();
         return $this->respond($setting ?: ['key' => $key, 'value' => null]);
     }
 
@@ -1124,9 +1402,9 @@ class Products extends ResourceController
             return $this->fail('Key is required');
         }
 
-        $existing = $model->find($key);
+        $existing = $model->where('key', $key)->first();
         if ($existing) {
-            $model->update($key, [
+            $model->update($existing['id'], [
                 'value' => $value,
                 'updated_at' => date('Y-m-d H:i:s')
             ]);
@@ -1158,8 +1436,14 @@ class Products extends ResourceController
                 $db->table('products')->where('is_saved', false)->delete();
                 break;
             case 'saved':
-                // Reset all saved products
-                $db->table('products')->where('is_saved', true)->update([
+                // Reset all saved products for current tenant
+                $context = \App\Libraries\TenantContext::getInstance();
+                $tenantId = $context->getTenantId();
+                $query = $db->table('products')->where('is_saved', true);
+                if ($tenantId !== null) {
+                    $query->where('tenant_id', $tenantId);
+                }
+                $query->update([
                     'is_saved' => false,
                     'saved_at' => null,
                     'rating' => 0,
@@ -1170,21 +1454,63 @@ class Products extends ResourceController
                 break;
             case 'collections':
                 // Clear custom collections and reset products' collections
-                $db->table('collections')->delete();
-                $db->table('products')->update(['collection' => 'عامة']);
+                $context = \App\Libraries\TenantContext::getInstance();
+                $tenantId = $context->getTenantId();
+                
+                $collectionsQuery = $db->table('collections');
+                if ($tenantId !== null) {
+                    $collectionsQuery->where('tenant_id', $tenantId);
+                }
+                $collectionsQuery->delete();
+                
+                $productsQuery = $db->table('products');
+                if ($tenantId !== null) {
+                    $productsQuery->where('tenant_id', $tenantId);
+                }
+                $productsQuery->update(['collection' => 'عامة']);
                 break;
             case 'watchlist':
                 // Clear watched stores
-                $db->table('watched_stores')->delete();
+                $context = \App\Libraries\TenantContext::getInstance();
+                $tenantId = $context->getTenantId();
+                
+                $watchedQuery = $db->table('watched_stores');
+                if ($tenantId !== null) {
+                    $watchedQuery->where('tenant_id', $tenantId);
+                }
+                $watchedQuery->delete();
                 break;
             case 'all':
-                // Delete all products, collections, watched stores
-                $db->table('products')->delete();
-                $db->table('collections')->delete();
-                $db->table('watched_stores')->delete();
-                // Reset settings to default
-                $db->table('settings')->where('key', 'app-theme')->update(['value' => 'light']);
-                $db->table('settings')->where('key', 'data-source')->update(['value' => 'database']);
+                // Delete all products, collections, watched stores belonging to tenant
+                $context = \App\Libraries\TenantContext::getInstance();
+                $tenantId = $context->getTenantId();
+                
+                $productsQuery = $db->table('products');
+                $collectionsQuery = $db->table('collections');
+                $watchedQuery = $db->table('watched_stores');
+                
+                if ($tenantId !== null) {
+                    $productsQuery->where('tenant_id', $tenantId);
+                    $collectionsQuery->where('tenant_id', $tenantId);
+                    $watchedQuery->where('tenant_id', $tenantId);
+                }
+                
+                $productsQuery->delete();
+                $collectionsQuery->delete();
+                $watchedQuery->delete();
+                
+                // Reset settings to default for tenant
+                $settingsQuery = $db->table('settings');
+                if ($tenantId !== null) {
+                    $settingsQuery->where('tenant_id', $tenantId);
+                }
+                $settingsQuery->where('key', 'app-theme')->update(['value' => 'light']);
+                
+                $settingsQuery2 = $db->table('settings');
+                if ($tenantId !== null) {
+                    $settingsQuery2->where('tenant_id', $tenantId);
+                }
+                $settingsQuery2->where('key', 'data-source')->update(['value' => 'database']);
                 break;
             default:
                 return $this->fail('Invalid clear type: ' . $type);
@@ -1221,9 +1547,37 @@ public function activity()
     }
 
     if (empty($activity)) {
-        // ... كود جلب البيانات الحالي من الـ API الخارجي عبر cURLRequest ...
-        // (تأكد من إبقاء منطق الجلب الحالي وتخزين النتيجة في مصفوفة $activity)
-        $source = 'api';
+        $inputObj = ['0' => ['json' => ['product_url' => $productUrl]]];
+        $apiUrl = 'https://www.overviewdata.io/api/trpc/data.getAdActivity?batch=1&input=' . urlencode(json_encode($inputObj));
+
+        try {
+            $client = \Config\Services::curlrequest();
+            $response = $client->request('GET', $apiUrl, [
+                'headers' => [
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept' => 'application/json',
+                ],
+                'timeout' => 30,
+            ]);
+
+            if ($response->getStatusCode() === 200) {
+                $rawBody = $response->getBody();
+                $parsed = json_decode($rawBody, true);
+                $base = is_array($parsed) ? ($parsed[0] ?? null) : $parsed;
+                $activity = $base['result']['data']['json'] ?? [];
+
+                // Save to database
+                if ($product) {
+                    $model->update($product['id'], ['activity_data' => json_encode($activity)]);
+                }
+                $source = 'api';
+            } else {
+                $source = 'error';
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Failed to fetch activity from external API: ' . $e->getMessage());
+            $source = 'error';
+        }
     }
 
     // ⭐ توليد تحليل الاستراتيجية الواقعي بناءً على بيانات المنتج والنشاط

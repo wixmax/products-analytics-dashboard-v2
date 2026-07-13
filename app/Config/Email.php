@@ -6,8 +6,8 @@ use CodeIgniter\Config\BaseConfig;
 
 class Email extends BaseConfig
 {
-    public string $fromEmail  = '';
-    public string $fromName   = '';
+    public string $fromEmail  = 'noreply@analytics-dashboard.local';
+    public string $fromName   = 'Products Analytics Dashboard';
     public string $recipients = '';
 
     /**

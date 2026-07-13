@@ -17,8 +17,7 @@
   --border-color: #e2e8f0;
   --border-color-hover: #cbd5e1;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md:
-    0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg:
     0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --font-sans: "Cairo", sans-serif;
@@ -48,8 +47,7 @@
   --border-color: #334155;
   --border-color-hover: #475569;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md:
-    0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
   --shadow-lg:
     0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
 }
@@ -166,6 +164,8 @@ label {
 
 input[type="text"],
 input[type="number"],
+input[type="email"],
+input[type="password"],
 select,
 textarea {
   background-color: var(--bg-input);
@@ -591,6 +591,33 @@ textarea:focus {
   border: 1px solid var(--border-color);
 }
 
+.product-toolbar select,
+.product-toolbar button,
+.product-toolbar .btn,
+.product-toolbar input {
+  height: 42px;
+  font-size: 0.85rem;
+  padding: 0 1rem;
+  box-sizing: border-box;
+}
+
+.product-toolbar select {
+  width: auto;
+  min-width: 150px;
+  padding-right: 2rem;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-position: left 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25em;
+}
+
+[dir="rtl"] .product-toolbar select {
+  background-position: left 0.5rem center;
+  padding-left: 2rem;
+  padding-right: 1rem;
+}
+
 .search-box {
   position: relative;
   flex: 1;
@@ -599,6 +626,7 @@ textarea:focus {
 
 .search-box input {
   padding-right: 2.5rem;
+  padding-left: 1rem;
 }
 
 .search-box::before {
@@ -615,8 +643,9 @@ textarea:focus {
 /* Products Grid Area */
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 400px));
   gap: 1.5rem;
+  justify-content: center;
 }
 
 @media (max-width: 450px) {
@@ -690,14 +719,16 @@ textarea:focus {
   height: 100%;
   object-fit: cover;
   position: absolute;
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
 }
 
 .vid-placeholder-bg {
   width: 100%;
   height: 100%;
   position: absolute;
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
   background: linear-gradient(135deg, #2d1b69 0%, #1a1a2e 50%, #16213e 100%);
   display: flex;
   flex-direction: column;
@@ -707,9 +738,9 @@ textarea:focus {
 }
 
 .vid-placeholder-bg::after {
-  content: '🎬 فيديو';
+  content: "🎬 فيديو";
   font-size: 0.85rem;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .vid-play-btn {
@@ -717,25 +748,28 @@ textarea:focus {
   z-index: 2;
   width: 60px;
   height: 60px;
-  background: rgba(255,255,255,0.95);
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.6rem;
   color: #111;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .vid-placeholder:hover .vid-play-btn {
   transform: scale(1.12);
-  box-shadow: 0 6px 25px rgba(0,0,0,0.6);
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.6);
 }
 
 .vid-placeholder-overlay {
   position: absolute;
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   display: flex;
@@ -1034,40 +1068,40 @@ textarea:focus {
 
 /* Pagination Styling */
 .pagination-container {
-    margin: 2rem 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
+  margin: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
 .pagination {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: center;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .pagination .btn {
-    min-width: 40px;
-    height: 40px;
-    padding: 0 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    font-weight: 700;
-    font-size: 0.9rem;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .pagination .btn-primary {
-    background: var(--color-primary);
-    color: white;
+  background: var(--color-primary);
+  color: white;
 }
 
 .pagination .btn-secondary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* =========================================
@@ -1464,7 +1498,11 @@ textarea:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(168, 85, 247, 0.08) 0%,
+    rgba(59, 130, 246, 0.08) 100%
+  );
 }
 
 .help-modal-title {
@@ -1483,7 +1521,9 @@ textarea:focus {
   color: var(--color-text-muted);
   cursor: pointer;
   line-height: 1;
-  transition: color 0.2s, transform 0.2s;
+  transition:
+    color 0.2s,
+    transform 0.2s;
 }
 
 .help-modal-close:hover {
@@ -1504,7 +1544,10 @@ textarea:focus {
   background: var(--bg-app);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .help-section:hover {
@@ -1530,8 +1573,12 @@ textarea:focus {
 }
 
 @keyframes modalFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes modalSlideUp {
@@ -1543,5 +1590,108 @@ textarea:focus {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* =========================================
+   13. User Profile Dropdown Styling
+   ========================================= */
+.user-profile-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.user-profile-dropdown-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-main);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: var(--transition-all);
+}
+
+.user-profile-dropdown-btn:hover {
+  border-color: var(--color-primary);
+  background: var(--bg-input);
+}
+
+.user-avatar-small {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), #6366f1);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.user-name-small {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-badge-small {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--color-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.dropdown-chevron {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  transition: transform 0.2s;
+}
+
+.user-profile-dropdown:hover .dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.user-profile-dropdown-content {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  min-width: 180px;
+  box-shadow: var(--shadow-md);
+  z-index: 1500;
+  overflow: hidden;
+}
+
+.user-profile-dropdown:hover .user-profile-dropdown-content {
+  display: block;
+}
+
+.user-profile-dropdown-content a {
+  color: var(--color-text-main);
+  padding: 10px 14px;
+  text-decoration: none;
+  display: block;
+  font-size: 0.85rem;
+  text-align: right;
+  transition: var(--transition-all);
+}
+
+.user-profile-dropdown-content a:hover {
+  background: var(--bg-input);
+  color: var(--color-primary);
 }
 

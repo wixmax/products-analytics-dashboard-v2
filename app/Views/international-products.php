@@ -113,6 +113,7 @@
           </div>
           <div class="actions-group">
             <a href="<?= base_url('settings') ?>" class="btn btn-secondary">⚙️ الإعدادات</a>
+            <a href="<?= base_url('logout') ?>" class="btn btn-error" style="background:rgba(239,68,68,0.12);color:var(--color-error);border-color:rgba(239,68,68,0.3);" title="تسجيل الخروج">🚪 خروج</a>
             <button class="theme-toggle" id="theme-toggle-btn">🌓</button>
           </div>
         </div>

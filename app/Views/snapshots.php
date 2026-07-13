@@ -208,6 +208,9 @@
           <a href="<?= base_url('settings') ?>" class="btn btn-secondary btn-block" style="text-align: center">
             ⚙️ الإعدادات
           </a>
+          <a href="<?= base_url('logout') ?>" class="btn btn-block" style="text-align:center;background:rgba(239,68,68,0.12);color:var(--color-error);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius-sm);padding:0.75rem 1.25rem;font-weight:600;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+            🚪 تسجيل الخروج
+          </a>
         </div>
       </aside>
 
@@ -222,7 +225,10 @@
               جميع نسخ JSON المحفوظة عند كل عملية جلب من API، مرتبة حسب الأحدث
             </p>
           </div>
-          <button class="theme-toggle" id="theme-toggle-btn" aria-label="تبديل الثيم">🌓</button>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <a href="<?= base_url('logout') ?>" class="btn btn-error" style="background:rgba(239,68,68,0.12);color:var(--color-error);border-color:rgba(239,68,68,0.3);font-size:0.85rem;">🚪 خروج</a>
+            <button class="theme-toggle" id="theme-toggle-btn" aria-label="تبديل الثيم">🌓</button>
+          </div>
         </div>
 
         <!-- Controls -->
@@ -278,6 +284,9 @@
     <!-- Toast -->
     <div class="toast-container" id="toast-container"></div>
 
+    <script>
+      window.userIsAdmin = <?= (auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin')) ? 'true' : 'false' ?>;
+    </script>
     <script src="<?= base_url('snapshots.js') ?>?v=1.3"></script>
   </body>
 </html>

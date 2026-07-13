@@ -112,8 +112,27 @@ async function triggerSyncForOrigin(origin) {
 }
 
 function processAndAppendData(data, origin) {
-  const base = Array.isArray(data) ? data[0] : data;
-  const rawProducts = base?.result?.data?.json || [];
+  let rawProducts = [];
+  if (Array.isArray(data)) {
+    if (data.length > 0) {
+      const first = data[0];
+      if (first && typeof first === "object" && (first.product_url !== undefined || first.productUrl !== undefined || first.product_title !== undefined || first.title !== undefined)) {
+        // Direct list of products
+        rawProducts = data;
+      } else {
+        // Wrapped array
+        const base = data[0];
+        const targetData = base?.result?.data?.json ?? base?.data?.json ?? base?.json ?? base ?? {};
+        rawProducts = Array.isArray(targetData) ? targetData : (targetData.productsEntries || targetData.results || []);
+      }
+    } else {
+      rawProducts = [];
+    }
+  } else if (data && typeof data === "object") {
+    // Single object or single wrapper
+    const targetData = data.result?.data?.json ?? data.data?.json ?? data.json ?? data;
+    rawProducts = Array.isArray(targetData) ? targetData : (targetData.productsEntries || targetData.results || [targetData]);
+  }
 
   if (Array.isArray(rawProducts)) {
     const mapped = rawProducts.map((p) => {

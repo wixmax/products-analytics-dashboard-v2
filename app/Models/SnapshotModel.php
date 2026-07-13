@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use CodeIgniter\Model;
+use App\Models\TenantModel;
 
-class SnapshotModel extends Model
+class SnapshotModel extends TenantModel
 {
     protected $table            = 'data_snapshots';
     protected $primaryKey       = 'id';

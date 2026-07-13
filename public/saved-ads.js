@@ -39,7 +39,11 @@ async function loadInitialDatabaseData() {
   try {
     const collectionsRes = await fetch("/api/products/collections");
     if (collectionsRes.ok) {
-      collections = await collectionsRes.json();
+      const data = await collectionsRes.json();
+      // Fallback to defaults if API returns empty array
+      collections = data && data.length > 0
+        ? data
+        : ["عامة", "ملابس", "إلكترونيات", "أدوات منزلية"];
     }
     await fetchSavedProductsFromDb();
     const watchlistRes = await fetch("/api/products/watchlist");
@@ -215,12 +219,18 @@ function renderSavedGrid() {
                         ${p.api_version ? `<span class="snapshot-badge" style="background:rgba(99,102,241,0.1);color:#6366f1;padding:2px 8px;border-radius:var(--radius-full);font-size:0.65rem;">🔖 ${p.api_version}</span>` : ''}
                     </div>
                 </div>
-                <div class="card-footer" style="gap: 6px; padding: 8px;">
-                    <a href="${p.productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">🛒 زيارة</a>
-                    <button onclick='openInfoModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.6rem; font-size: 0.7rem;">ℹ️ معلومات</button>
-                    <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">📊 تفاصيل أكثر</button>
-                    <button onclick="exportSingleSavedProduct('${escapedUrlForDelete}')" class="btn btn-secondary" title="تصدير JSON" style="flex: 0 0 auto; aspect-ratio: 1; padding: 0.4rem; display: flex; align-items: center; justify-content: center;">📥</button>
-                    <button class="btn btn-secondary" onclick="removeFromSaved('${escapedUrlForDelete}')" title="إزالة من المحفوظات" style="flex: 0 0 auto; aspect-ratio: 1; padding: 0.4rem; display: flex; align-items: center; justify-content: center;">🗑️</button>
+                <div class="card-footer" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-top: 1px solid var(--border-color);">
+                    <!-- Main Actions -->
+                    <div style="display: flex; gap: 8px; width: 100%;">
+                        <a href="${p.productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px;">🛒 زيارة</a>
+                        <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px;">📊 تفاصيل أكثر</button>
+                    </div>
+                    <!-- Secondary & Danger Actions -->
+                    <div style="display: flex; gap: 8px; width: 100%;">
+                        <button onclick='openInfoModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px;">ℹ️ معلومات</button>
+                        <button onclick="exportSingleSavedProduct('${escapedUrlForDelete}')" class="btn btn-secondary" title="تصدير JSON" style="flex: 0 0 auto; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">📥</button>
+                        <button class="btn btn-error" onclick="removeFromSaved('${escapedUrlForDelete}')" title="إزالة من المحفوظات" style="flex: 0 0 auto; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: var(--color-error); border: 1px solid rgba(239, 68, 68, 0.2);">🗑️</button>
+                    </div>
                 </div>
             </article>
         `;
@@ -507,6 +517,10 @@ async function openDetailsModal(product) {
   modal.style.display = "flex";
 
   // Set basic details
+  const priceInput = document.getElementById("details-price-input");
+  if (priceInput) {
+    priceInput.value = product.actualPrice || product.price_1 || "0";
+  }
   document.getElementById("details-title").textContent =
     product.title || "تفاصيل الإعلان والنشاط";
   document.getElementById("details-info-title").textContent =
@@ -1536,4 +1550,103 @@ async function refreshActivityData() {
   }
 
   showToast("✅ تم تحديث بيانات النشاط والتحليل الاستراتيجي", "success");
+}
+
+function updateDetailsRawDataView() {
+  const product = currentProductForDetails;
+  if (!product) return;
+  const rawDataContainer = document.getElementById("details-raw-data-list");
+  if (!rawDataContainer) return;
+  
+  let listHtml = "";
+  for (const [key, value] of Object.entries(product)) {
+    if (value !== null && value !== undefined && value !== "") {
+      let valStr = String(value);
+      if (valStr.length > 80) valStr = valStr.slice(0, 80) + "...";
+      listHtml += `
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding: 4px 0; font-family: sans-serif; gap: 10px;">
+          <span style="color: var(--color-primary); font-weight: 600; text-transform: capitalize;">${key}:</span>
+          <span style="word-break: break-all; text-align: right; color: var(--color-text-main); font-weight: 500;">${valStr}</span>
+        </div>
+      `;
+    }
+  }
+  if (currentProductDetailsWithAnalysis && currentProductDetailsWithAnalysis.computed_metrics) {
+    for (const [key, value] of Object.entries(
+      currentProductDetailsWithAnalysis.computed_metrics,
+    )) {
+      if (value !== null && value !== undefined && value !== "") {
+        let valStr = String(value);
+        if (valStr.length > 80) valStr = valStr.slice(0, 80) + "...";
+        listHtml += `
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding: 4px 0; font-family: sans-serif; gap: 10px; background: var(--bg-card); opacity: 0.9;">
+            <span style="color: var(--color-success); font-weight: 600; text-transform: capitalize;">computed_${key}:</span>
+            <span style="word-break: break-all; text-align: right; color: var(--color-text-main); font-weight: 500;">${valStr}</span>
+          </div>
+        `;
+      }
+    }
+  }
+  rawDataContainer.innerHTML =
+    listHtml ||
+    `<div style="text-align: center; padding: 10px; color: var(--color-text-muted);">لا توجد بيانات إضافية</div>`;
+}
+
+async function handleDetailsPriceChange(val) {
+  if (!currentProductForDetails) return;
+  
+  currentProductForDetails.actualPrice = val;
+  currentProductForDetails.price_1 = val;
+  if (currentProductDetailsWithAnalysis) {
+    currentProductDetailsWithAnalysis.actualPrice = val;
+    currentProductDetailsWithAnalysis.price_1 = val;
+  }
+  
+  if (typeof allProducts !== 'undefined') {
+    const pMain = allProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+    if (pMain) {
+      pMain.actualPrice = val;
+      pMain.price_1 = val;
+    }
+  }
+  if (typeof currentFilteredProducts !== 'undefined') {
+    const pFiltered = currentFilteredProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+    if (pFiltered) {
+      pFiltered.actualPrice = val;
+      pFiltered.price_1 = val;
+    }
+  }
+  if (typeof currentFiltered !== 'undefined') {
+    const pFilteredSaved = currentFiltered.find(p => p.productUrl === currentProductForDetails.productUrl);
+    if (pFilteredSaved) {
+      pFilteredSaved.actualPrice = val;
+      pFilteredSaved.price_1 = val;
+    }
+  }
+  
+  const pSaved = savedProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+  if (pSaved) {
+    pSaved.actualPrice = val;
+    pSaved.price_1 = val;
+    
+    try {
+      const res = await fetch("/api/products/saved/price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_url: pSaved.productUrl,
+          price: val
+        })
+      });
+      if (res.ok) {
+        showToast("✅ تم تحديث سعر المنتج في قاعدة البيانات", "success");
+      }
+    } catch (e) {
+      console.error("Failed to save price update to database", e);
+    }
+  } else {
+    showToast("⚠️ السعر محدث مؤقتاً. لحفظه في قاعدة البيانات بشكل دائم، يرجى حفظ المنتج أولاً.", "info");
+  }
+  
+  updateDetailsRawDataView();
 }

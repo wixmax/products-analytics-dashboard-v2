@@ -55,3 +55,36 @@ Events::on('pre_system', static function (): void {
         }
     }
 });
+
+// Auto-create tenant upon registration
+Events::on('register', static function (\CodeIgniter\Shield\Entities\User $user): void {
+    if (!empty($user->tenant_id)) {
+        return;
+    }
+
+    $db = \Config\Database::connect();
+    
+    // Generate a unique slug based on username or email
+    $slugBase = $user->username ?: explode('@', $user->email)[0];
+    $slug = url_title($slugBase, '-', true);
+    
+    // Ensure slug is unique
+    $existing = $db->table('tenants')->where('slug', $slug)->get()->getRow();
+    if ($existing) {
+        $slug .= '-' . time();
+    }
+
+    $db->table('tenants')->insert([
+        'name'       => $slugBase . "'s Workspace",
+        'slug'       => $slug,
+        'status'     => 'active',
+        'created_at' => date('Y-m-d H:i:s'),
+        'updated_at' => date('Y-m-d H:i:s'),
+    ]);
+
+    $tenantId = $db->insertID('tenants_id_seq');
+
+    // Update user's tenant_id
+    $userModel = new \App\Models\UserModel();
+    $userModel->bypassTenant()->update($user->id, ['tenant_id' => $tenantId]);
+});

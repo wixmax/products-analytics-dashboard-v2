@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use CodeIgniter\Model;
+use App\Models\TenantModel;
 
-class WatchedStoreModel extends Model
+class WatchedStoreModel extends TenantModel
 {
     protected $table            = 'watched_stores';
     protected $primaryKey       = 'id';

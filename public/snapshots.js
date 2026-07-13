@@ -78,7 +78,7 @@ function renderSnapshots(snapshots) {
           <button onclick="viewSnapshotJson(${s.id})">📄 عرض JSON</button>
           <button onclick="exportSingleSnapshot(${s.id})">📥 تصدير</button>
           <button class="btn-restore" onclick="restoreSnapshot(${s.id})">🔄 استعادة</button>
-          <button style="background:var(--color-error);color:white;border-color:var(--color-error)" onclick="deleteSnapshot(${s.id})">🗑️ حذف</button>
+          ${window.userIsAdmin ? `<button style="background:var(--color-error);color:white;border-color:var(--color-error)" onclick="deleteSnapshot(${s.id})">🗑️ حذف</button>` : ''}
         </div>
       </div>
     `;
@@ -212,7 +212,20 @@ async function deleteSnapshot(id) {
 
   try {
     const res = await fetch(`/api/products/snapshots/${id}/delete`, { method: 'POST' });
-    if (!res.ok) throw new Error('فشل الحذف');
+    if (!res.ok) {
+      let errMsg = 'فشل الحذف';
+      try {
+        const errData = await res.json();
+        if (errData.messages && errData.messages.error) {
+          errMsg = errData.messages.error;
+        } else if (errData.message) {
+          errMsg = errData.message;
+        } else if (errData.error) {
+          errMsg = errData.error;
+        }
+      } catch (pErr) {}
+      throw new Error(errMsg);
+    }
     showToast(`✅ تم حذف اللقطة #${id}`);
     loadSnapshots();
   } catch (e) {
