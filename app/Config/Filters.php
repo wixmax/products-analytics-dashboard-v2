@@ -37,7 +37,9 @@ class Filters extends BaseFilters
         'tenant'        => \App\Filters\TenantFilter::class,
         'auth'          => \CodeIgniter\Shield\Filters\SessionAuth::class,
         'role'          => \CodeIgniter\Shield\Filters\GroupFilter::class,
+        'install'       => \App\Filters\InstallFilter::class,
     ];
+
 
     /**
      * List of special required filters.
@@ -75,6 +77,7 @@ class Filters extends BaseFilters
      */
     public array $globals = [
         'before' => [
+            'install',
             // 'honeypot',
             // 'csrf',
             // 'invalidchars',

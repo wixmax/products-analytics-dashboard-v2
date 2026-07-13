@@ -83,3 +83,15 @@ $routes->get('/api/settings/(:segment)', 'Products::getSetting/$1');
 $routes->post('/api/settings', 'Products::saveSetting');
 $routes->post('/api/products/clear-database-data', 'Products::clearDatabaseData');
 
+// Installer Routes
+$routes->group('install', function($routes) {
+    $routes->get('/', '\App\Controllers\InstallController::index');
+    $routes->get('database', '\App\Controllers\InstallController::database');
+    $routes->post('database', '\App\Controllers\InstallController::saveDatabase');
+    $routes->get('migrate', '\App\Controllers\InstallController::migrate');
+    $routes->get('admin', '\App\Controllers\InstallController::admin');
+    $routes->post('admin', '\App\Controllers\InstallController::saveAdmin');
+    $routes->get('complete', '\App\Controllers\InstallController::complete');
+});
+
+
