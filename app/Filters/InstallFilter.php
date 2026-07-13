@@ -23,7 +23,7 @@ class InstallFilter implements FilterInterface
     public function before(RequestInterface $request, $arguments = null)
     {
         $installedFile = WRITEPATH . 'installed.txt';
-        $uri = $request->getUri()->getPath();
+        $uri = trim($request->getUri()->getPath(), '/');
 
         // Check if the current request is for the installer
         $isInstallerRequest = (
