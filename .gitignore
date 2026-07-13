@@ -63,6 +63,9 @@ Vagrantfile
 /writable/debugbar/*
 !/writable/debugbar/index.html
 
+# Install lock file
+/writable/installed.txt
+
 php_errors.log
 error_log
 **/error_log
