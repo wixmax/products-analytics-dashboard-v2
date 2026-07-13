@@ -85,13 +85,15 @@ class Filters extends BaseFilters
                 'except' => [
                     'login', 'login/*', 'register', 'register/*', 'forgot', 'forgot/*',
                     'logout', 'logout/*', 'auth/google*', 'oauth*',
-                    'api/*', 'api/products/*'
+                    'api/*', 'api/products/*',
+                    'install', 'install/*'
                 ]
             ],
             'tenant' => [
                 'except' => [
                     'login', 'login/*', 'register', 'register/*', 'forgot', 'forgot/*',
                     'logout', 'logout/*', 'auth/google*', 'oauth*',
+                    'install', 'install/*'
                 ]
             ],
         ],
