@@ -1,5 +1,5 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/alldqdks/pad.madaqbio.com/
+    - export DEPLOYPATH=/home/alldqdks/pad.alldays.store/
     - /bin/cp -R public/. $DEPLOYPATH
