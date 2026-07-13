@@ -25,6 +25,13 @@ class InstallFilter implements FilterInterface
         $installedFile = WRITEPATH . 'installed.txt';
         $uri = trim($request->getUri()->getPath(), '/');
 
+        // Remove index.php/ or index.php from path if present (common in cPanel/subfolder setups)
+        if (strpos($uri, 'index.php/') === 0) {
+            $uri = substr($uri, 10);
+        } elseif ($uri === 'index.php') {
+            $uri = '';
+        }
+
         // Check if the current request is for the installer
         $isInstallerRequest = (
             $uri === 'install' || 
