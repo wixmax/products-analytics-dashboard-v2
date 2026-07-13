@@ -20,6 +20,16 @@ class Settings extends BaseSettings
      */
     public $handlers = ['database'];
 
+    public function __construct()
+    {
+        parent::__construct();
+
+        // If the application is not installed yet, bypass the database handler to prevent DB errors
+        if (!file_exists(WRITEPATH . 'installed.txt')) {
+            $this->handlers = ['array'];
+        }
+    }
+
     /**
      * Array handler settings.
      */
