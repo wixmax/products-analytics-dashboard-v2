@@ -141,7 +141,16 @@ async function exportSingleSnapshot(id) {
     const res = await fetch(`/api/products/snapshots/${id}`);
     if (!res.ok) throw new Error('فشل جلب اللقطة');
     const s = await res.json();
-    const dataStr = JSON.stringify(JSON.parse(s.raw_json || '{}'), null, 2);
+    
+    // Save metadata wrapper so it can be restored directly without asking for version
+    const exportData = {
+      is_snapshot_backup: true,
+      origin: s.origin,
+      api_version: s.api_version,
+      raw_json: s.raw_json
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -151,7 +160,7 @@ async function exportSingleSnapshot(id) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('✅ تم تصدير اللقطة');
+    showToast('✅ تم تصدير اللقطة مع البيانات الوصفية');
   } catch (e) {
     showToast('⚠️ ' + e.message, 'error');
   }
@@ -190,6 +199,52 @@ async function importSnapshotFile(event) {
 
   try {
     const text = await file.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      throw new Error('الملف ليس بتنسيق JSON صالح');
+    }
+
+    // 1. Check if bulk snapshots export (Array of snapshots)
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0) {
+        showToast('⚠️ ملف فارغ لا يحتوي على أي لقطات بيانات', 'error');
+        return;
+      }
+      showToast('⏳ جاري استيراد اللقطات المتعددة...', 'info');
+      const res = await fetch('/api/products/snapshots/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed)
+      });
+      if (!res.ok) throw new Error('فشل استيراد الملف المجمع');
+      const result = await res.json();
+      showToast(`✅ ${result.message}`);
+      loadSnapshots();
+      return;
+    }
+
+    // 2. Check if single snapshot backup with metadata wrapper
+    if (parsed && (parsed.is_snapshot_backup || (parsed.raw_json !== undefined && parsed.origin !== undefined))) {
+      showToast('⏳ جاري استيراد اللقطة...', 'info');
+      const res = await fetch('/api/products/snapshots/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          raw_json: parsed.raw_json,
+          origin: parsed.origin || 'Local',
+          api_version: parsed.api_version || ''
+        })
+      });
+      if (!res.ok) throw new Error('فشل استيراد اللقطة');
+      const result = await res.json();
+      showToast(`✅ تم استيراد اللقطة #${result.id} بنجاح`);
+      loadSnapshots();
+      return;
+    }
+
+    // 3. Fallback: Raw products JSON from API or other source - ask user
     const origin = prompt('أدخل المصدر (Local, Winning, China, Japan):', 'Local') || 'Local';
     const apiVersion = prompt('أدخل إصدار API (اختياري):', '') || '';
 

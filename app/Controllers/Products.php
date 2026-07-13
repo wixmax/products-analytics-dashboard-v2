@@ -467,6 +467,77 @@ class Products extends ResourceController
     public function importSnapshot()
     {
         $json = $this->request->getJSON(true);
+        if (empty($json)) {
+            return $this->fail('Invalid or empty JSON payload');
+        }
+
+        $snapshotModel = new SnapshotModel();
+
+        // 1. Bulk import: check if payload is a list of snapshots
+        if (is_array($json) && isset($json[0]) && is_array($json[0]) && (isset($json[0]['raw_json']) || isset($json[0]['origin']))) {
+            $importedCount = 0;
+            foreach ($json as $item) {
+                $rawJson = $item['raw_json'] ?? '';
+                if (empty($rawJson)) continue;
+
+                $origin = $item['origin'] ?? 'Local';
+                $apiVersion = $item['api_version'] ?? '';
+
+                // Try to determine product count from structure
+                $decoded = json_decode($rawJson, true);
+                $productCount = 0;
+                if (is_array($decoded)) {
+                    $rawList = [];
+                    $isAssoc = false;
+                    if (count($decoded) > 0) {
+                        $keys = array_keys($decoded);
+                        $isAssoc = (array_keys($keys) !== $keys);
+                    }
+
+                    if ($isAssoc) {
+                        $targetData = $decoded['result']['data']['json'] ?? $decoded['data']['json'] ?? $decoded['json'] ?? $decoded;
+                        $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                        if (!is_array($rawList)) {
+                            $rawList = is_array($targetData) ? $targetData : [$decoded];
+                        }
+                    } else {
+                        if (count($decoded) > 0) {
+                            $first = $decoded[0];
+                            if (is_array($first) && (isset($first['productUrl']) || isset($first['product_url']) || isset($first['title']) || isset($first['product_title']))) {
+                                $rawList = $decoded;
+                            } else if (is_array($first) && (isset($first['result']) || isset($first['data']) || isset($first['json']))) {
+                                $targetData = $first['result']['data']['json'] ?? $first['data']['json'] ?? $first['json'] ?? $first;
+                                $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                                if (!is_array($rawList)) {
+                                    $rawList = is_array($targetData) ? $targetData : [];
+                                }
+                            } else {
+                                $rawList = $decoded;
+                            }
+                        }
+                    }
+                    $productCount = count($rawList);
+                }
+
+                $dataToSave = [
+                    'origin' => $origin,
+                    'api_version' => $apiVersion,
+                    'raw_json' => $rawJson,
+                    'product_count' => $productCount,
+                ];
+
+                $snapshotModel->insert($dataToSave);
+                $importedCount++;
+            }
+
+            return $this->respond([
+                'success' => true,
+                'message' => "تم استيراد عدد {$importedCount} من لقطات البيانات بنجاح",
+                'bulk' => true
+            ]);
+        }
+
+        // 2. Single snapshot import (fallback/original logic)
         $rawJson = $json['raw_json'] ?? $this->request->getVar('raw_json') ?? '';
         if (empty($rawJson)) {
             return $this->fail('raw_json is required');
@@ -481,10 +552,7 @@ class Products extends ResourceController
             return $this->fail('Invalid JSON');
         }
 
-        $snapshotModel = new SnapshotModel();
         $productCount = 0;
-
-        // Try to determine product count from structure
         $rawList = [];
         if (is_array($decoded)) {
             $isAssoc = false;
