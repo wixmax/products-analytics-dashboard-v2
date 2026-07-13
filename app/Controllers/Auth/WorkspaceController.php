@@ -103,13 +103,20 @@ class WorkspaceController extends BaseController
 
         $email = $this->request->getPost('email');
 
-        // Check if user exists
-        $userModel = new \App\Models\UserModel();
-        $targetUser = $userModel->bypassTenant()->where('email', $email)->first();
+        // Check if user exists by querying the auth_identities table (since users table does not have an email column in Shield)
+        $db = \Config\Database::connect();
+        $identity = $db->table('auth_identities')
+            ->where('type', 'email_password')
+            ->where('name', $email)
+            ->get()
+            ->getRow();
 
-        if ($targetUser === null) {
+        if ($identity === null) {
             return redirect()->back()->withInput()->with('error', 'البريد الإلكتروني غير مسجل في النظام. يجب على المستخدم إنشاء حساب أولاً.');
         }
+
+        $userModel = new \App\Models\UserModel();
+        $targetUser = $userModel->bypassTenant()->find($identity->user_id);
 
         if ((int)$targetUser->tenant_id === (int)$tenantId) {
             return redirect()->back()->withInput()->with('error', 'المستخدم عضو بالفعل في مساحة العمل هذه.');
