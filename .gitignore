@@ -140,3 +140,4 @@ _modules/*
 /public/index.php
 
 testsprite_tests\tmp\config.json
+testsprite_tests/tmp/mcp.log
