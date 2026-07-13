@@ -611,6 +611,7 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
+    <script src="<?= base_url('analysis-helper.js') ?>?v=1.0"></script>
     <script src="<?= base_url('saved-ads.js') ?>?v=2.3"></script>
   </body>
 </html>
