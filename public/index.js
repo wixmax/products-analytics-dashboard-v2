@@ -156,16 +156,52 @@ window.addEventListener("DOMContentLoaded", () => {
   toggleApiMode();
 
   // Bootstrap initial products from PostgreSQL if provided by server
-  if (
-    window.INITIAL_PRODUCTS_FROM_DB &&
-    window.INITIAL_PRODUCTS_FROM_DB.result?.data?.json?.productsEntries
-      ?.length > 0
-  ) {
-    document.getElementById("api-endpoint-select").value = "winning";
+  let initialProductsList = [];
+  if (window.INITIAL_PRODUCTS_FROM_DB) {
+    const data = window.INITIAL_PRODUCTS_FROM_DB;
+    const target = data.result?.data?.json ?? data.data?.json ?? data.json ?? data;
+    initialProductsList = target?.productsEntries || target?.results || (Array.isArray(target) ? target : []);
+  }
+
+  if (initialProductsList.length > 0) {
+    const origin = window.INITIAL_PRODUCTS_FROM_DB.origin || "Winning";
+    const apiVersion = window.INITIAL_PRODUCTS_FROM_DB.api_version || "";
+
+    if (origin === "Winning") {
+      document.getElementById("api-endpoint-select").value = "winning";
+    } else if (origin === "Local") {
+      document.getElementById("api-endpoint-select").value = "insights";
+    }
+
+    if (apiVersion) {
+      let versionNum = apiVersion;
+      let dateStr = "";
+      
+      const dashIndex = apiVersion.indexOf('-');
+      if (dashIndex !== -1) {
+        versionNum = apiVersion.substring(0, dashIndex);
+        dateStr = apiVersion.substring(dashIndex + 1);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          dateStr = "";
+          versionNum = apiVersion;
+        }
+      }
+      
+      document.getElementById("filter-version").value = versionNum;
+      if (dateStr) {
+        document.getElementById("filter-date")._flatpickr?.setDate(dateStr);
+      }
+    }
+
     toggleApiMode();
+
+    const dateLabel = window.INITIAL_PRODUCTS_FROM_DB.created_at
+      ? `آخر لقطة محفوظة (#${window.INITIAL_PRODUCTS_FROM_DB.snapshot_id} - ${window.INITIAL_PRODUCTS_FROM_DB.created_at.slice(0, 16)})`
+      : "آخر لقطة محفوظة";
+
     processLoadedData(
       window.INITIAL_PRODUCTS_FROM_DB,
-      "قاعدة البيانات (PostgreSQL)",
+      dateLabel,
     );
   }
 });
