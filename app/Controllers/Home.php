@@ -7,7 +7,7 @@ class Home extends BaseController
     public function index(): string
     {
         $snapshotModel = new \App\Models\SnapshotModel();
-        $latestSnapshot = $snapshotModel->whereIn('origin', ['Winning', 'Local'])
+        $latestSnapshot = $snapshotModel->where('origin', 'Winning')
                                         ->orderBy('created_at', 'DESC')
                                         ->first();
         
