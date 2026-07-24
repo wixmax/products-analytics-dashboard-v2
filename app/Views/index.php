@@ -358,8 +358,11 @@
         >
           <!-- Main Stat Chart based on adaptedResult -->
           <div class="chart-card">
-            <div class="card-title">
-              📊 مخطط حركة الإدراجات الأسبوعية (Weekly New Listings)
+            <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>📊 مخطط حركة الإدراجات الأسبوعية (Weekly New Listings)</span>
+              <button class="btn btn-secondary" onclick="openAnalyticsHelpModal('listings')" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--color-primary); color: var(--color-primary); border-radius: var(--radius-sm); font-weight: 700; cursor: pointer;" title="شرح مفصل للمخطط الأسبوعي">
+                💡 دليل القراءة
+              </button>
             </div>
             <div class="mini-chart-container" id="listings-chart">
               <!-- Dynamic Bars generated via JS -->
@@ -379,7 +382,12 @@
 
           <!-- Summary of Total Shops & Supply -->
           <div class="chart-card" style="justify-content: center">
-            <div class="card-title">🛍️ تحليل المتاجر والعرض</div>
+            <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>🛍️ تحليل المتاجر والعرض</span>
+              <button class="btn btn-secondary" onclick="openAnalyticsHelpModal('shops')" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--color-primary); color: var(--color-primary); border-radius: var(--radius-sm); font-weight: 700; cursor: pointer;" title="شرح مفصل لتحليل المتاجر والعرض">
+                💡 دليل القراءة
+              </button>
+            </div>
             <div style="display: flex; flex-direction: column; gap: 15px">
               <div
                 style="
@@ -1004,8 +1012,99 @@
       </div>
     </div>
 
+    <!-- Analytics Explanation Modal -->
+    <div class="modal-overlay" id="analytics-help-modal" style="display: none; z-index: 10000;">
+      <div class="modal-card" style="max-width: 650px; width: 90%; padding: 1.75rem; border-radius: var(--radius-md); box-shadow: var(--shadow-lg);">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+          <h3 id="analytics-help-title" style="font-weight: 800; font-size: 1.15rem; color: var(--color-primary); display: flex; align-items: center; gap: 8px; margin: 0;">
+            💡 دليل ودور التحليلات
+          </h3>
+          <button style="background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--color-text-muted); line-height: 1;" onclick="closeAnalyticsHelpModal()">&times;</button>
+        </div>
+        <div id="analytics-help-body" style="font-size: 0.9rem; line-height: 1.7; color: var(--color-text-main); max-height: 70vh; overflow-y: auto;">
+          <!-- Dynamic Help Content -->
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 0.85rem;">
+          <button class="btn btn-primary" onclick="closeAnalyticsHelpModal()" style="padding: 0.5rem 1.4rem; font-size: 0.9rem;">فهمت ذلك 👍</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
+
+    <script>
+      function openAnalyticsHelpModal(type) {
+        const modal = document.getElementById('analytics-help-modal');
+        const title = document.getElementById('analytics-help-title');
+        const body = document.getElementById('analytics-help-body');
+
+        if (type === 'listings') {
+          title.innerHTML = '📊 دليل مخطط حركة الإدراجات الأسبوعية (Weekly New Listings)';
+          body.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <p style="margin: 0; color: var(--color-text-muted); font-size: 0.95rem; line-height: 1.6;">
+                يقوم هذا المخطط بتتبع وتقييم حركة إدراج وإطلاق المنتجات الإعلانية الجديدة أسبوعياً خلال آخر 12 أسبوعاً.
+              </p>
+              
+              <div style="background: var(--bg-input); padding: 14px; border-radius: var(--radius-sm); border-right: 4px solid var(--color-primary);">
+                <strong style="color: var(--color-primary); font-size: 0.95rem; font-weight: 700;">🎯 الهدف والدور الأساسي:</strong>
+                <p style="margin: 6px 0 0 0; font-size: 0.88rem; color: var(--color-text-main);">
+                  معرفة ما إذا كان السوق ينشط ويدخله معروض جديد من المنتجات، أم أنه يمر بمرحلة هدوء واستقرار في الإدراجات.
+                </p>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <strong style="font-weight: 700; font-size: 0.95rem;">📌 كيفية قراءة عناصر المخطط:</strong>
+                <ul style="margin: 0; padding-right: 20px; font-size: 0.88rem; display: flex; flex-direction: column; gap: 8px; color: var(--color-text-main);">
+                  <li><strong>ارتفاع العمود (Bar Height):</strong> يمثل إجمالي عدد المنتجات والإعلانات التي تم إطلاقها في ذلك الأسبوع المحدد.</li>
+                  <li><strong>التدفق الزمني (12 أسبوعاً):</strong> يتيح لك رؤية منحنى صعود أو هبوط المعروض بمرور الوقت لملاحظة أوقات الذروة والمواسم.</li>
+                  <li><strong>شريط الزخم (Supply Momentum):</strong> يحسب متوسط آخر 4 أسابيع مقارنة بالأربعة أسابيع السابقة لمعرفة ما إذا كان الاتجاه <span style="color: var(--color-success); font-weight: 700;">📈 تصاعدياً</span> أم <span style="color: var(--color-error); font-weight: 700;">📉 تنازلياً</span>.</li>
+                </ul>
+              </div>
+            </div>
+          `;
+        } else if (type === 'shops') {
+          title.innerHTML = '🛍️ دليل تحليل المتاجر والعرض (Shops & Supply Analysis)';
+          body.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <p style="margin: 0; color: var(--color-text-muted); font-size: 0.95rem; line-height: 1.6;">
+                توفر هذه البطاقة مؤشرات حول حركة المنافسين، عدد المتاجر النشطة، ومعدل نموها وتوزع المعروض في السوق.
+              </p>
+
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="background: var(--bg-input); padding: 12px 14px; border-radius: var(--radius-sm); border-right: 4px solid var(--color-success);">
+                  <strong style="color: var(--color-success); font-size: 0.95rem;">1️⃣ الزخم في المعروض (Supply Momentum)</strong>
+                  <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: var(--color-text-main);">
+                    يُظهر اتجاه حركة المنتجات. <b>تصاعدي 📈</b> يعني إقبالاً وتزايداً في المعروض، بينما <b>مستقر / تنازلي 📉</b> يعبر عن هدوء الإدراجات.
+                  </p>
+                </div>
+
+                <div style="background: var(--bg-input); padding: 12px 14px; border-radius: var(--radius-sm); border-right: 4px solid var(--color-primary);">
+                  <strong style="color: var(--color-primary); font-size: 0.95rem;">2️⃣ المتاجر النشطة حالياً (Active Stores)</strong>
+                  <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: var(--color-text-main);">
+                    عدد المتاجر الإلكترونية المستقلة الفريدة (Unique Domains) التي تبيع وتعلن عن هذه المنتجات حالياً.
+                  </p>
+                </div>
+
+                <div style="background: var(--bg-input); padding: 12px 14px; border-radius: var(--radius-sm); border-right: 4px solid var(--color-warning);">
+                  <strong style="color: var(--color-warning); font-size: 0.95rem;">3️⃣ الزيادة في المتاجر (Shops Growth Trend %)</strong>
+                  <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: var(--color-text-main);">
+                    نسبة التغير المئوية لدخول متاجر جديدة مقارنة بالفترة السابقة. الزيادة الإيجابية تدل على انتعاش وإقبال التجار على السوق.
+                  </p>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        modal.style.display = 'flex';
+      }
+
+      function closeAnalyticsHelpModal() {
+        document.getElementById('analytics-help-modal').style.display = 'none';
+      }
+    </script>
 
     <script>
       window.INITIAL_PRODUCTS_FROM_DB = <?= isset($initialData) ? json_encode($initialData) : 'null' ?>;

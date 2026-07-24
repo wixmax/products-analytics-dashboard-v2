@@ -142,6 +142,58 @@
       .danger-zone:hover {
         border-color: var(--color-error) !important;
       }
+      /* Floating Toast Notifications */
+      .toast-container {
+        position: fixed;
+        bottom: 24px;
+        left: 24px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+      }
+      .toast {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        background: #1e293b;
+        color: #f8fafc;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        font-size: 0.9rem;
+        font-weight: 600;
+        pointer-events: auto;
+        animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        transition: all 0.3s ease;
+      }
+      .toast-success {
+        border-right: 4px solid #10b981;
+        background: #064e3b;
+        color: #ecfdf5;
+      }
+      .toast-error {
+        border-right: 4px solid #ef4444;
+        background: #7f1d1d;
+        color: #fef2f2;
+      }
+      .toast-info {
+        border-right: 4px solid #3b82f6;
+        background: #1e3a8a;
+        color: #eff6ff;
+      }
+      @keyframes toastIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
     </style>
   </head>
   <body>
@@ -281,6 +333,44 @@
             <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
               <button class="btn btn-primary" onclick="saveDataSourceSetting()">
                 💾 حفظ التفضيلات
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 1.5: Analytics Scope Setting -->
+          <div class="settings-card">
+            <div class="settings-card-title">
+              📊 نطاق حساب تحليلات المتاجر والإدراجات
+            </div>
+            <p class="settings-card-desc">
+              اختر نطاق وحجم البيانات التي تعتمد عليها بطاقة المتاجر النشطة والمخطط البياني الأسبوعي.
+            </p>
+            
+            <div class="settings-form-group">
+              <div class="setting-radio-group">
+                <!-- Option A: Snapshot Scope -->
+                <label class="setting-radio-option">
+                  <input type="radio" name="analytics-scope-radio" value="snapshot" id="radio-scope-snapshot" />
+                  <div class="setting-radio-label-wrapper">
+                    <span class="setting-radio-title">مرتبط باللقطة والفلتر الحالي (Snapshot Scope - مستحسن ⚡)</span>
+                    <span class="setting-radio-desc">حساب المتاجر النشطة وحركة الإدراجات الأسبوعية بناءً على المنتجات الخاصة باللقطة المحددة حالياً لتفادي أي تناقض مع إجمالي المنتجات المعروضة.</span>
+                  </div>
+                </label>
+
+                <!-- Option B: Global Database Scope -->
+                <label class="setting-radio-option">
+                  <input type="radio" name="analytics-scope-radio" value="global" id="radio-scope-global" />
+                  <div class="setting-radio-label-wrapper">
+                    <span class="setting-radio-title">شامل لجميع البيانات في النظام (Global Database Scope 🌐)</span>
+                    <span class="setting-radio-desc">حساب المتاجر النشطة والمخطط البياني بشكل تجميعي على مستوى كافة اللقطات والمنتجات المسجلة في قاعدة البيانات ككل.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+              <button class="btn btn-primary" onclick="saveAnalyticsScopeSetting()">
+                💾 حفظ نطاق التحليلات
               </button>
             </div>
           </div>
@@ -446,6 +536,24 @@
           console.error("Error loading settings:", err);
           document.getElementById('radio-source-db').checked = true;
         }
+
+        try {
+          const resScope = await fetch('/api/settings/analytics-scope');
+          if (resScope.ok) {
+            const dataScope = await resScope.json();
+            const valScope = dataScope.value || 'snapshot';
+            if (valScope === 'global') {
+              document.getElementById('radio-scope-global').checked = true;
+            } else {
+              document.getElementById('radio-scope-snapshot').checked = true;
+            }
+          } else {
+            document.getElementById('radio-scope-snapshot').checked = true;
+          }
+        } catch (err) {
+          console.error("Error loading analytics scope:", err);
+          document.getElementById('radio-scope-snapshot').checked = true;
+        }
       }
 
       // Save Data Source Setting
@@ -469,6 +577,31 @@
           }
         } catch (err) {
           console.error("Error saving setting:", err);
+          showToast("خطأ في الاتصال بالسيرفر.", "error");
+        }
+      }
+
+      // Save Analytics Scope Setting
+      async function saveAnalyticsScopeSetting() {
+        const selectedRadio = document.querySelector('input[name="analytics-scope-radio"]:checked');
+        if (!selectedRadio) return;
+
+        const value = selectedRadio.value;
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'analytics-scope', value: value })
+          });
+
+          if (res.ok) {
+            showToast("تم حفظ نطاق التحليلات بنجاح! 📊", "success");
+          } else {
+            showToast("فشل حفظ تفضيلات نطاق التحليلات.", "error");
+          }
+        } catch (err) {
+          console.error("Error saving analytics scope setting:", err);
           showToast("خطأ في الاتصال بالسيرفر.", "error");
         }
       }

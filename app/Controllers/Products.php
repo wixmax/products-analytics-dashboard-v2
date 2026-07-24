@@ -194,20 +194,59 @@ class Products extends ResourceController
     {
         $db = \Config\Database::connect();
         $origin = $this->request->getVar('origin') ?? 'Winning';
+        $snapshotId = $this->request->getVar('snapshot_id');
 
-        // 1. Weekly new listings (last 12 weeks) based on created_at
+        // Fetch analytics scope setting ('snapshot' or 'global')
+        $settingModel = new \App\Models\SettingModel();
+        $scopeSetting = $settingModel->where('key', 'analytics-scope')->first();
+        $scope = $scopeSetting['value'] ?? 'snapshot'; // Default to snapshot-scoped
+
+        // Closure to produce filtered query builder according to scope setting and snapshot_id
+        $getBaseQuery = function() use ($db, $origin, $snapshotId, $scope) {
+            $builder = $db->table('products')->where('origin', $origin);
+            if ($scope === 'snapshot') {
+                if (!empty($snapshotId)) {
+                    $builder->where('snapshot_id', $snapshotId);
+                } else {
+                    // Fallback to latest snapshot_id for this origin if available
+                    $latest = $db->table('data_snapshots')
+                        ->where('origin', $origin)
+                        ->orderBy('id', 'DESC')
+                        ->limit(1)
+                        ->get()
+                        ->getRowArray();
+                    if ($latest && !empty($latest['id'])) {
+                        $builder->where('snapshot_id', $latest['id']);
+                    }
+                }
+            }
+            return $builder;
+        };
+
+        // 1. Weekly new listings (last 12 weeks)
         $weeklyData = [];
         for ($i = 11; $i >= 0; $i--) {
-            $weekStart = date('Y-m-d', strtotime("-{$i} weeks Monday"));
-            $weekEnd = date('Y-m-d', strtotime("-{$i} weeks Sunday"));
-            
-            $count = $db->table('products')
-                ->where('origin', $origin)
+            $dt = new \DateTime();
+            $dt->modify("-{$i} weeks");
+            $dtStart = clone $dt;
+            $dtStart->modify('monday this week');
+            $dtEnd = clone $dt;
+            $dtEnd->modify('sunday this week');
+
+            $weekStart = $dtStart->format('Y-m-d');
+            $weekEnd = $dtEnd->format('Y-m-d');
+
+            $countAdStart = $getBaseQuery()
+                ->where('ad_start_date >=', $weekStart)
+                ->where('ad_start_date <=', $weekEnd)
+                ->countAllResults();
+
+            $countCreatedAt = $getBaseQuery()
                 ->where('created_at >=', $weekStart)
                 ->where('created_at <=', $weekEnd . ' 23:59:59')
                 ->countAllResults();
-            
-            $weeklyData[] = $count;
+
+            $weeklyData[] = max($countAdStart, $countCreatedAt);
         }
 
         // 2. Supply momentum: compare last 4 weeks average vs previous 4 weeks average
@@ -216,13 +255,11 @@ class Products extends ResourceController
         $hasSupplyMomentum = $recent4 > $previous4;
 
         // 3. Active stores: count unique domains from product_url
-
         $domains = [];
         $previousDomains = [];
         $fourWeeksAgo = date('Y-m-d', strtotime('-4 weeks'));
 
-        $allProducts = $db->table('products')
-            ->where('origin', $origin)
+        $allProducts = $getBaseQuery()
             ->select('product_url, created_at')
             ->get()
             ->getResultArray();
@@ -235,7 +272,6 @@ class Products extends ResourceController
                 if ($host) {
                     $host = preg_replace('/^www\./', '', $host);
                     $domains[$host] = true;
-                    // Track stores from before 4 weeks for trend calculation
                     if (isset($p['created_at']) && $p['created_at'] < $fourWeeksAgo) {
                         $previousDomains[$host] = true;
                     }
@@ -246,16 +282,16 @@ class Products extends ResourceController
         }
 
         $currentShopCount = count($domains);
-        $previousShopCount = max(count($previousDomains), 1); // Avoid division by zero
+        $previousShopCount = max(count($previousDomains), 1);
 
         // 4. Total products and ads stats
-        $totalProducts = $db->table('products')->where('origin', $origin)->countAllResults();
-        $activeAds = $db->table('products')
-            ->where('origin', $origin)
+        $totalProducts = $getBaseQuery()->countAllResults();
+        $activeAds = $getBaseQuery()
             ->where('active_ads', true)
             ->countAllResults();
 
         return $this->respond([
+            'scope' => $scope,
             'newListings' => [
                 'weeklyData' => $weeklyData,
                 'hasSupplyMomentum' => $hasSupplyMomentum,
@@ -1457,14 +1493,12 @@ class Products extends ResourceController
     public function saveSetting()
     {
         $model = new \App\Models\SettingModel();
-        $key = $this->request->getVar('key');
-        $value = $this->request->getVar('value');
+        
+        $rawInput = file_get_contents('php://input');
+        $json = !empty($rawInput) ? (json_decode($rawInput, true) ?: []) : [];
 
-        if (empty($key)) {
-            $json = $this->request->getJSON(true);
-            $key = $json['key'] ?? null;
-            $value = $json['value'] ?? null;
-        }
+        $key = $this->request->getPost('key') ?? ($json['key'] ?? $this->request->getGet('key'));
+        $value = $this->request->getPost('value') ?? ($json['value'] ?? $this->request->getGet('value'));
 
         if (empty($key)) {
             return $this->fail('Key is required');
