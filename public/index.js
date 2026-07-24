@@ -312,7 +312,7 @@ window.addEventListener("DOMContentLoaded", () => {
       let versionNum = apiVersion;
       let dateStr = "";
 
-      const datePatternMatch = apiVersion.match(/^(.*)-(\d{4}-\d{2}-\d{2})$/);
+      const datePatternMatch = apiVersion.match(/^(.*)-(\d{4}-\d{2}-\d{2})$/) || apiVersion.match(/^(.*)(\d{4}-\d{2}-\d{2})$/);
       if (datePatternMatch) {
         versionNum = datePatternMatch[1];
         dateStr = datePatternMatch[2];
@@ -427,7 +427,7 @@ function getActiveFiltersObject() {
 
   const versionNum = document.getElementById("filter-version").value || "1.10";
   const dateStr = document.getElementById("filter-date").value || "";
-  const v = dateStr ? `${versionNum}-${dateStr}` : versionNum;
+  const v = dateStr ? `${versionNum}${dateStr}` : versionNum;
 
   if (mode === "winning") {
     return {
