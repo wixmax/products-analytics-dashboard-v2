@@ -770,8 +770,8 @@ class Products extends ResourceController
 
         $model = new ProductModel();
         
-        // Use DB cache only if no specific version requested or requested version matches stored data
-        $useDbCache = ($dataSource === 'database');
+        // Use DB cache only for Winning; Local always fetches from API
+        $useDbCache = ($dataSource === 'database' && $origin !== 'Local');
         if ($useDbCache && $requestedVersion !== null && $requestedVersion !== '') {
             // Check if we have products with this api_version
             $countWithVersion = $model->where('origin', $origin)
