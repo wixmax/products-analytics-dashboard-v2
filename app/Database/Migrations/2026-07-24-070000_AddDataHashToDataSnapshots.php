@@ -20,6 +20,22 @@ class AddDataHashToDataSnapshots extends Migration
                     ],
                 ]);
             }
+
+            // Backfill data_hash for legacy snapshots
+            $legacySnapshots = $this->db->table('data_snapshots')
+                ->select('id, raw_json')
+                ->where('data_hash IS NULL OR data_hash = \'\'')
+                ->get()
+                ->getResultArray();
+
+            foreach ($legacySnapshots as $snap) {
+                if (!empty($snap['raw_json'])) {
+                    $hash = md5($snap['raw_json']);
+                    $this->db->table('data_snapshots')
+                        ->where('id', $snap['id'])
+                        ->update(['data_hash' => $hash]);
+                }
+            }
         }
     }
 

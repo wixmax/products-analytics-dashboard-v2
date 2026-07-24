@@ -360,10 +360,29 @@ class InstallController extends Controller
                 }
             }
             
+            // Automatic backfill of data_hash for legacy snapshots
+            $db = \Config\Database::connect();
+            if ($db->tableExists('data_snapshots') && $db->fieldExists('data_hash', 'data_snapshots')) {
+                $legacySnapshots = $db->table('data_snapshots')
+                    ->select('id, raw_json')
+                    ->where('data_hash IS NULL OR data_hash = \'\'')
+                    ->get()
+                    ->getResultArray();
+
+                foreach ($legacySnapshots as $snap) {
+                    if (!empty($snap['raw_json'])) {
+                        $hash = md5($snap['raw_json']);
+                        $db->table('data_snapshots')
+                            ->where('id', $snap['id'])
+                            ->update(['data_hash' => $hash]);
+                    }
+                }
+            }
+            
             if ($isJson) {
                 return $this->response->setJSON([
                     'status' => 'success',
-                    'message' => 'تمت تحديثات قاعدة البيانات بنجاح! تمت مزامنة جميع الجداول وتطبيق الهجرات الجديدة.'
+                    'message' => 'تمت تحديثات قاعدة البيانات بنجاح! تمت مزامنة جميع الجداول وإنشاء بصمات البيانات (data_hash) للنسخ القديمة.'
                 ]);
             }
 
