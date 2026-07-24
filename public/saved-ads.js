@@ -132,6 +132,44 @@ function renderSavedGrid() {
     return 0;
   });
 
+// State for Progressive Lazy Rendering in saved-ads.js
+let currentSavedList = [];
+let renderedSavedCount = 0;
+const SAVED_PER_BATCH = 16;
+let savedScrollObserver = null;
+
+function renderSavedGrid() {
+  const container = document.getElementById("saved-products-container");
+  if (!container) return;
+
+  const collectionFilter = document.getElementById("collection-filter")?.value || "";
+  const countryFilter = document.getElementById("country-filter")?.value || "";
+  const searchFilter = document.getElementById("search-saved")?.value?.toLowerCase() || "";
+  const sortOrder = document.getElementById("sort-saved")?.value || "date-desc";
+
+  let filtered = savedProducts.filter((p) => {
+    if (collectionFilter && p.collection !== collectionFilter) return false;
+    if (countryFilter && p.country !== countryFilter) return false;
+    if (searchFilter && !(p.title || "").toLowerCase().includes(searchFilter)) return false;
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    if (sortOrder === "date-desc") return new Date(b.saved_at || 0) - new Date(a.saved_at || 0);
+    if (sortOrder === "date-asc") return new Date(a.saved_at || 0) - new Date(b.saved_at || 0);
+    if (sortOrder === "rating-desc") return (b.rating || 0) - (a.rating || 0);
+    if (sortOrder === "rating-asc") return (a.rating || 0) - (b.rating || 0);
+    return 0;
+  });
+
+  currentSavedList = filtered;
+  renderedSavedCount = 0;
+
+  if (savedScrollObserver) {
+    savedScrollObserver.disconnect();
+    savedScrollObserver = null;
+  }
+
   if (filtered.length === 0) {
     container.innerHTML = `
             <div class="empty-state" style="grid-column: 1/-1;">
@@ -143,100 +181,189 @@ function renderSavedGrid() {
     return;
   }
 
-  container.innerHTML = filtered
-    .map((p) => {
-      const safeId = p.productUrl
-        ? btoa(unescape(encodeURIComponent(p.productUrl))).replace(/[/+=]/g, "")
-        : Math.random().toString(36).slice(2);
-      const imageUrls = (p.ad_image_urls || "").split(";").filter(Boolean);
-      const videoUrls = (p.ad_video_urls || "").split(";").filter(Boolean);
+  container.innerHTML = "";
+  loadNextSavedBatch();
+  setupSavedScrollObserver();
+}
 
-      const countryMeta = COUNTRIES_LIST.find((c) => c.code === p.country);
-      const flag = countryMeta ? countryMeta.flag : "🌍";
+function loadNextSavedBatch() {
+  const container = document.getElementById("saved-products-container");
+  if (!container || renderedSavedCount >= currentSavedList.length) return;
 
-      let domain = "متجر خارجي";
-      try {
-        if (p.productUrl)
-          domain = new URL(p.productUrl).hostname.replace("www.", "");
-      } catch (e) {
-        domain = p.productUrl || "رابط غير معروف";
-      }
+  const start = renderedSavedCount;
+  const end = Math.min(start + SAVED_PER_BATCH, currentSavedList.length);
+  const batch = currentSavedList.slice(start, end);
+  renderedSavedCount = end;
 
-      // Time elapsed calculation
-      let timeAgoText = "";
-      if (p.ad_start_date) {
-        const startDate = new Date(p.ad_start_date);
-        if (!isNaN(startDate.getTime())) {
-          const now = new Date();
-          now.setHours(0, 0, 0, 0);
-          startDate.setHours(0, 0, 0, 0);
-          const diffDays = Math.floor(
-            (now - startDate) / (1000 * 60 * 60 * 24),
-          );
-          if (diffDays === 0) timeAgoText = " (اليوم)";
-          else if (diffDays === 1) timeAgoText = " (أمس)";
-          else if (diffDays < 7) timeAgoText = ` (منذ ${diffDays} أيام)`;
-          else if (diffDays < 30)
-            timeAgoText = ` (منذ ${Math.floor(diffDays / 7)} أسبوع)`;
-          else timeAgoText = ` (منذ ${Math.floor(diffDays / 30)} شهر)`;
-        }
-      }
+  const batchHtml = batch.map((p) => buildSavedCardHtml(p)).join("");
+  const sentinel = document.getElementById("saved-scroll-sentinel");
+  if (sentinel) {
+    sentinel.insertAdjacentHTML("beforebegin", batchHtml);
+  } else {
+    container.insertAdjacentHTML("beforeend", batchHtml);
+  }
 
-      // Stars HTML
-      let starsHtml = "";
-      for (let i = 1; i <= 5; i++) {
-        const escapedUrl = (p.productUrl || "").replace(/'/g, "\\'");
-        starsHtml += `<span class="star ${i <= (p.rating || 0) ? "filled" : ""}" onclick="setRating('${escapedUrl}', ${i})">★</span>`;
-      }
+  initVideoJs(container);
 
-      const escapedUrlForDelete = (p.productUrl || "").replace(/'/g, "\\'");
-      const escapedUrlForNotes = (p.productUrl || "").replace(/'/g, "\\'");
+  if (renderedSavedCount >= currentSavedList.length) {
+    const s = document.getElementById("saved-scroll-sentinel");
+    if (s) s.remove();
+  }
+}
 
-      return `
-            <article class="product-card saved-product-card" id="card-${safeId}">
-                <div class="product-media">
-                    ${
-                      videoUrls.length > 0
-                        ? `<div class="vid-placeholder" data-vid-src="${videoUrls[0]}" data-vid-poster="${imageUrls[0] || ""}" id="vp-${safeId}">${imageUrls[0] ? `<img src="${imageUrls[0]}" alt="" class="vid-placeholder-img">` : `<div class="vid-placeholder-bg"></div>`}<div class="vid-play-btn">▶</div></div>`
-                        : imageUrls.length > 0
-                          ? `<img src="${imageUrls[0]}" alt="${p.title}">`
-                          : '<div class="no-media"><span>📦 لا توجد وسائط</span></div>'
-                    }
-                    <div class="status-badge ${p.active_ads ? "active" : "inactive"}">
-                        ${p.active_ads ? "🟢 نشط" : "🔴 متوقف"}
-                    </div>
-                    <div class="country-flag-badge">
-                        <span>${flag}</span>
-                        <span>${p.country || "--"}</span>
-                    </div>
-                    <div class="media-badge" style="top: auto; bottom: 10px;">⭐ محفوظة</div>
+function setupSavedScrollObserver() {
+  const container = document.getElementById("saved-products-container");
+  if (!container || renderedSavedCount >= currentSavedList.length) return;
+
+  let sentinel = document.getElementById("saved-scroll-sentinel");
+  if (!sentinel) {
+    sentinel = document.createElement("div");
+    sentinel.id = "saved-scroll-sentinel";
+    sentinel.className = "infinite-scroll-sentinel";
+    sentinel.style.gridColumn = "1 / -1";
+    sentinel.innerHTML = "<span>⏳ جاري تحميل المزيد من المنتجات...</span>";
+    container.appendChild(sentinel);
+  }
+
+  if (typeof IntersectionObserver !== "undefined") {
+    savedScrollObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && renderedSavedCount < currentSavedList.length) {
+            loadNextSavedBatch();
+          }
+        });
+      },
+      { rootMargin: "300px" }
+    );
+    savedScrollObserver.observe(sentinel);
+  }
+}
+
+function buildSavedCardHtml(p) {
+  const safeId = p.productUrl
+    ? btoa(unescape(encodeURIComponent(p.productUrl))).replace(/[/+=]/g, "")
+    : Math.random().toString(36).slice(2);
+  const imageUrls = (p.ad_image_urls || "").split(";").filter(Boolean);
+  const videoUrls = (p.ad_video_urls || "").split(";").filter(Boolean);
+
+  const countryMeta = COUNTRIES_LIST.find((c) => c.code === p.country);
+  const flag = countryMeta ? countryMeta.flag : "🌍";
+
+  let domain = "متجر خارجي";
+  try {
+    if (p.productUrl)
+      domain = new URL(p.productUrl).hostname.replace("www.", "");
+  } catch (e) {
+    domain = p.productUrl || "رابط غير معروف";
+  }
+
+  // Stars HTML
+  let starsHtml = "";
+  for (let i = 1; i <= 5; i++) {
+    const escapedUrl = (p.productUrl || "").replace(/'/g, "\\'");
+    starsHtml += `<span class="star ${i <= (p.rating || 0) ? "filled" : ""}" onclick="setRating('${escapedUrl}', ${i})">★</span>`;
+  }
+
+  const escapedUrlForDelete = (p.productUrl || "").replace(/'/g, "\\'");
+
+  return `
+        <article class="product-card saved-product-card card-lazy-load" id="card-${safeId}">
+            <div class="product-media">
+                ${
+                  videoUrls.length > 0
+                    ? `<div class="vid-placeholder" data-vid-src="${videoUrls[0]}" data-vid-poster="${imageUrls[0] || ""}" id="vp-${safeId}">${imageUrls[0] ? `<img src="${imageUrls[0]}" alt="" class="vid-placeholder-img">` : `<div class="vid-placeholder-bg"></div>`}<div class="vid-play-btn">▶</div></div>`
+                    : imageUrls.length > 0
+                      ? `<img src="${imageUrls[0]}" alt="${p.title}">`
+                      : '<div class="no-media"><span>📦 لا توجد وسائط</span></div>'
+                }
+                <div class="status-badge ${p.active_ads ? "active" : "inactive"}">
+                    ${p.active_ads ? "🟢 نشط" : "🔴 متوقف"}
                 </div>
-                <div class="card-body">
-                    <h4 class="p-title" title="${p.title}">${p.title}</h4>
-                    <div style="color: var(--color-text-muted); font-size: 0.75rem; margin-top: -4px;">🏪 ${domain}</div>
-                    <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
-                        <span class="alg-badge" style="font-size: 0.65rem;">${p.algorithm || "new"}</span>
-                        ${p.api_version ? `<span class="snapshot-badge" style="background:rgba(99,102,241,0.1);color:#6366f1;padding:2px 8px;border-radius:var(--radius-full);font-size:0.65rem;">🔖 ${p.api_version}</span>` : ''}
-                    </div>
+                <div class="country-flag-badge">
+                    <span>${flag}</span>
+                    <span>${p.country || "--"}</span>
                 </div>
-                <div class="card-footer" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-top: 1px solid var(--border-color);">
-                    <!-- Main Actions -->
-                    <div style="display: flex; gap: 8px; width: 100%;">
-                        <a href="${p.productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px;">🛒 زيارة</a>
-                        <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px;">📊 تفاصيل أكثر</button>
-                    </div>
-                    <!-- Secondary & Danger Actions -->
-                    <div style="display: flex; gap: 8px; width: 100%;">
-                        <button onclick='openInfoModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px;">ℹ️ معلومات</button>
-                        <button onclick="exportSingleSavedProduct('${escapedUrlForDelete}')" class="btn btn-secondary" title="تصدير JSON" style="flex: 0 0 auto; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">📥</button>
-                        <button class="btn btn-error" onclick="removeFromSaved('${escapedUrlForDelete}')" title="إزالة من المحفوظات" style="flex: 0 0 auto; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: var(--color-error); border: 1px solid rgba(239, 68, 68, 0.2);">🗑️</button>
-                    </div>
+                <div class="media-badge" style="top: auto; bottom: 10px;">⭐ محفوظة</div>
+            </div>
+            <div class="card-body">
+                <h4 class="p-title" title="${p.title}">${p.title}</h4>
+                <div style="color: var(--color-text-muted); font-size: 0.75rem; margin-top: -4px;">🏪 ${domain}</div>
+                <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                    <span class="alg-badge" style="font-size: 0.65rem;">${p.algorithm || "new"}</span>
+                    ${p.api_version ? `<span class="snapshot-badge" style="background:rgba(99,102,241,0.1);color:#6366f1;padding:2px 8px;border-radius:var(--radius-full);font-size:0.65rem;">🔖 ${p.api_version}</span>` : ''}
                 </div>
-            </article>
-        `;
-    })
-    .join("");
-  initVideoJs();
+                <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.75rem; color: var(--color-text-muted);">المجموعة:</span>
+                    <select onchange="updateCollection('${escapedUrlForDelete}', this.value)" style="padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; background: var(--bg-card); color: var(--color-text-main); border: 1px solid var(--border-color);">
+                        ${collections.map((c) => `<option value="${c}" ${p.collection === c ? "selected" : ""}>${c}</option>`).join("")}
+                    </select>
+                </div>
+                <div class="rating-stars" style="margin-top: 6px;">
+                    ${starsHtml}
+                </div>
+            </div>
+            <div class="card-footer" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-top: 1px solid var(--border-color);">
+                <div style="display: flex; gap: 8px; width: 100%;">
+                    <a href="${p.productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px; display: flex; align-items: center; justify-content: center;">🛒 زيارة</a>
+                    <button onclick='openDetailsModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px;">📊 تفاصيل أكثر</button>
+                </div>
+                <div style="display: flex; gap: 8px; width: 100%;">
+                    <button onclick='openInfoModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.5rem; height: 36px;">ℹ️ معلومات</button>
+                    <button onclick="exportSingleSavedProduct('${escapedUrlForDelete}')" class="btn btn-secondary" title="تصدير JSON" style="flex: 0 0 auto; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">📥</button>
+                    <button class="btn btn-error" onclick="removeFromSaved('${escapedUrlForDelete}')" title="إزالة من المحفوظات" style="flex: 0 0 auto; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: var(--color-error); border: 1px solid rgba(239, 68, 68, 0.2);">🗑️</button>
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function initBackToTop() {
+  if (document.getElementById("back-to-top-btn")) return;
+  const btn = document.createElement("button");
+  btn.id = "back-to-top-btn";
+  btn.className = "back-to-top-btn";
+  btn.setAttribute("aria-label", "التوجه إلى الأعلى");
+  btn.setAttribute("title", "التوجه إلى الأعلى");
+  btn.innerHTML = "⬆️";
+  document.body.appendChild(btn);
+
+  const mainContent = document.querySelector(".main-content");
+
+  const toggleBtn = () => {
+    const windowScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const mainScroll = mainContent ? mainContent.scrollTop : 0;
+    const currentScroll = Math.max(windowScroll, mainScroll);
+
+    if (currentScroll > 150) {
+      btn.classList.add("visible");
+    } else {
+      btn.classList.remove("visible");
+    }
+  };
+
+  window.addEventListener("scroll", toggleBtn, { passive: true });
+  document.addEventListener("scroll", toggleBtn, { passive: true });
+  if (mainContent) {
+    mainContent.addEventListener("scroll", toggleBtn, { passive: true });
+  }
+
+  toggleBtn();
+
+  btn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
+    document.body.scrollTo({ top: 0, behavior: "smooth" });
+    if (mainContent) {
+      mainContent.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initBackToTop);
+} else {
+  initBackToTop();
 }
 
 function initVideoJs(scope) {
@@ -461,12 +588,19 @@ async function setupTheme() {
   const themeBtn = document.getElementById("theme-toggle-btn");
   if (!themeBtn) return;
 
+  const localTheme = localStorage.getItem("app-theme");
+  if (localTheme) {
+    document.documentElement.setAttribute("data-theme", localTheme);
+  }
+
   try {
     const res = await fetch("/api/settings/app-theme");
     if (res.ok) {
       const data = await res.json();
-      const currentTheme = data.value || "light";
-      document.documentElement.setAttribute("data-theme", currentTheme);
+      if (data.value) {
+        document.documentElement.setAttribute("data-theme", data.value);
+        localStorage.setItem("app-theme", data.value);
+      }
     }
   } catch (err) {
     console.error("Error fetching theme setting:", err);
@@ -478,6 +612,7 @@ async function setupTheme() {
         ? "light"
         : "dark";
     document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("app-theme", theme);
     try {
       await fetch("/api/settings", {
         method: "POST",

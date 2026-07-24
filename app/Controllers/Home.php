@@ -51,11 +51,65 @@ class Home extends BaseController
 
     public function settings(): string
     {
-        return view('settings');
+        $pendingMigrations = [];
+        try {
+            $migrate = \Config\Services::migrations();
+            $history = $migrate->getHistory();
+            
+            $historyVersions = [];
+            $historyClasses = [];
+            foreach ($history as $h) {
+                $hObj = (object)$h;
+                if (!empty($hObj->version)) {
+                    $historyVersions[] = $hObj->version;
+                }
+                if (!empty($hObj->class)) {
+                    $historyClasses[] = $hObj->class;
+                }
+            }
+
+            $namespaces = ['App', 'CodeIgniter\Shield'];
+            foreach ($namespaces as $ns) {
+                try {
+                    $all = $migrate->findNamespaceMigrations($ns);
+                    foreach ($all as $m) {
+                        $mVer = $m->version ?? null;
+                        $mClass = $m->class ?? null;
+
+                        $isAlreadyRan = false;
+                        if ($mVer && in_array($mVer, $historyVersions, true)) {
+                            $isAlreadyRan = true;
+                        } elseif ($mClass && in_array($mClass, $historyClasses, true)) {
+                            $isAlreadyRan = true;
+                        }
+
+                        if (!$isAlreadyRan) {
+                            $pendingMigrations[] = [
+                                'name'      => $m->name ?? $m->version,
+                                'version'   => $m->version,
+                                'namespace' => $m->namespace,
+                                'filename'  => basename($m->path),
+                            ];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore namespace if no migrations exist
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed to check pending migrations: ' . $e->getMessage());
+        }
+
+        return view('settings', [
+            'pendingMigrations' => $pendingMigrations
+        ]);
     }
 
-    public function snapshots(): string
+    public function snapshots()
     {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return redirect()->to('/');
+        }
         return view('snapshots');
     }
 }

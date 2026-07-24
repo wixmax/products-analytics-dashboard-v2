@@ -109,6 +109,72 @@ function toggleApiMode() {
   updateGeneratedURL();
 }
 
+let availableSnapshotDates = [];
+
+async function initDatePickerWithSnapshotIndicators() {
+  try {
+    const res = await fetch("/api/products/available-dates");
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.dates)) {
+        availableSnapshotDates = data.dates;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to fetch available snapshot dates:", err);
+  }
+
+  const now = new Date();
+  const yearStr = now.getFullYear();
+  const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+  const dayStr = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${yearStr}-${monthStr}-${dayStr}`;
+
+  const allowedSet = new Set(availableSnapshotDates);
+  allowedSet.add(todayStr);
+
+  const fpInstance = flatpickr("#filter-date", {
+    dateFormat: "Y-m-d",
+    allowInput: false,
+    maxDate: "today",
+    enable: [
+      function(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const formatted = `${y}-${m}-${d}`;
+        return allowedSet.has(formatted);
+      }
+    ],
+    onDayCreate: function(dObj, dStr, fp, dayElem) {
+      if (!dayElem.dateObj) return;
+      const y = dayElem.dateObj.getFullYear();
+      const m = String(dayElem.dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dayElem.dateObj.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+
+      if (availableSnapshotDates.includes(dateStr)) {
+        dayElem.classList.add("has-snapshot-date");
+        dayElem.title = `نسخة مسجلة في قاعدة البيانات (${dateStr})`;
+        const badge = document.createElement("span");
+        badge.className = "snapshot-date-badge";
+        badge.innerHTML = "●";
+        dayElem.appendChild(badge);
+      }
+    },
+    onChange: (dates, dateStr) => {
+      if (dateStr) localStorage.setItem("api_filter_date", dateStr);
+      else localStorage.removeItem("api_filter_date");
+      updateGeneratedURL();
+    }
+  });
+
+  const cachedDate = localStorage.getItem("api_filter_date");
+  if (cachedDate && allowedSet.has(cachedDate)) {
+    fpInstance.setDate(cachedDate);
+  }
+}
+
 // =========================================
 // 2. UI Generators & Setup Initializer
 // =========================================
@@ -118,28 +184,13 @@ window.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   setupTheme();
 
-  // Initialize Flatpickr for date picker
-  flatpickr("#filter-date", {
-    dateFormat: "Y-m-d",
-    allowInput: true,
-    maxDate: "today",
-    onChange: (dates, dateStr) => {
-      if (dateStr) localStorage.setItem("api_filter_date", dateStr);
-      else localStorage.removeItem("api_filter_date");
-      updateGeneratedURL();
-    }
-  });
+  // Initialize Flatpickr for date picker with snapshot indicators & past date protection
+  initDatePickerWithSnapshotIndicators();
 
   // Restore cached API version if available
   const cachedVersion = localStorage.getItem("api_version_v");
   if (cachedVersion) {
     document.getElementById("filter-version").value = cachedVersion;
-  }
-
-  // Restore cached date if available
-  const cachedDate = localStorage.getItem("api_filter_date");
-  if (cachedDate) {
-    document.getElementById("filter-date")._flatpickr?.setDate(cachedDate);
   }
 
   // Restore cached Countries if available
@@ -415,11 +466,10 @@ async function handleFetchAPI() {
     }
     const data = await response.json();
 
-    // Detect data source from server response
-    const source =
-      Array.isArray(data) && data[0] && data[0].source
-        ? data[0].source
-        : "unknown";
+    // Detect data source & duplication status from server response
+    const firstItem = Array.isArray(data) && data[0] ? data[0] : {};
+    const source = firstItem.source || "unknown";
+    const isDuplicate = Boolean(firstItem.is_duplicate);
 
     if (source === "database") {
       processLoadedData(data, "قاعدة البيانات المحلية");
@@ -429,10 +479,17 @@ async function handleFetchAPI() {
       );
     } else if (source === "api") {
       processLoadedData(data, "السيرفر الخارجي (API)");
-      showToast(
-        "🌐 تم جلب البيانات من السيرفر الخارجي وحفظها في قاعدة البيانات بنجاح!",
-        "success",
-      );
+      if (isDuplicate) {
+        showToast(
+          "ℹ️ البيانات القادمة مطابقة 100% لنسخة مسجلة مسبقاً، تم تجاوز إعادة الحفظ وتجنب التكرار.",
+          "info",
+        );
+      } else {
+        showToast(
+          "✨ تم جلب وتسجيل بيانات جديدة بنجاح في قاعدة البيانات (نسخة جديدة)!",
+          "success",
+        );
+      }
     } else {
       processLoadedData(data, "مصدر غير محدد");
       showToast("تمت المزامنة بنجاح! 🎉", "success");
@@ -814,10 +871,23 @@ function updateKpiCards(products) {
   document.getElementById("kpi-avg-creatives").textContent = avg;
 }
 
+// State for Progressive Lazy Rendering
+let currentProductsList = [];
+let renderedProductsCount = 0;
+const PRODUCTS_PER_BATCH = 16;
+let infiniteScrollObserver = null;
+
 function renderProductGrid(products) {
   const container = document.getElementById("products-container");
+  currentProductsList = products || [];
+  renderedProductsCount = 0;
 
-  if (products.length === 0) {
+  if (infiniteScrollObserver) {
+    infiniteScrollObserver.disconnect();
+    infiniteScrollObserver = null;
+  }
+
+  if (currentProductsList.length === 0) {
     container.innerHTML = `
     <div class="empty-state">
       <div class="empty-icon">🔍</div>
@@ -828,107 +898,164 @@ function renderProductGrid(products) {
     return;
   }
 
-  container.innerHTML = products
-    .map((p) => {
-      // Safely parse semicolon separated URLs
-      const imageUrls = (p.ad_image_urls || "")
-        .split(";")
-        .map((u) => u.trim())
-        .filter(Boolean);
-      const videoUrls = (p.ad_video_urls || "")
-        .split(";")
-        .map((u) => u.trim())
-        .filter(Boolean);
+  container.innerHTML = "";
+  loadNextProductBatch();
+  setupInfiniteScrollObserver();
+}
 
-      // Flags and meta
-      const countryMeta = COUNTRIES_LIST.find((c) => c.code === p.country);
-      const flag = countryMeta ? countryMeta.flag : "🌍";
-      let domain = "متجر خارجي";
-      try {
-        if (p.productUrl)
-          domain = new URL(p.productUrl).hostname.replace("www.", "");
-      } catch (e) {
-        domain = p.productUrl || "رابط غير معروف";
-      }
+function loadNextProductBatch() {
+  const container = document.getElementById("products-container");
+  if (!container || renderedProductsCount >= currentProductsList.length) return;
 
-      // Time elapsed calculation
-      let timeAgoText = "";
-      if (p.ad_start_date) {
-        const startDate = new Date(p.ad_start_date);
-        if (!isNaN(startDate.getTime())) {
-          const now = new Date();
-          // Reset time part to compare just dates roughly
-          now.setHours(0, 0, 0, 0);
-          startDate.setHours(0, 0, 0, 0);
+  const start = renderedProductsCount;
+  const end = Math.min(start + PRODUCTS_PER_BATCH, currentProductsList.length);
+  const batch = currentProductsList.slice(start, end);
+  renderedProductsCount = end;
 
-          const diffTime = now.getTime() - startDate.getTime();
-          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const batchHtml = batch.map((p) => buildProductCardHtml(p)).join("");
+  
+  const sentinel = document.getElementById("infinite-scroll-sentinel");
+  if (sentinel) {
+    sentinel.insertAdjacentHTML("beforebegin", batchHtml);
+  } else {
+    container.insertAdjacentHTML("beforeend", batchHtml);
+  }
 
-          if (diffDays === 0) {
-            timeAgoText =
-              ' <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(اليوم)</span>';
-          } else if (diffDays === 1) {
-            timeAgoText =
-              ' <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(أمس)</span>';
-          } else if (diffDays > 1 && diffDays < 7) {
-            timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(منذ ${diffDays} أيام)</span>`;
-          } else if (diffDays >= 7 && diffDays < 30) {
-            const weeks = Math.floor(diffDays / 7);
-            timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(منذ ${weeks} أسبوع)</span>`;
-          } else if (diffDays >= 30 && diffDays < 365) {
-            const months = Math.floor(diffDays / 30);
-            timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(منذ ${months} شهر)</span>`;
-          } else if (diffDays >= 365) {
-            const years = Math.floor(diffDays / 365);
-            timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(منذ ${years} سنة)</span>`;
-          } else if (diffDays < 0) {
-            const futureDays = Math.abs(diffDays);
-            timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-warning); font-weight: 700;">(بعد ${futureDays} يوم)</span>`;
+  initVideoJs(container);
+
+  if (renderedProductsCount >= currentProductsList.length) {
+    const s = document.getElementById("infinite-scroll-sentinel");
+    if (s) s.remove();
+  }
+}
+
+function setupInfiniteScrollObserver() {
+  const container = document.getElementById("products-container");
+  if (!container || renderedProductsCount >= currentProductsList.length) return;
+
+  let sentinel = document.getElementById("infinite-scroll-sentinel");
+  if (!sentinel) {
+    sentinel = document.createElement("div");
+    sentinel.id = "infinite-scroll-sentinel";
+    sentinel.className = "infinite-scroll-sentinel";
+    sentinel.innerHTML = "<span>⏳ جاري تحميل المزيد من المنتجات...</span>";
+    container.appendChild(sentinel);
+  }
+
+  if (typeof IntersectionObserver !== "undefined") {
+    infiniteScrollObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && renderedProductsCount < currentProductsList.length) {
+            loadNextProductBatch();
           }
-        }
+        });
+      },
+      { rootMargin: "300px" }
+    );
+    infiniteScrollObserver.observe(sentinel);
+  }
+}
+
+function buildProductCardHtml(p) {
+  // Safely parse semicolon separated URLs
+  const imageUrls = (p.ad_image_urls || "")
+    .split(";")
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const videoUrls = (p.ad_video_urls || "")
+    .split(";")
+    .map((u) => u.trim())
+    .filter(Boolean);
+
+  // Flags and meta
+  const countryMeta = COUNTRIES_LIST.find((c) => c.code === p.country);
+  const flag = countryMeta ? countryMeta.flag : "🌍";
+  let domain = "متجر خارجي";
+  try {
+    if (p.productUrl)
+      domain = new URL(p.productUrl).hostname.replace("www.", "");
+  } catch (e) {
+    domain = p.productUrl || "رابط غير معروف";
+  }
+
+  // Time elapsed calculation
+  let timeAgoText = "";
+  if (p.ad_start_date) {
+    const startDate = new Date(p.ad_start_date);
+    if (!isNaN(startDate.getTime())) {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      startDate.setHours(0, 0, 0, 0);
+
+      const diffTime = now.getTime() - startDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) {
+        timeAgoText =
+          ' <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(اليوم)</span>';
+      } else if (diffDays === 1) {
+        timeAgoText =
+          ' <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(أمس)</span>';
+      } else if (diffDays > 1 && diffDays < 7) {
+        timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(منذ ${diffDays} أيام)</span>`;
+      } else if (diffDays >= 7 && diffDays < 30) {
+        const weeks = Math.floor(diffDays / 7);
+        timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(منذ ${weeks} أسبوع)</span>`;
+      } else if (diffDays >= 30 && diffDays < 365) {
+        const months = Math.floor(diffDays / 30);
+        timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(منذ ${months} شهر)</span>`;
+      } else if (diffDays >= 365) {
+        const years = Math.floor(diffDays / 365);
+        timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-primary); font-weight: 700;">(منذ ${years} سنة)</span>`;
+      } else if (diffDays < 0) {
+        const futureDays = Math.abs(diffDays);
+        timeAgoText = ` <span style="font-size: 0.7rem; color: var(--color-warning); font-weight: 700;">(بعد ${futureDays} يوم)</span>`;
       }
+    }
+  }
 
-      const safeId = p.productUrl
-        ? btoa(unescape(encodeURIComponent(p.productUrl))).replace(/[/+=]/g, "")
-        : Math.random().toString(36).slice(2);
+  const safeId = p.productUrl
+    ? btoa(unescape(encodeURIComponent(p.productUrl))).replace(/[/+=]/g, "")
+    : Math.random().toString(36).slice(2);
 
-      // Setup Media HTML (Show Video first if available, else image, else fallback)
-      let mediaHtml = "";
-      if (videoUrls.length > 0) {
-        mediaHtml = `
+  // Setup Media HTML
+  let mediaHtml = "";
+  if (videoUrls.length > 0) {
+    mediaHtml = `
       <div class="media-badge">🎥 فيديو (${videoUrls.length})</div>
       <div class="vid-placeholder" data-vid-src="${videoUrls[0]}" data-vid-poster="${imageUrls[0] || ""}" id="vp-${safeId}">
         ${imageUrls[0] ? `<img src="${imageUrls[0]}" alt="" class="vid-placeholder-img">` : `<div class="vid-placeholder-bg"></div>`}
         <div class="vid-play-btn">▶</div>
       </div>
     `;
-      } else if (imageUrls.length > 0) {
-        mediaHtml = `
+  } else if (imageUrls.length > 0) {
+    mediaHtml = `
       <div class="media-badge">📸 صور (${imageUrls.length})</div>
       <img src="${imageUrls[0]}" alt="${p.title}" loading="lazy">
     `;
-      } else {
-        mediaHtml = `
+  } else {
+    mediaHtml = `
       <div class="no-media">
         <span>📦 لا توجد وسائط معاينة</span>
       </div>
     `;
-      }
+  }
 
-      const isSaved = savedProducts.some(
-        (saved) => saved.productUrl === p.productUrl,
-      );
-      const saveBtnHtml = `
-        <button onclick='toggleSaveProduct(${JSON.stringify(p).replace(/'/g, "&apos;")})' 
-                class="btn ${isSaved ? "btn-success" : "btn-secondary"}" 
-                id="save-btn-${safeId}"
-                title="${isSaved ? "محفوظ" : "حفظ المنتج"}">
-          ${isSaved ? "⭐" : "☆"}
-        </button>
-      `;
+  const isSaved = savedProducts.some(
+    (saved) => saved.productUrl === p.productUrl,
+  );
+  const saveBtnHtml = `
+    <button onclick='toggleSaveProduct(${JSON.stringify(p).replace(/'/g, "&apos;")})' 
+            class="btn ${isSaved ? "btn-success" : "btn-secondary"}" 
+            id="save-btn-${safeId}"
+            title="${isSaved ? "محفوظ" : "حفظ المنتج"}">
+      ${isSaved ? "⭐" : "☆"}
+    </button>
+  `;
 
-      return `
-    <article class="product-card index-product-card" id="product-${safeId}">
+  return `
+    <article class="product-card index-product-card card-lazy-load" id="product-${safeId}">
       <div class="product-media">
         ${mediaHtml}
         <div class="status-badge ${p.active_ads ? "active" : "inactive"}">
@@ -959,10 +1086,34 @@ function renderProductGrid(products) {
       </div>
     </article>
   `;
-    })
-    .join("");
-  initVideoJs();
 }
+
+function initBackToTop() {
+  if (document.getElementById("back-to-top-btn")) return;
+  const btn = document.createElement("button");
+  btn.id = "back-to-top-btn";
+  btn.className = "back-to-top-btn";
+  btn.setAttribute("aria-label", "التوجه إلى الأعلى");
+  btn.setAttribute("title", "التوجه إلى الأعلى");
+  btn.innerHTML = "⬆️";
+  document.body.appendChild(btn);
+
+  window.addEventListener("scroll", () => {
+    if (window.scrollY > 300) {
+      btn.classList.add("visible");
+    } else {
+      btn.classList.remove("visible");
+    }
+  }, { passive: true });
+
+  btn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initBackToTop();
+});
 
 let vidObserver = null;
 
@@ -1120,12 +1271,19 @@ async function setupTheme() {
   const btn = document.getElementById("theme-toggle-btn");
   if (!btn) return;
 
+  const localTheme = localStorage.getItem("app-theme");
+  if (localTheme) {
+    document.documentElement.setAttribute("data-theme", localTheme);
+  }
+
   try {
     const res = await fetch("/api/settings/app-theme");
     if (res.ok) {
       const data = await res.json();
-      const currentTheme = data.value || "light";
-      document.documentElement.setAttribute("data-theme", currentTheme);
+      if (data.value) {
+        document.documentElement.setAttribute("data-theme", data.value);
+        localStorage.setItem("app-theme", data.value);
+      }
     }
   } catch (err) {
     console.error("Error fetching theme setting:", err);
@@ -1136,6 +1294,7 @@ async function setupTheme() {
       document.documentElement.getAttribute("data-theme") === "dark";
     const nextTheme = isDark ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", nextTheme);
+    localStorage.setItem("app-theme", nextTheme);
     try {
       await fetch("/api/settings", {
         method: "POST",
@@ -1928,4 +2087,52 @@ async function handleDetailsPriceChange(val) {
   }
   
   updateDetailsRawDataView();
+}
+
+function initBackToTop() {
+  if (document.getElementById("back-to-top-btn")) return;
+  const btn = document.createElement("button");
+  btn.id = "back-to-top-btn";
+  btn.className = "back-to-top-btn";
+  btn.setAttribute("aria-label", "التوجه إلى الأعلى");
+  btn.setAttribute("title", "التوجه إلى الأعلى");
+  btn.innerHTML = "⬆️";
+  document.body.appendChild(btn);
+
+  const mainContent = document.querySelector(".main-content");
+
+  const toggleBtn = () => {
+    const windowScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const mainScroll = mainContent ? mainContent.scrollTop : 0;
+    const currentScroll = Math.max(windowScroll, mainScroll);
+
+    if (currentScroll > 150) {
+      btn.classList.add("visible");
+    } else {
+      btn.classList.remove("visible");
+    }
+  };
+
+  window.addEventListener("scroll", toggleBtn, { passive: true });
+  document.addEventListener("scroll", toggleBtn, { passive: true });
+  if (mainContent) {
+    mainContent.addEventListener("scroll", toggleBtn, { passive: true });
+  }
+
+  toggleBtn();
+
+  btn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
+    document.body.scrollTo({ top: 0, behavior: "smooth" });
+    if (mainContent) {
+      mainContent.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initBackToTop);
+} else {
+  initBackToTop();
 }

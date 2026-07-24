@@ -360,48 +360,52 @@ class SyncService
                     $rawList = $targetData['results'];
                 }
                 if (is_array($rawList)) {
-                    // Save snapshot before upserting products
-                    $snapshotId = $this->saveSnapshot($origin, $apiVersion, $rawBody, count($rawList));
+                    // Save snapshot with content hash deduplication
+                    $snapInfo = $this->saveSnapshot($origin, $apiVersion, $rawBody, count($rawList));
+                    $snapshotId = $snapInfo['id'];
 
-                    foreach ($rawList as $p) {
-                        $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
-                        if (empty($productUrl)) continue;
-                        $title = $p['title'] ?? $p['product_title'] ?? 'بدون عنوان';
-                        
-                        $existing = $this->model->where('product_url', $productUrl)
-                                          ->where('origin', $origin)
-                                          ->first();
-                                           
-                        $dataToSave = [
-                            'title' => $title,
-                            'product_url' => $productUrl,
-                            'country' => $p['country'] ?? '',
-                            'algo' => $p['algorithm'] ?? $p['algo'] ?? ($origin === 'Winning' ? 'winning' : 'new'),
-                            'ad_start_date' => $this->cleanDate($p['ad_start_date'] ?? null),
-                            'ads_count' => intval($p['ads_count'] ?? 0),
-                            'unique_image_count' => intval($p['unique_image_count'] ?? 0),
-                            'unique_video_count' => intval($p['unique_video_count'] ?? 0),
-                            'avg_creatives' => floatval($p['avg_creatives'] ?? 1),
-                            'ads_per_unique_url' => floatval($p['ads_per_unique_url'] ?? 1),
-                            'ad_title' => $p['ad_title'] ?? '',
-                            'ad_body' => $p['ad_body'] ?? '',
-                            'ad_image_urls' => is_array($p['ad_image_urls'] ?? null) ? implode(';', $p['ad_image_urls']) : ($p['ad_image_urls'] ?? ''),
-                            'ad_video_urls' => is_array($p['ad_video_urls'] ?? null) ? implode(';', $p['ad_video_urls']) : ($p['ad_video_urls'] ?? ''),
-                            'price_1' => strval($p['price_1'] ?? $p['actualPrice'] ?? $p['price'] ?? '0'),
-                            'active_ads' => isset($p['active_ads']) ? (bool)$p['active_ads'] : true,
-                            'origin' => $origin,
-                            'api_version' => $apiVersion,
-                            'snapshot_id' => $snapshotId,
-                        ];
-                        
-                        if ($origin === 'Winning') {
-                            $dataToSave['badge_algorithm'] = $p['badge_algorithm'] ?? 'winning';
-                        }
-                        
-                        if ($existing) {
-                            $this->model->update($existing['id'], $dataToSave);
-                        } else {
-                            $this->model->insert($dataToSave);
+                    // Only upsert product details if this is a new snapshot/hash or first time
+                    if (!$snapInfo['is_duplicate']) {
+                        foreach ($rawList as $p) {
+                            $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
+                            if (empty($productUrl)) continue;
+                            $title = $p['title'] ?? $p['product_title'] ?? 'بدون عنوان';
+                            
+                            $existing = $this->model->where('product_url', $productUrl)
+                                              ->where('origin', $origin)
+                                              ->first();
+                                               
+                            $dataToSave = [
+                                'title' => $title,
+                                'product_url' => $productUrl,
+                                'country' => $p['country'] ?? '',
+                                'algo' => $p['algorithm'] ?? $p['algo'] ?? ($origin === 'Winning' ? 'winning' : 'new'),
+                                'ad_start_date' => $this->cleanDate($p['ad_start_date'] ?? null),
+                                'ads_count' => intval($p['ads_count'] ?? 0),
+                                'unique_image_count' => intval($p['unique_image_count'] ?? 0),
+                                'unique_video_count' => intval($p['unique_video_count'] ?? 0),
+                                'avg_creatives' => floatval($p['avg_creatives'] ?? 1),
+                                'ads_per_unique_url' => floatval($p['ads_per_unique_url'] ?? 1),
+                                'ad_title' => $p['ad_title'] ?? '',
+                                'ad_body' => $p['ad_body'] ?? '',
+                                'ad_image_urls' => is_array($p['ad_image_urls'] ?? null) ? implode(';', $p['ad_image_urls']) : ($p['ad_image_urls'] ?? ''),
+                                'ad_video_urls' => is_array($p['ad_video_urls'] ?? null) ? implode(';', $p['ad_video_urls']) : ($p['ad_video_urls'] ?? ''),
+                                'price_1' => strval($p['price_1'] ?? $p['actualPrice'] ?? $p['price'] ?? '0'),
+                                'active_ads' => isset($p['active_ads']) ? (bool)$p['active_ads'] : true,
+                                'origin' => $origin,
+                                'api_version' => $apiVersion,
+                                'snapshot_id' => $snapshotId,
+                            ];
+                            
+                            if ($origin === 'Winning') {
+                                $dataToSave['badge_algorithm'] = $p['badge_algorithm'] ?? 'winning';
+                            }
+                            
+                            if ($existing) {
+                                $this->model->update($existing['id'], $dataToSave);
+                            } else {
+                                $this->model->insert($dataToSave);
+                            }
                         }
                     }
                 }
@@ -416,6 +420,11 @@ class SyncService
                 }
             }
             
+            if (is_array($data) && isset($data[0])) {
+                $data[0]['is_duplicate'] = $snapInfo['is_duplicate'] ?? false;
+                $data[0]['snapshot_id'] = $snapInfo['id'] ?? null;
+            }
+
             return $data;
         } catch (\Exception $e) {
             log_message('error', 'Error in fetchAndSaveTrpcUrl: ' . $e->getMessage());
@@ -431,45 +440,62 @@ class SyncService
         return null;
     }
 
-    private function saveSnapshot(string $origin, ?string $apiVersion, string $rawJson, int $productCount): ?int
+    private function saveSnapshot(string $origin, ?string $apiVersion, string $rawJson, int $productCount): array
     {
+        $dataHash = md5($rawJson);
+
+        // 1. Check if a snapshot with exact origin + api_version exists
         if ($apiVersion !== null) {
-            // Dedup by origin + api_version
-            $existing = $this->snapshotModel
+            $existingVersion = $this->snapshotModel
                 ->where('origin', $origin)
                 ->where('api_version', $apiVersion)
                 ->first();
-            if ($existing) {
-                // Update raw_json and product_count in case data changed
-                $this->snapshotModel->update($existing['id'], [
-                    'raw_json'      => $rawJson,
-                    'product_count' => $productCount,
-                ]);
-                return $existing['id'];
-            }
-        } else {
-            // No version: replace the latest null-version snapshot for this origin
-            $existing = $this->snapshotModel
-                ->where('origin', $origin)
-                ->where('api_version IS NULL')
-                ->orderBy('id', 'DESC')
-                ->first();
-            if ($existing) {
-                $this->snapshotModel->update($existing['id'], [
-                    'raw_json'      => $rawJson,
-                    'product_count' => $productCount,
-                ]);
-                return $existing['id'];
+            if ($existingVersion) {
+                return [
+                    'id' => (int)$existingVersion['id'],
+                    'is_duplicate' => true,
+                    'data_hash' => $dataHash
+                ];
             }
         }
 
+        // 2. Check if a snapshot with identical content hash exists
+        $existingHash = $this->snapshotModel
+            ->where('origin', $origin)
+            ->where('data_hash', $dataHash)
+            ->first();
+
+        if ($existingHash) {
+            // DO NOT overwrite existing snapshot's api_version label if it already has one!
+            if (!empty($apiVersion) && empty($existingHash['api_version'])) {
+                $this->snapshotModel->update($existingHash['id'], [
+                    'api_version'   => $apiVersion,
+                    'product_count' => $productCount,
+                ]);
+            }
+            return [
+                'id' => (int)$existingHash['id'],
+                'is_duplicate' => true,
+                'data_hash' => $dataHash
+            ];
+        }
+
+        // 3. Create a new snapshot for this version
         $data = [
             'origin'        => $origin,
             'api_version'   => $apiVersion,
             'raw_json'      => $rawJson,
             'product_count' => $productCount,
+            'data_hash'     => $dataHash,
         ];
-        return $this->snapshotModel->insert($data) ? $this->snapshotModel->getInsertID() : null;
+        $inserted = $this->snapshotModel->insert($data);
+        $newId = $inserted ? $this->snapshotModel->getInsertID() : null;
+
+        return [
+            'id' => $newId,
+            'is_duplicate' => false,
+            'data_hash' => $dataHash
+        ];
     }
 
     private function cleanDate($dateStr)

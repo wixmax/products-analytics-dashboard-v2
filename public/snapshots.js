@@ -328,11 +328,19 @@ async function setupTheme() {
   const btn = document.getElementById("theme-toggle-btn");
   if (!btn) return;
 
+  const localTheme = localStorage.getItem("app-theme");
+  if (localTheme) {
+    document.documentElement.setAttribute("data-theme", localTheme);
+  }
+
   try {
     const res = await fetch("/api/settings/app-theme");
     if (res.ok) {
       const data = await res.json();
-      document.documentElement.setAttribute("data-theme", data.value || "light");
+      if (data.value) {
+        document.documentElement.setAttribute("data-theme", data.value);
+        localStorage.setItem("app-theme", data.value);
+      }
     }
   } catch (err) {
     console.error("Error fetching theme setting:", err);
@@ -342,6 +350,7 @@ async function setupTheme() {
     const isDark = document.documentElement.getAttribute("data-theme") === "dark";
     const nextTheme = isDark ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", nextTheme);
+    localStorage.setItem("app-theme", nextTheme);
     try {
       await fetch("/api/settings", {
         method: "POST",
@@ -354,8 +363,57 @@ async function setupTheme() {
   };
 }
 
+function initBackToTop() {
+  if (document.getElementById("back-to-top-btn")) return;
+  const btn = document.createElement("button");
+  btn.id = "back-to-top-btn";
+  btn.className = "back-to-top-btn";
+  btn.setAttribute("aria-label", "التوجه إلى الأعلى");
+  btn.setAttribute("title", "التوجه إلى الأعلى");
+  btn.innerHTML = "⬆️";
+  document.body.appendChild(btn);
+
+  const mainContent = document.querySelector(".main-content");
+
+  const toggleBtn = () => {
+    const windowScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const mainScroll = mainContent ? mainContent.scrollTop : 0;
+    const currentScroll = Math.max(windowScroll, mainScroll);
+
+    if (currentScroll > 150) {
+      btn.classList.add("visible");
+    } else {
+      btn.classList.remove("visible");
+    }
+  };
+
+  window.addEventListener("scroll", toggleBtn, { passive: true });
+  document.addEventListener("scroll", toggleBtn, { passive: true });
+  if (mainContent) {
+    mainContent.addEventListener("scroll", toggleBtn, { passive: true });
+  }
+
+  toggleBtn();
+
+  btn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
+    document.body.scrollTo({ top: 0, behavior: "smooth" });
+    if (mainContent) {
+      mainContent.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+}
+
 // Load on page load
-document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === "loading") {
+  document.addEventListener('DOMContentLoaded', () => {
+    setupTheme();
+    initBackToTop();
+    loadSnapshots();
+  });
+} else {
   setupTheme();
+  initBackToTop();
   loadSnapshots();
-});
+}

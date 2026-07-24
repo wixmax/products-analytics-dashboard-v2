@@ -96,14 +96,18 @@ async function triggerSyncForOrigin(origin) {
         if (!response.ok) throw new Error("Sync Proxy Error");
         const data = await response.json();
         
-        // Detect source from server response
-        const source = (Array.isArray(data) && data[0] && data[0].source) ? data[0].source : 'api';
+        // Detect source & duplication from server response
+        const firstItem = (Array.isArray(data) && data[0]) ? data[0] : {};
+        const source = firstItem.source || 'api';
+        const isDuplicate = Boolean(firstItem.is_duplicate);
         
         processAndAppendData(data, origin);
         if (source === 'database') {
             showToast(`📦 تم جلب بيانات ${origin} من قاعدة البيانات المحلية`, "info");
+        } else if (isDuplicate) {
+            showToast(`ℹ️ تمت المزامنة: بيانات ${origin} مطابقة لنسخة مسجلة مسبقاً، تم تجاوز التكرار بنجاح!`, "info");
         } else {
-            showToast(`🌐 تمت مزامنة بيانات ${origin} من السيرفر الخارجي وحفظها في قاعدة البيانات بنجاح! 🎉`, "success");
+            showToast(`✨ تمت مزامنة بيانات ${origin} الجديدة من السيرفر الخارجي وحفظها بنجاح! 🎉`, "success");
         }
     } catch (err) {
         console.error("Sync failed:", err);
@@ -354,28 +358,89 @@ async function uploadImportedJson(data, origin) {
     }
 }
 
-function setupTheme() {
+async function setupTheme() {
     const btn = document.getElementById("theme-toggle-btn");
-    const currentTheme = localStorage.getItem("app-theme") || "light";
-    document.documentElement.setAttribute("data-theme", currentTheme);
+    if (!btn) return;
 
-    btn.addEventListener("click", () => {
+    const localTheme = localStorage.getItem("app-theme");
+    if (localTheme) {
+        document.documentElement.setAttribute("data-theme", localTheme);
+    }
+
+    try {
+        const res = await fetch("/api/settings/app-theme");
+        if (res.ok) {
+            const data = await res.json();
+            if (data.value) {
+                document.documentElement.setAttribute("data-theme", data.value);
+                localStorage.setItem("app-theme", data.value);
+            }
+        }
+    } catch (err) {
+        console.error("Error fetching theme setting:", err);
+    }
+
+    btn.addEventListener("click", async () => {
         const isDark = document.documentElement.getAttribute("data-theme") === "dark";
         const nextTheme = isDark ? "light" : "dark";
         document.documentElement.setAttribute("data-theme", nextTheme);
         localStorage.setItem("app-theme", nextTheme);
+        try {
+            await fetch("/api/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: "app-theme", value: nextTheme }),
+            });
+        } catch (err) {
+            console.error("Error saving theme setting:", err);
+        }
     });
 }
 
-function showToast(message, type = "info") {
-    const container = document.getElementById("toast-container");
-    const t = document.createElement("div");
-    t.className = `toast ${type}`;
-    t.innerHTML = `<span>💡</span> <div>${message}</div>`;
-    container.appendChild(t);
-    setTimeout(() => t.classList.add("show"), 50);
-    setTimeout(() => {
-        t.classList.remove("show");
-        setTimeout(() => t.remove(), 400);
-    }, 3500);
+function initBackToTop() {
+  if (document.getElementById("back-to-top-btn")) return;
+  const btn = document.createElement("button");
+  btn.id = "back-to-top-btn";
+  btn.className = "back-to-top-btn";
+  btn.setAttribute("aria-label", "التوجه إلى الأعلى");
+  btn.setAttribute("title", "التوجه إلى الأعلى");
+  btn.innerHTML = "⬆️";
+  document.body.appendChild(btn);
+
+  const mainContent = document.querySelector(".main-content");
+
+  const toggleBtn = () => {
+    const windowScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const mainScroll = mainContent ? mainContent.scrollTop : 0;
+    const currentScroll = Math.max(windowScroll, mainScroll);
+
+    if (currentScroll > 150) {
+      btn.classList.add("visible");
+    } else {
+      btn.classList.remove("visible");
+    }
+  };
+
+  window.addEventListener("scroll", toggleBtn, { passive: true });
+  document.addEventListener("scroll", toggleBtn, { passive: true });
+  if (mainContent) {
+    mainContent.addEventListener("scroll", toggleBtn, { passive: true });
+  }
+
+  toggleBtn();
+
+  btn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
+    document.body.scrollTo({ top: 0, behavior: "smooth" });
+    if (mainContent) {
+      mainContent.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initBackToTop);
+} else {
+  initBackToTop();
 }

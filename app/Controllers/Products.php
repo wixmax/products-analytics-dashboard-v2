@@ -340,6 +340,10 @@ class Products extends ResourceController
 
     public function snapshots()
     {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return $this->failForbidden('عذراً، الوصول إلى لقطات البيانات مخصص للمشرفين والمسؤولين فقط.');
+        }
+
         $snapshotModel = new SnapshotModel();
         $origin = $this->request->getVar('origin') ?? '';
         $includeRaw = $this->request->getVar('include_raw') === '1';
@@ -365,6 +369,10 @@ class Products extends ResourceController
 
     public function getSnapshot($id = null)
     {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return $this->failForbidden('عذراً، الوصول إلى لقطات البيانات مخصص للمشرفين والمسؤولين فقط.');
+        }
+
         if (!$id) {
             $id = $this->request->getVar('id');
         }
@@ -383,6 +391,10 @@ class Products extends ResourceController
 
     public function restoreSnapshot($id = null)
     {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return $this->failForbidden('عذراً، استعادة لقطات البيانات مخصصة للمشرفين والمسؤولين فقط.');
+        }
+
         if (!$id) {
             $id = $this->request->getVar('id');
         }
@@ -502,6 +514,10 @@ class Products extends ResourceController
 
     public function importSnapshot()
     {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return $this->failForbidden('عذراً، استيراد لقطات البيانات مخصص للمشرفين والمسؤولين فقط.');
+        }
+
         $json = $this->request->getJSON(true);
         if (empty($json)) {
             return $this->fail('Invalid or empty JSON payload');
@@ -800,43 +816,194 @@ class Products extends ResourceController
             }
         }
 
+        $isRegularUser = false;
+        if (auth()->loggedIn() && !auth()->user()->inGroup('superadmin', 'admin')) {
+            $isRegularUser = true;
+        }
+
         $settingModel = new \App\Models\SettingModel();
         $dataSourceSetting = $settingModel->where('key', 'data-source')->first();
         $dataSource = $dataSourceSetting ? $dataSourceSetting['value'] : 'database';
 
         $model = new ProductModel();
+        $snapshotModel = new \App\Models\SnapshotModel();
+
+        // Security Protection: Validate past date requests to prevent tampering
+        if ($requestedVersion !== null && preg_match('/(\d{4}-\d{2}-\d{2})/', $requestedVersion, $matches)) {
+            $extractedDate = $matches[1];
+            $today = date('Y-m-d');
+            if ($extractedDate < $today) {
+                $cleanVer = ltrim($requestedVersion, 'v');
+                $snapCheck = $snapshotModel->where('origin', $origin)
+                                          ->groupStart()
+                                            ->where('api_version', $requestedVersion)
+                                            ->orWhere('api_version', 'v' . $cleanVer)
+                                            ->orWhere('api_version', $cleanVer)
+                                            ->orWhere("api_version LIKE '%{$extractedDate}%'")
+                                          ->groupEnd()
+                                          ->first();
+                $prodCheck = $model->where('origin', $origin)
+                                   ->groupStart()
+                                     ->where('api_version', $requestedVersion)
+                                     ->orWhere("api_version LIKE '%{$extractedDate}%'")
+                                   ->groupEnd()
+                                   ->first();
+                if (!$snapCheck && !$prodCheck) {
+                    return $this->failForbidden('⚠️ غير مسموح بجلب تاريخ سابق غير مسجل في قاعدة البيانات. تم رفض الطلب لحماية النظام.');
+                }
+            }
+        }
         
-        // Use DB cache only for Winning; Local always fetches from API
-        $useDbCache = ($dataSource === 'database' && $origin !== 'Local');
-        if ($useDbCache && $requestedVersion !== null && $requestedVersion !== '') {
-            // Check if we have products with this api_version
-            $countWithVersion = $model->where('origin', $origin)
-                                      ->where('api_version', $requestedVersion)
-                                      ->countAllResults();
-            if ($countWithVersion === 0) {
-                $useDbCache = false;
+        // 1. Check if the requested version exists in products table or data_snapshots table
+        if ($requestedVersion !== null && $requestedVersion !== '') {
+            $versionProducts = $model->where('origin', $origin)
+                                     ->where('api_version', $requestedVersion)
+                                     ->orderBy('ads_count', 'DESC')
+                                     ->findAll();
+            
+            if (!empty($versionProducts)) {
+                $finalProducts = $versionProducts;
+                if ($requestedCountry !== null && $requestedCountry !== '') {
+                    $countries = explode(';', $requestedCountry);
+                    $filtered = array_values(array_filter($versionProducts, function($p) use ($countries) {
+                        return in_array($p['country'], $countries);
+                    }));
+                    if (!empty($filtered)) {
+                        $finalProducts = $filtered;
+                    }
+                }
+
+                $formatted = [
+                    'result' => [
+                        'data' => [
+                            'json' => [
+                                'productsEntries' => array_map(function($p) {
+                                    return [
+                                        'title' => $p['title'],
+                                        'productUrl' => $p['product_url'],
+                                        'country' => $p['country'],
+                                        'algorithm' => $p['algo'],
+                                        'ad_start_date' => $p['ad_start_date'] ?: '--',
+                                        'ads_count' => intval($p['ads_count']),
+                                        'avg_creatives' => floatval($p['avg_creatives']),
+                                        'ad_title' => $p['ad_title'],
+                                        'ad_body' => $p['ad_body'],
+                                        'ad_image_urls' => $p['ad_image_urls'],
+                                        'ad_video_urls' => $p['ad_video_urls'],
+                                        'actualPrice' => floatval($p['price_1']),
+                                        'active_ads' => (bool)$p['active_ads'],
+                                        'api_version' => $p['api_version'] ?? '',
+                                    ];
+                                }, $finalProducts)
+                            ]
+                        ]
+                    ]
+                ];
+
+                $cachePath = WRITEPATH . 'cache/adapted_result.json';
+                if (file_exists($cachePath)) {
+                    $formatted['result']['data']['json']['adaptedResult'] = json_decode(file_get_contents($cachePath), true);
+                }
+
+                $formatted['source'] = 'database';
+                return $this->respond([$formatted]);
+            }
+
+            // 2. Check if a snapshot with this api_version exists in data_snapshots table
+            $cleanVer = ltrim($requestedVersion, 'v');
+            $snapshot = $snapshotModel->where('origin', $origin)
+                                      ->groupStart()
+                                        ->where('api_version', $requestedVersion)
+                                        ->orWhere('api_version', 'v' . $cleanVer)
+                                        ->orWhere('api_version', $cleanVer)
+                                      ->groupEnd()
+                                      ->orderBy('id', 'DESC')
+                                      ->first();
+
+            if ($snapshot && !empty($snapshot['raw_json'])) {
+                $decodedData = json_decode($snapshot['raw_json'], true);
+                if (is_array($decodedData) && isset($decodedData[0])) {
+                    $decodedData[0]['source'] = 'database';
+                    $decodedData[0]['is_duplicate'] = true;
+                    return $this->respond($decodedData);
+                }
+            }
+        } else {
+            // General query (no version specified)
+            $originProducts = $model->where('origin', $origin)->orderBy('ads_count', 'DESC')->findAll();
+            if (!empty($originProducts)) {
+                $finalProducts = $originProducts;
+                if ($requestedCountry !== null && $requestedCountry !== '') {
+                    $countries = explode(';', $requestedCountry);
+                    $filtered = array_values(array_filter($originProducts, function($p) use ($countries) {
+                        return in_array($p['country'], $countries);
+                    }));
+                    if (!empty($filtered)) {
+                        $finalProducts = $filtered;
+                    }
+                }
+
+                $formatted = [
+                    'result' => [
+                        'data' => [
+                            'json' => [
+                                'productsEntries' => array_map(function($p) {
+                                    return [
+                                        'title' => $p['title'],
+                                        'productUrl' => $p['product_url'],
+                                        'country' => $p['country'],
+                                        'algorithm' => $p['algo'],
+                                        'ad_start_date' => $p['ad_start_date'] ?: '--',
+                                        'ads_count' => intval($p['ads_count']),
+                                        'avg_creatives' => floatval($p['avg_creatives']),
+                                        'ad_title' => $p['ad_title'],
+                                        'ad_body' => $p['ad_body'],
+                                        'ad_image_urls' => $p['ad_image_urls'],
+                                        'ad_video_urls' => $p['ad_video_urls'],
+                                        'actualPrice' => floatval($p['price_1']),
+                                        'active_ads' => (bool)$p['active_ads'],
+                                        'api_version' => $p['api_version'] ?? '',
+                                    ];
+                                }, $finalProducts)
+                            ]
+                        ]
+                    ]
+                ];
+
+                $cachePath = WRITEPATH . 'cache/adapted_result.json';
+                if (file_exists($cachePath)) {
+                    $formatted['result']['data']['json']['adaptedResult'] = json_decode(file_get_contents($cachePath), true);
+                }
+
+                $formatted['source'] = 'database';
+                return $this->respond([$formatted]);
             }
         }
 
-        if ($useDbCache) {
-            $count = $model->where('origin', $origin)->countAllResults();
-            if ($count > 0) {
-            // Fetch from database instead of calling the external API
-            $builder = $model->where('origin', $origin);
-            if ($requestedVersion !== null && $requestedVersion !== '') {
-                $builder->where('api_version', $requestedVersion);
-            }
-            if ($requestedCountry !== null) {
-                $countries = explode(';', $requestedCountry);
-                if (count($countries) > 1) {
-                    $builder->whereIn('country', $countries);
-                } else {
-                    $builder->where('country', $requestedCountry);
+        // 3. Option 3: Smart On-Demand Auto Sync (when requested version is missing from DB)
+        $syncService = new SyncService();
+        $data = $syncService->fetchAndSaveTrpcUrl($url);
+
+        if (is_array($data) && isset($data[0])) {
+            $data[0]['source'] = 'api';
+            if ($requestedVersion) {
+                $entries = &$data[0]['result']['data']['json']['productsEntries'] ?? [];
+                if (is_array($entries)) {
+                    foreach ($entries as &$entry) {
+                        $entry['api_version'] = $requestedVersion;
+                    }
                 }
             }
-            $products = $builder->orderBy('ads_count', 'DESC')
-                                ->findAll();
+            return $this->respond($data);
+        }
 
+        // 4. Fallback if external API is unreachable or returned error: return available DB products
+        $fallbackProducts = $model->where('origin', $origin)->orderBy('ads_count', 'DESC')->findAll();
+        if (empty($fallbackProducts)) {
+            $fallbackProducts = $model->orderBy('ads_count', 'DESC')->findAll();
+        }
+
+        if (!empty($fallbackProducts)) {
             $formatted = [
                 'result' => [
                     'data' => [
@@ -858,45 +1025,16 @@ class Products extends ResourceController
                                     'active_ads' => (bool)$p['active_ads'],
                                     'api_version' => $p['api_version'] ?? '',
                                 ];
-                            }, $products)
+                            }, $fallbackProducts)
                         ]
                     ]
                 ]
             ];
-
-            // Cache adaptedResult if present
-            $cachePath = WRITEPATH . 'cache/adapted_result.json';
-            if (file_exists($cachePath)) {
-                $formatted['result']['data']['json']['adaptedResult'] = json_decode(file_get_contents($cachePath), true);
-            }
-
-            // Return database data in trpc format wrapped in a batch array with source info
-            $formatted['source'] = 'database';
+            $formatted['source'] = 'database_fallback';
             return $this->respond([$formatted]);
         }
-    }
 
-        // If no products in DB or data-source is 'api', fetch from API
-        $syncService = new SyncService();
-        $data = $syncService->fetchAndSaveTrpcUrl($url);
-        
-        if ($data === null) {
-            log_message('error', 'syncTrpc: fetchAndSaveTrpcUrl returned null for URL: ' . substr($url, 0, 200));
-            return $this->fail('Failed to fetch or parse tRPC data from external API');
-        }
-
-        // Add source indicator and inject api_version into each product entry
-        if (is_array($data) && isset($data[0])) {
-            $data[0]['source'] = 'api';
-            if ($requestedVersion) {
-                $entries = &$data[0]['result']['data']['json']['productsEntries'] ?? [];
-                if (is_array($entries)) {
-                    foreach ($entries as &$entry) {
-                        $entry['api_version'] = $requestedVersion;
-                    }
-                }
-            }
-        }
+        return $this->fail('Failed to fetch or parse tRPC data from external API and no database data available');
 
         return $this->respond($data);
     }
@@ -1504,6 +1642,13 @@ class Products extends ResourceController
             return $this->fail('Key is required');
         }
 
+        // Allow app-theme for all users, restrict system settings to superadmin/admin
+        if ($key !== 'app-theme') {
+            if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+                return $this->failForbidden('عذراً، تعديل هذه الإعدادات مخصص للمشرفين والمسؤولين فقط.');
+            }
+        }
+
         $existing = $model->where('key', $key)->first();
         if ($existing) {
             $model->update($existing['id'], [
@@ -1524,6 +1669,10 @@ class Products extends ResourceController
 
     public function clearDatabaseData()
     {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return $this->failForbidden('عذراً، عمليات تنظيف وتصفير قاعدة البيانات مخصصة للمشرفين والمسؤولين فقط.');
+        }
+
         $type = $this->request->getVar('type');
         if (empty($type)) {
             $json = $this->request->getJSON(true);
@@ -1751,5 +1900,47 @@ private function generateLiveStrategy($product, $activity)
         }
         $timestamp = strtotime($dateStr);
         return $timestamp ? date('Y-m-d', $timestamp) : null;
+    }
+
+    public function getAvailableDates()
+    {
+        $db = \Config\Database::connect();
+        $dates = [];
+
+        // 1. Extract from data_snapshots
+        if ($db->tableExists('data_snapshots')) {
+            $snapshots = $db->table('data_snapshots')->select('api_version, created_at')->get()->getResultArray();
+            foreach ($snapshots as $row) {
+                if (!empty($row['api_version']) && preg_match('/(\d{4}-\d{2}-\d{2})/', $row['api_version'], $m)) {
+                    $dates[$m[1]] = true;
+                }
+                if (!empty($row['created_at'])) {
+                    $d = date('Y-m-d', strtotime($row['created_at']));
+                    $dates[$d] = true;
+                }
+            }
+        }
+
+        // 2. Extract from products
+        if ($db->tableExists('products')) {
+            $products = $db->table('products')->select('api_version, created_at')->get()->getResultArray();
+            foreach ($products as $row) {
+                if (!empty($row['api_version']) && preg_match('/(\d{4}-\d{2}-\d{2})/', $row['api_version'], $m)) {
+                    $dates[$m[1]] = true;
+                }
+                if (!empty($row['created_at'])) {
+                    $d = date('Y-m-d', strtotime($row['created_at']));
+                    $dates[$d] = true;
+                }
+            }
+        }
+
+        // Today is always available for fresh sync
+        $dates[date('Y-m-d')] = true;
+
+        $dateList = array_keys($dates);
+        sort($dateList);
+
+        return $this->respond(['dates' => array_values($dateList)]);
     }
 }

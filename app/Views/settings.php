@@ -1,6 +1,14 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
   <head>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem("app-theme") || "dark";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Settings | إعدادات النظام</title>
@@ -204,75 +212,7 @@
       </div>
     <?php endif; ?>
     <div class="app-shell">
-      <!-- Sidebar Panel -->
-      <aside class="sidebar">
-        <div class="logo-container">
-          <div class="logo-icon">⚡</div>
-          <div class="logo-text">
-            <h1>Overview Insights</h1>
-            <p>إعدادات النظام</p>
-          </div>
-        </div>
-
-        <!-- Sidebar Navigation Menu -->
-        <nav class="sidebar-nav">
-          <a href="<?= base_url('/') ?>" class="sidebar-nav-item <?= current_url() == base_url() || current_url() == base_url('/') ? 'active' : '' ?>">
-            📊 لوحة التحكم
-          </a>
-          <a href="<?= base_url('saved-ads') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'saved-ads') !== false ? 'active' : '' ?>">
-            ⭐ الإعلانات المحفوظة
-          </a>
-          <a href="<?= base_url('international-products') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'international-products') !== false ? 'active' : '' ?>">
-            🌏 منتجات الصين واليابان
-          </a>
-          <a href="<?= base_url('snapshots') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'snapshots') !== false ? 'active' : '' ?>">
-            📸 لقطات البيانات
-          </a>
-          <a href="<?= base_url('settings') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'settings') !== false ? 'active' : '' ?>">
-            ⚙️ إعدادات النظام
-          </a>
-          <a href="<?= base_url('workspace') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'workspace') !== false ? 'active' : '' ?>">
-            📁 مساحة العمل
-          </a>
-          <a href="<?= base_url('profile') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'profile') !== false ? 'active' : '' ?>">
-            👤 الملف الشخصي
-          </a>
-          <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin')): ?>
-            <a href="<?= base_url('admin/users') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'admin/users') !== false ? 'active' : '' ?>">
-              🛡️ إدارة الأعضاء
-            </a>
-          <?php endif; ?>
-        </nav>
-
-        <!-- Sidebar Footer (User Profile Card) -->
-        <?php if (auth()->loggedIn()): ?>
-          <?php
-            $db = \Config\Database::connect();
-            $activeTenant = !empty(auth()->user()->tenant_id) ? $db->table('tenants')->where('id', auth()->user()->tenant_id)->get()->getRow() : null;
-          ?>
-          <div class="sidebar-user-card" style="margin-top: auto;">
-            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-              <div class="user-avatar-small" style="width: 38px; height: 38px; font-size: 1.1rem; flex-shrink: 0; background: var(--color-primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
-                <?= strtoupper(substr(esc(auth()->user()->username ?? 'U'), 0, 1)) ?>
-              </div>
-              <div style="display: flex; flex-direction: column; min-width: 0;">
-                <span class="user-name-small" style="font-weight: 700; font-size: 0.85rem; color: var(--color-text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                  <?= esc(auth()->user()->username) ?>
-                </span>
-                <?php if ($activeTenant): ?>
-                  <span style="font-size: 0.7rem; color: var(--color-text-muted); display: flex; align-items: center; gap: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= esc($activeTenant->name) ?>">
-                    📁 <?= esc($activeTenant->name) ?>
-                  </span>
-                <?php endif; ?>
-              </div>
-            </div>
-            <div style="display: flex; gap: 6px;">
-              <a href="<?= base_url('profile') ?>" class="btn btn-secondary" style="padding: 6px; font-size: 0.9rem; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" title="الملف الشخصي">👤</a>
-              <a href="<?= base_url('logout') ?>" class="btn btn-error" style="padding: 6px; font-size: 0.9rem; border-radius: 50%; width: 32px; height: 32px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: var(--color-error); display: flex; align-items: center; justify-content: center;" title="تسجيل الخروج">🚪</a>
-            </div>
-          </div>
-        <?php endif; ?>
-      </aside>
+      <?= $this->include('partials/sidebar', ['subtitle' => 'إعدادات النظام']) ?>
 
       <!-- Main Area -->
       <main class="main-content">
@@ -299,7 +239,77 @@
         </div>
 
         <div class="settings-container">
-          <!-- Card 1: Data Source Setting -->
+          <!-- Database Migration Status Card -->
+          <?php if (!empty($pendingMigrations)): ?>
+            <div class="settings-card" style="border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.08);">
+              <div class="settings-card-title" style="color: #f59e0b; border-bottom-color: rgba(245, 158, 11, 0.3);">
+                ⚡ تحديثات قاعدة البيانات المتاحة (Pending Migrations)
+                <span style="background: #f59e0b; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; margin-right: auto; font-weight: 800;">
+                  <?= count($pendingMigrations) ?> تحديث جديد
+                </span>
+              </div>
+              <p class="settings-card-desc" style="color: var(--color-text-main); margin-bottom: 0.75rem;">
+                توجد تعديلات وتحديثات جديدة على هيكل قاعدة البيانات يجب تطبيقها لضمان عمل النظام بكفاءة واستقرار دون أخطاء.
+              </p>
+              <div style="background: var(--bg-app); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 1.25rem;">
+                <strong style="font-size: 0.85rem; display: block; margin-bottom: 6px; color: var(--color-text-main);">📋 تفاصيل الهجرات المعلقة:</strong>
+                <ul style="margin: 0; padding-right: 20px; font-size: 0.85rem; font-family: var(--font-mono, monospace); color: var(--color-text-muted);">
+                  <?php foreach ($pendingMigrations as $pm): ?>
+                    <li>
+                      <strong style="color: var(--color-text-main);"><?= esc($pm['name']) ?></strong> 
+                      <span style="font-size: 0.75rem;">(<?= esc($pm['filename']) ?>)</span>
+                    </li>
+                  <?php endforeach; ?>
+                </ul>
+              </div>
+              <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <a href="<?= base_url('update-db') ?>" class="btn" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 22px; border-radius: 8px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
+                  🔄 تشغيل التحديث الآن (/update-db)
+                </a>
+                <span style="font-size: 0.8rem; color: var(--color-text-muted);">أو قم بتشغيل <code>php spark migrate</code> في cPanel Terminal</span>
+              </div>
+            </div>
+          <?php else: ?>
+            <div class="settings-card" style="border-right: 4px solid #10b981;">
+              <div class="settings-card-title" style="color: #10b981; border-bottom: none; padding-bottom: 0; margin-bottom: 0.25rem;">
+                ✅ حالة قاعدة البيانات (Database Status)
+              </div>
+              <p class="settings-card-desc" style="margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <span>قاعدة البيانات محدثة بالكامل وتعمل بأحدث هيكل، لا توجد أي هجرات (Migrations) معلقة.</span>
+                <a href="<?= base_url('update-db') ?>" class="btn btn-secondary" style="font-size: 0.8rem; padding: 5px 12px; text-decoration: none;">إعادة الفحص (/update-db)</a>
+              </p>
+            </div>
+          <?php endif; ?>
+
+          <!-- Card 0: Personal Preferences (Visible to All Users) -->
+          <div class="settings-card">
+            <div class="settings-card-title">
+              🎨 التفضيلات الشخصية والمظهر
+            </div>
+            <p class="settings-card-desc">
+              إدارة الخيارات والشكل الظاهري المخصص لحسابك وتفريغ الملفات المؤقتة بالمتصفح.
+            </p>
+            <div class="actions-grid">
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">🌓 نمط مظهر الواجهة</span>
+                  <span class="action-item-desc">التبديل بين النمط المظلم (Dark Mode) والنمط المضيء (Light Mode).</span>
+                </div>
+                <button class="btn btn-secondary" onclick="toggleThemeFromSettings()">🌓 تبديل النمط</button>
+              </div>
+
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">🧹 تفريغ كاش ملفات المتصفح</span>
+                  <span class="action-item-desc">مسح الملفات المخزنة (CSS/JS) وإعادة تحميل الصفحة للتأكد من تشغيل أحدث إصدار.</span>
+                </div>
+                <button class="btn btn-secondary" onclick="clearBrowserCache()">🧹 تفريغ الكاش</button>
+              </div>
+            </div>
+          </div>
+
+          <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin')): ?>
+          <!-- Card 1: Data Source Setting (Admin Only) -->
           <div class="settings-card">
             <div class="settings-card-title">
               🌐 مصدر جلب البيانات الافتراضي
@@ -337,7 +347,7 @@
             </div>
           </div>
 
-          <!-- Card 1.5: Analytics Scope Setting -->
+          <!-- Card 1.5: Analytics Scope Setting (Admin Only) -->
           <div class="settings-card">
             <div class="settings-card-title">
               📊 نطاق حساب تحليلات المتاجر والإدراجات
@@ -375,13 +385,13 @@
             </div>
           </div>
 
-          <!-- Card 2: Database Operations -->
+          <!-- Card 2: Database Operations (Admin Only) -->
           <div class="settings-card">
             <div class="settings-card-title">
-              🧹 تحكم وتنظيف البيانات
+              🧹 تحكم وتنظيف البيانات النظام
             </div>
             <p class="settings-card-desc">
-              خيارات لحذف بيانات المنتجات والمجموعات لتهيئة النظام وتخفيف مساحة التخزين.
+              خيارات للمشرفين لحذف بيانات المنتجات والمجموعات لتهيئة النظام وتخفيف مساحة التخزين.
             </p>
 
             <div class="actions-grid">
@@ -420,19 +430,10 @@
                 </div>
                 <button class="btn btn-secondary" onclick="clearData('watchlist')">تفريغ قائمة المراقبة</button>
               </div>
-
-              <!-- Item 5: Clear JS Cache -->
-              <div class="action-item">
-                <div class="action-item-info">
-                  <span class="action-item-title">🧹 تفريغ كاش ملفات JS في المتصفح</span>
-                  <span class="action-item-desc">مسح الملفات المخزنة (CSS/JS) من المتصفح وإعادة تحميل آخر إصدار من السيرفر. استخدم هذا بعد تحديث الكود للتأكد من تشغيل الإصدار الجديد.</span>
-                </div>
-                <button class="btn btn-secondary" onclick="clearBrowserCache()">🧹 تفريغ الكاش</button>
-              </div>
             </div>
           </div>
 
-          <!-- Card 3: Danger Zone -->
+          <!-- Card 3: Danger Zone (Admin Only) -->
           <div class="settings-card danger-zone" style="border: 1px dashed var(--color-error);">
             <div class="settings-card-title" style="color: var(--color-error)">
               🚨 منطقة الخطر
@@ -449,6 +450,7 @@
               <button class="btn btn-error" onclick="clearData('all')">🚨 تهيئة النظام بالكامل</button>
             </div>
           </div>
+          <?php endif; ?>
         </div>
       </main>
     </div>
@@ -502,57 +504,68 @@
           console.error("Error fetching theme:", err);
         }
 
-        themeBtn.onclick = async () => {
-          const theme = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-          document.documentElement.setAttribute("data-theme", theme);
-          try {
-            await fetch('/api/settings', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: 'app-theme', value: theme })
-            });
-          } catch (err) {
-            console.error("Error saving theme:", err);
-          }
-        };
+        themeBtn.onclick = toggleThemeFromSettings;
+      }
+
+      async function toggleThemeFromSettings() {
+        const theme = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+        try {
+          await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'app-theme', value: theme })
+          });
+          showToast(`تم تغيير مظهر الواجهة إلى النمط ${theme === 'dark' ? 'المظلم 🌙' : 'المضيء ☀️'}`, "success");
+        } catch (err) {
+          console.error("Error saving theme:", err);
+        }
       }
 
       // Load Settings from server
       async function loadSettings() {
-        try {
-          const res = await fetch('/api/settings/data-source');
-          if (res.ok) {
-            const data = await res.json();
-            const value = data.value || 'database';
-            if (value === 'api') {
-              document.getElementById('radio-source-api').checked = true;
+        const radioApi = document.getElementById('radio-source-api');
+        const radioDb = document.getElementById('radio-source-db');
+        if (radioApi && radioDb) {
+          try {
+            const res = await fetch('/api/settings/data-source');
+            if (res.ok) {
+              const data = await res.json();
+              const value = data.value || 'database';
+              if (value === 'api') {
+                radioApi.checked = true;
+              } else {
+                radioDb.checked = true;
+              }
             } else {
-              document.getElementById('radio-source-db').checked = true;
+              radioDb.checked = true;
             }
-          } else {
-            document.getElementById('radio-source-db').checked = true;
+          } catch (err) {
+            console.error("Error loading settings:", err);
+            radioDb.checked = true;
           }
-        } catch (err) {
-          console.error("Error loading settings:", err);
-          document.getElementById('radio-source-db').checked = true;
         }
 
-        try {
-          const resScope = await fetch('/api/settings/analytics-scope');
-          if (resScope.ok) {
-            const dataScope = await resScope.json();
-            const valScope = dataScope.value || 'snapshot';
-            if (valScope === 'global') {
-              document.getElementById('radio-scope-global').checked = true;
+        const radioGlobal = document.getElementById('radio-scope-global');
+        const radioSnapshot = document.getElementById('radio-scope-snapshot');
+        if (radioGlobal && radioSnapshot) {
+          try {
+            const resScope = await fetch('/api/settings/analytics-scope');
+            if (resScope.ok) {
+              const dataScope = await resScope.json();
+              const valScope = dataScope.value || 'snapshot';
+              if (valScope === 'global') {
+                radioGlobal.checked = true;
+              } else {
+                radioSnapshot.checked = true;
+              }
             } else {
-              document.getElementById('radio-scope-snapshot').checked = true;
+              radioSnapshot.checked = true;
             }
-          } else {
-            document.getElementById('radio-scope-snapshot').checked = true;
+          } catch (err) {
+            console.error("Error loading analytics scope:", err);
+            radioSnapshot.checked = true;
           }
-        } catch (err) {
-          console.error("Error loading analytics scope:", err);
-          document.getElementById('radio-scope-snapshot').checked = true;
         }
       }
 
