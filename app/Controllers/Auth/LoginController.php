@@ -48,7 +48,24 @@ class LoginController extends ShieldLogin
 
         // Attempt to login
         $result = $authenticator->remember($remember)->attempt($credentials);
+
+        if (auth()->loggedIn()) {
+            $user = auth()->user();
+            if (empty($user->active)) {
+                auth()->logout();
+                return redirect()->route('login')->withInput()->with('error', 'حسابك حالياً في وضعية الانتظار ولم يتم قبوله وتفعيله بعد من قبل المشرف أو الأدمن. ⏳');
+            }
+        }
+
         if (! $result->isOK()) {
+            // Check if user exists but is inactive (pending approval)
+            $userModel = new \App\Models\UserModel();
+            $searchCredentials = $credentials;
+            unset($searchCredentials['password']);
+            $targetUser = $userModel->bypassTenant()->findByCredentials($searchCredentials);
+            if ($targetUser && empty($targetUser->active)) {
+                return redirect()->route('login')->withInput()->with('error', 'حسابك حالياً في وضعية الانتظار ولم يتم قبوله وتفعيله بعد من قبل المشرف أو الأدمن. ⏳');
+            }
             return redirect()->route('login')->withInput()->with('error', $result->reason());
         }
 

@@ -56,8 +56,13 @@ Events::on('pre_system', static function (): void {
     }
 });
 
-// Auto-create tenant upon registration
+// Auto-create tenant upon registration & set user as pending approval
 Events::on('register', static function (\CodeIgniter\Shield\Entities\User $user): void {
+    $userModel = new \App\Models\UserModel();
+    
+    // Set user as pending approval (active = 0)
+    $userModel->bypassTenant()->update($user->id, ['active' => 0]);
+
     if (!empty($user->tenant_id)) {
         return;
     }
@@ -85,7 +90,6 @@ Events::on('register', static function (\CodeIgniter\Shield\Entities\User $user)
     $tenantId = $db->insertID('tenants_id_seq');
 
     // Update user's tenant_id
-    $userModel = new \App\Models\UserModel();
     $userModel->bypassTenant()->update($user->id, ['tenant_id' => $tenantId]);
 
     // Insert user into tenant_users as owner

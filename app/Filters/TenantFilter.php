@@ -18,6 +18,18 @@ class TenantFilter implements FilterInterface
 
         if (auth()->loggedIn()) {
             $user = auth()->user();
+
+            // Block inactive / pending approval users from accessing the app
+            if (empty($user->active)) {
+                auth()->logout();
+                if (session_status() === PHP_SESSION_ACTIVE) {
+                    session()->destroy();
+                }
+
+                return redirect()->to(base_url('login'))
+                    ->with('error', 'حسابك حالياً في وضعية الانتظار ولم يتم قبوله وتفعيله بعد من قبل المشرف أو الأدمن. ⏳');
+            }
+
             if (isset($user->tenant_id) && $user->tenant_id !== null) {
                 $context->setTenantId((int)$user->tenant_id);
             }

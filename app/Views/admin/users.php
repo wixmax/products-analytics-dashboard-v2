@@ -341,8 +341,12 @@
                           <span class="badge-role badge-role-<?= esc($group) ?>"><?= esc($group) ?></span>
                         <?php endforeach; ?>
                       </td>
-                      <td class="<?= $u['active'] ? 'status-active' : 'status-inactive' ?>">
-                        <?= $u['active'] ? '🟢 نشط' : '🔴 معطل' ?>
+                      <td>
+                        <?php if ($u['active']): ?>
+                          <span style="color: var(--color-success); font-weight: 700;">🟢 مفعل (نشط)</span>
+                        <?php else: ?>
+                          <span style="color: var(--color-warning); font-weight: 700; background: rgba(245, 158, 11, 0.12); padding: 3px 8px; border-radius: 12px;">⏳ قيد الانتظار</span>
+                        <?php endif; ?>
                       </td>
                       <td>
                         <form action="<?= base_url('admin/users/update-role') ?>" method="POST" style="display:flex; gap:6px; align-items:center;">
@@ -363,8 +367,8 @@
                           <form action="<?= base_url('admin/users/toggle-status') ?>" method="POST" style="display:inline;">
                             <?= csrf_field() ?>
                             <input type="hidden" name="user_id" value="<?= $u['id'] ?>" />
-                            <button type="submit" class="btn <?= $u['active'] ? 'btn-secondary' : 'btn-success' ?>" style="padding: 4px 10px; font-size: 0.75rem; width: 100px;">
-                              <?= $u['active'] ? '🔴 تعطيل' : '🟢 تفعيل' ?>
+                            <button type="submit" class="btn <?= $u['active'] ? 'btn-secondary' : 'btn-success' ?>" style="padding: 4px 10px; font-size: 0.75rem; width: 110px;">
+                              <?= $u['active'] ? '🔴 تعطيل' : '🟢 قبول وتفعيل' ?>
                             </button>
                           </form>
                         <?php else: ?>

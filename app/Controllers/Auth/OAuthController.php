@@ -134,8 +134,17 @@ class OAuthController extends BaseController
                 // Trigger registration events (this will auto-create the tenant using App/Config/Events.php)
                 Events::trigger('register', $user);
 
-                // Mark user as active
-                $user->activate();
+                // Deactivate user (set active = 0) so they require admin approval
+                $userModel->bypassTenant()->update($user->id, ['active' => 0]);
+
+                return redirect()->to(route_to('login'))
+                    ->with('message', 'تم إنشاء حسابك بنجاح عبر Google! ⏳ حسابك الآن في وضعية الانتظار ولن تتمكن من الدخول حتى يتم قبوله وتفعيله من قبل المشرف أو الأدمن.');
+            }
+
+            // Check if user is inactive (pending approval)
+            if (empty($user->active)) {
+                return redirect()->to(route_to('login'))
+                    ->with('error', 'حسابك حالياً في وضعية الانتظار ولم يتم قبوله وتفعيله بعد من قبل المشرف أو الأدمن. ⏳');
             }
 
             // Log user in

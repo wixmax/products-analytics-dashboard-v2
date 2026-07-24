@@ -2,11 +2,13 @@
 
 use CodeIgniter\Router\RouteCollection;
 
-service('auth')->routes($routes, ['except' => ['login']]);
+service('auth')->routes($routes, ['except' => ['login', 'register']]);
 
 // Custom Auth Controllers
 $routes->get('login', '\App\Controllers\Auth\LoginController::loginView');
 $routes->post('login', '\App\Controllers\Auth\LoginController::loginAction');
+$routes->get('register', '\App\Controllers\Auth\RegisterController::registerView');
+$routes->post('register', '\App\Controllers\Auth\RegisterController::registerAction');
 
 // Google OAuth Controllers
 $routes->get('auth/google', '\App\Controllers\Auth\OAuthController::googleLogin');
