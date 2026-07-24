@@ -238,7 +238,7 @@
           </div>
         </div>
 
-        <div class="settings-container">
+        <div class="settings-container" id="db-migration-card-container">
           <!-- Database Migration Status Card -->
           <?php if (!empty($pendingMigrations)): ?>
             <div class="settings-card" style="border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.08);">
@@ -263,9 +263,9 @@
                 </ul>
               </div>
               <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                <a href="<?= base_url('update-db') ?>" class="btn" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 22px; border-radius: 8px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
-                  🔄 تشغيل التحديث الآن (/update-db)
-                </a>
+                <button id="run-migration-btn" onclick="runInlineMigration(event)" class="btn" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 22px; border-radius: 8px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
+                  🔄 تشغيل التحديث الآن
+                </button>
                 <span style="font-size: 0.8rem; color: var(--color-text-muted);">أو قم بتشغيل <code>php spark migrate</code> في cPanel Terminal</span>
               </div>
             </div>
@@ -276,10 +276,12 @@
               </div>
               <p class="settings-card-desc" style="margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                 <span>قاعدة البيانات محدثة بالكامل وتعمل بأحدث هيكل، لا توجد أي هجرات (Migrations) معلقة.</span>
-                <a href="<?= base_url('update-db') ?>" class="btn btn-secondary" style="font-size: 0.8rem; padding: 5px 12px; text-decoration: none;">إعادة الفحص (/update-db)</a>
+                <button onclick="runInlineMigration(event)" class="btn btn-secondary" style="font-size: 0.8rem; padding: 5px 12px; cursor: pointer;">إعادة الفحص والتحديث</button>
               </p>
             </div>
           <?php endif; ?>
+        </div>
+        <div class="settings-container">
 
           <!-- Card 0: Personal Preferences (Visible to All Users) -->
           <div class="settings-card">
@@ -673,6 +675,63 @@
         } catch (err) {
           console.error("Error clearing data:", err);
           showToast("خطأ في الاتصال بالسيرفر أثناء محاولة الحذف.", "error");
+        }
+      }
+
+      // Inline Migration Runner
+      async function runInlineMigration(e) {
+        if (e) e.preventDefault();
+        const btn = e ? e.currentTarget : document.getElementById("run-migration-btn");
+        const originalHtml = btn ? btn.innerHTML : "";
+
+        if (btn) {
+          btn.disabled = true;
+          btn.style.opacity = "0.75";
+          btn.innerHTML = `<span style="display:inline-block; width:14px; height:14px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; margin-left:6px;"></span> جاري التحديث...`;
+        }
+
+        try {
+          const res = await fetch("/update-db?json=1", {
+            headers: {
+              "X-Requested-With": "XMLHttpRequest",
+              "Accept": "application/json"
+            }
+          });
+          const data = await res.json();
+
+          if (res.ok && data.status === "success") {
+            showToast(data.message || "تمت تحديثات قاعدة البيانات بنجاح! 🚀", "success");
+            
+            const cardContainer = document.getElementById("db-migration-card-container");
+            if (cardContainer) {
+              cardContainer.innerHTML = `
+                <div class="settings-card" style="border-right: 4px solid #10b981;">
+                  <div class="settings-card-title" style="color: #10b981; border-bottom: none; padding-bottom: 0; margin-bottom: 0.25rem;">
+                    ✅ حالة قاعدة البيانات (Database Status)
+                  </div>
+                  <p class="settings-card-desc" style="margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <span>قاعدة البيانات محدثة بالكامل وتعمل بأحدث هيكل، لا توجد أي هجرات (Migrations) معلقة.</span>
+                    <button onclick="runInlineMigration(event)" class="btn btn-secondary" style="font-size: 0.8rem; padding: 5px 12px; cursor: pointer;">إعادة الفحص والتحديث</button>
+                  </p>
+                </div>
+              `;
+            }
+          } else {
+            showToast("❌ " + (data.message || "حدث خطأ أثناء إجراء التحديثات"), "error");
+            if (btn) {
+              btn.disabled = false;
+              btn.style.opacity = "1";
+              btn.innerHTML = originalHtml;
+            }
+          }
+        } catch (err) {
+          console.error("Migration error:", err);
+          showToast("❌ تعذر الاتصال بالسيرفر لتنفيذ التحديث.", "error");
+          if (btn) {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.innerHTML = originalHtml;
+          }
         }
       }
     </script>

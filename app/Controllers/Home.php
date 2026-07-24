@@ -53,28 +53,31 @@ class Home extends BaseController
     {
         $pendingMigrations = [];
         try {
-            $migrate = \Config\Services::migrations();
-            $history = $migrate->getHistory();
-            
+            $db = \Config\Database::connect();
+            $history = [];
+            if ($db->tableExists('migrations')) {
+                $history = $db->table('migrations')->get()->getResultArray();
+            }
+
             $historyVersions = [];
-            $historyClasses = [];
+            $historyClasses  = [];
             foreach ($history as $h) {
-                $hObj = (object)$h;
-                if (!empty($hObj->version)) {
-                    $historyVersions[] = $hObj->version;
+                if (!empty($h['version'])) {
+                    $historyVersions[] = (string)$h['version'];
                 }
-                if (!empty($hObj->class)) {
-                    $historyClasses[] = $hObj->class;
+                if (!empty($h['class'])) {
+                    $historyClasses[] = strtolower(ltrim((string)$h['class'], '\\'));
                 }
             }
 
+            $migrate = \Config\Services::migrations();
             $namespaces = ['App', 'CodeIgniter\Shield'];
             foreach ($namespaces as $ns) {
                 try {
                     $all = $migrate->findNamespaceMigrations($ns);
                     foreach ($all as $m) {
-                        $mVer = $m->version ?? null;
-                        $mClass = $m->class ?? null;
+                        $mVer   = isset($m->version) ? (string)$m->version : null;
+                        $mClass = isset($m->class) ? strtolower(ltrim((string)$m->class, '\\')) : null;
 
                         $isAlreadyRan = false;
                         if ($mVer && in_array($mVer, $historyVersions, true)) {

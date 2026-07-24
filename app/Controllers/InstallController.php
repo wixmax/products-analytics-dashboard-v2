@@ -326,9 +326,17 @@ class InstallController extends Controller
             $token = $this->request->getGet('token');
             $appSecret = env('DB_UPDATE_KEY') ?: 'madaqbio_update_secret_2026';
             if ($token !== $appSecret) {
+                if ($this->request->isAJAX() || $this->request->getGet('json') == '1') {
+                    return $this->response->setStatusCode(403)->setJSON([
+                        'status' => 'error',
+                        'message' => 'غير مسموح بالوصول. يجب تسجيل الدخول كمسؤول.'
+                    ]);
+                }
                 return $this->response->setStatusCode(403)->setBody('غير مسموح بالوصول. يجب تسجيل الدخول كمسؤول أو تقديم رمز الأمان الصحيح (token).');
             }
         }
+
+        $isJson = $this->request->isAJAX() || $this->request->getGet('json') == '1' || strpos($this->request->getHeaderLine('Accept'), 'application/json') !== false;
 
         try {
             $migrate = \Config\Services::migrations();
@@ -352,8 +360,21 @@ class InstallController extends Controller
                 }
             }
             
+            if ($isJson) {
+                return $this->response->setJSON([
+                    'status' => 'success',
+                    'message' => 'تمت تحديثات قاعدة البيانات بنجاح! تمت مزامنة جميع الجداول وتطبيق الهجرات الجديدة.'
+                ]);
+            }
+
             return $this->response->setBody('<h1>تمت تحديثات قاعدة البيانات بنجاح!</h1><p>تمت مزامنة جميع الجداول وتطبيق الهجرات (migrations) الجديدة.</p><p><a href="' . base_url('/') . '">العودة للوحة التحكم</a></p>');
         } catch (\Throwable $e) {
+            if ($isJson) {
+                return $this->response->setStatusCode(500)->setJSON([
+                    'status' => 'error',
+                    'message' => 'فشل تحديث قاعدة البيانات: ' . $e->getMessage()
+                ]);
+            }
             return $this->response->setBody('<h1>فشل تحديث قاعدة البيانات</h1><p>الخطأ: ' . esc($e->getMessage()) . '</p>');
         }
     }
