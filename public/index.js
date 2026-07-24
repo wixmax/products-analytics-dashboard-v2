@@ -176,17 +176,13 @@ window.addEventListener("DOMContentLoaded", () => {
     if (apiVersion) {
       let versionNum = apiVersion;
       let dateStr = "";
-      
-      const dashIndex = apiVersion.indexOf('-');
-      if (dashIndex !== -1) {
-        versionNum = apiVersion.substring(0, dashIndex);
-        dateStr = apiVersion.substring(dashIndex + 1);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-          dateStr = "";
-          versionNum = apiVersion;
-        }
+
+      const datePatternMatch = apiVersion.match(/^(.*)-(\d{4}-\d{2}-\d{2})$/);
+      if (datePatternMatch) {
+        versionNum = datePatternMatch[1];
+        dateStr = datePatternMatch[2];
       }
-      
+
       document.getElementById("filter-version").value = versionNum;
       if (dateStr) {
         document.getElementById("filter-date")._flatpickr?.setDate(dateStr);
@@ -217,9 +213,10 @@ function initFiltersPanel() {
 
   // Render Countries select
   const countryContainer = document.getElementById("api-filter-country");
-  let countryHtml = COUNTRIES_LIST.map(
+  let countryHtml = `<option value="all">🌍 الكل (All Countries)</option>`;
+  countryHtml += COUNTRIES_LIST.map(
     (c) =>
-      `<option value="${c.code}" selected>${c.flag} ${c.name} (${c.code})</option>`,
+      `<option value="${c.code}" ${c.code === "MA" ? "selected" : ""}>${c.flag} ${c.name} (${c.code})</option>`,
   ).join("");
   countryContainer.innerHTML = countryHtml;
 }
@@ -282,7 +279,7 @@ function getActiveFiltersObject() {
     (opt) => opt.value,
   );
   let country = "";
-  if (selectedCountryValues.length === 0) {
+  if (selectedCountryValues.length === 0 || selectedCountryValues.includes("all")) {
     country = COUNTRIES_LIST.map((c) => c.code).join(";");
   } else {
     country = selectedCountryValues.join(";");
