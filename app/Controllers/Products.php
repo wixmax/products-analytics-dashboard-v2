@@ -1905,42 +1905,46 @@ private function generateLiveStrategy($product, $activity)
     public function getAvailableDates()
     {
         $db = \Config\Database::connect();
-        $dates = [];
 
-        // 1. Extract from data_snapshots
+        // Optional origin filter passed from frontend (e.g. "Winning", "Local")
+        $origin = $this->request->getVar('origin') ?? '';
+
+        // ─── snapshotDates: dates from api_version of data_snapshots, filtered by origin ───
+        $snapshotDatesMap = [];
+
         if ($db->tableExists('data_snapshots')) {
-            $snapshots = $db->table('data_snapshots')->select('api_version, created_at')->get()->getResultArray();
+            $builder = $db->table('data_snapshots')->select('api_version');
+
+            // Filter by origin if provided
+            if (!empty($origin)) {
+                $builder->where('origin', $origin);
+            }
+
+            $snapshots = $builder->get()->getResultArray();
+
             foreach ($snapshots as $row) {
+                // Extract YYYY-MM-DD from api_version (e.g. "1.10-1-2026-07-13" → "2026-07-13")
                 if (!empty($row['api_version']) && preg_match('/(\d{4}-\d{2}-\d{2})/', $row['api_version'], $m)) {
-                    $dates[$m[1]] = true;
-                }
-                if (!empty($row['created_at'])) {
-                    $d = date('Y-m-d', strtotime($row['created_at']));
-                    $dates[$d] = true;
+                    $snapshotDatesMap[$m[1]] = true;
                 }
             }
         }
 
-        // 2. Extract from products
-        if ($db->tableExists('products')) {
-            $products = $db->table('products')->select('api_version, created_at')->get()->getResultArray();
-            foreach ($products as $row) {
-                if (!empty($row['api_version']) && preg_match('/(\d{4}-\d{2}-\d{2})/', $row['api_version'], $m)) {
-                    $dates[$m[1]] = true;
-                }
-                if (!empty($row['created_at'])) {
-                    $d = date('Y-m-d', strtotime($row['created_at']));
-                    $dates[$d] = true;
-                }
-            }
-        }
+        $snapshotDates = array_keys($snapshotDatesMap);
+        sort($snapshotDates);
 
-        // Today is always available for fresh sync
-        $dates[date('Y-m-d')] = true;
+        // ─── allDates: snapshot dates for this origin + today (always selectable) ───
+        $today = date('Y-m-d');
+        $allDatesMap = $snapshotDatesMap;
+        $allDatesMap[$today] = true;
+        $allDates = array_keys($allDatesMap);
+        sort($allDates);
 
-        $dateList = array_keys($dates);
-        sort($dateList);
-
-        return $this->respond(['dates' => array_values($dateList)]);
+        return $this->respond([
+            // Dates with a real snapshot for this origin — green badge in calendar
+            'snapshotDates' => array_values($snapshotDates),
+            // All selectable calendar dates (snapshot dates + today)
+            'dates'         => array_values($allDates),
+        ]);
     }
 }

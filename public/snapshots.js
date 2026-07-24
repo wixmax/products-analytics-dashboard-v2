@@ -21,11 +21,87 @@ async function loadSnapshots() {
     const res = await fetch(`/api/products/snapshots?${params.toString()}`);
     if (!res.ok) throw new Error('فشل تحميل اللقطات');
     allSnapshots = await res.json();
+
+    // Detect duplicates by api_version (same version = multiple snapshots)
+    renderDuplicateAlert(allSnapshots);
     renderSnapshots(allSnapshots);
     renderVersionFilter(allSnapshots);
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>خطأ في تحميل البيانات</h3><p>${e.message}</p></div>`;
   }
+}
+
+/**
+ * Detect REAL duplicate snapshots using data_hash (identical content).
+ * Two snapshots are duplicates only if they share the same data_hash value.
+ */
+function renderDuplicateAlert(snapshots) {
+  const alertContainer = document.getElementById('duplicate-alert-container');
+  if (!alertContainer) return;
+
+  // Group by data_hash — only non-null hashes
+  const hashGroups = {};
+  snapshots.forEach(s => {
+    if (!s.data_hash) return; // skip records with no hash (legacy without hash)
+    if (!hashGroups[s.data_hash]) hashGroups[s.data_hash] = [];
+    hashGroups[s.data_hash].push(s);
+  });
+
+  // Keep only groups with more than one snapshot (true duplicates)
+  const duplicateGroups = Object.entries(hashGroups).filter(([, arr]) => arr.length > 1);
+
+  if (duplicateGroups.length === 0) {
+    alertContainer.innerHTML = '';
+    return;
+  }
+
+  const totalExtra = duplicateGroups.reduce((sum, [, arr]) => sum + (arr.length - 1), 0);
+
+  let rows = '';
+  duplicateGroups.forEach(([hash, arr]) => {
+    // Sort ascending by id so the first (lowest id) is the "original"
+    const sorted = [...arr].sort((a, b) => a.id - b.id);
+    const keepId = sorted[0].id;
+    const deleteIds = sorted.slice(1).map(s => s.id);
+    const versions = [...new Set(arr.map(s => s.api_version).filter(Boolean))];
+    const versionLabel = versions.length ? versions.join(', ') : '(بدون إصدار)';
+
+    rows += `<li style="margin: 6px 0; padding: 6px 10px; background: rgba(0,0,0,0.15); border-radius: 6px;">
+      <span style="font-size:0.78rem; color: var(--color-text-muted);">🔑 Hash: <code style="font-size:0.75rem;">${hash.slice(0, 12)}…</code></span>
+      &nbsp;|&nbsp; <strong>${arr.length} نسخ</strong>
+      &nbsp;|&nbsp; الإصدار(ات): <strong>${versionLabel}</strong><br>
+      <span style="font-size:0.79rem;">
+        ✅ احتفظ بـ: <strong>#${keepId}</strong>
+        &nbsp;—&nbsp;
+        🗑️ يمكن حذف: <strong>${deleteIds.map(id => `#${id}`).join(', ')}</strong>
+      </span>
+    </li>`;
+  });
+
+  alertContainer.innerHTML = `
+    <div style="
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.45);
+      border-right: 4px solid #f59e0b;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+    ">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom: 8px;">
+        <span style="font-size:1.2rem;">⚠️</span>
+        <strong style="color:#f59e0b; font-size:0.95rem;">
+          تم اكتشاف ${duplicateGroups.length} مجموعة نسخ مكررة — ${totalExtra} نسخة زائدة تحتاج للحذف
+        </strong>
+      </div>
+      <p style="font-size:0.82rem; color:var(--color-text-muted); margin-bottom:10px;">
+        النسخ التالية تمتلك نفس البصمة الرقمية (data_hash)، مما يعني أنها تحتوي على بيانات متطابقة تماماً.
+        يُنصح بالاحتفاظ بالنسخة الأقدم (ID الأصغر) وحذف التكرارات.
+      </p>
+      <ul style="list-style: none; padding: 0; font-size:0.83rem; color: var(--color-text-main);">
+        ${rows}
+      </ul>
+    </div>
+  `;
 }
 
 function renderVersionFilter(snapshots) {
@@ -58,21 +134,85 @@ function renderSnapshots(snapshots) {
     return;
   }
 
+  // Build a set of data_hashes that appear more than once (true duplicates)
+  const hashCounts = {};
+  snapshots.forEach(s => {
+    if (!s.data_hash) return;
+    hashCounts[s.data_hash] = (hashCounts[s.data_hash] || 0) + 1;
+  });
+  // For each hash, track which id to keep (lowest id = original)
+  const hashKeepId = {};
+  const hashTotal = {};
+  const hashGrouped = {};
+  snapshots.forEach(s => {
+    if (!s.data_hash || hashCounts[s.data_hash] <= 1) return;
+    if (!hashGrouped[s.data_hash]) hashGrouped[s.data_hash] = [];
+    hashGrouped[s.data_hash].push(s.id);
+  });
+  Object.entries(hashGrouped).forEach(([hash, ids]) => {
+    const sorted = [...ids].sort((a, b) => a - b);
+    hashKeepId[hash] = sorted[0]; // lowest id = original to keep
+    hashTotal[hash] = sorted.length;
+  });
+
   let html = '';
   snapshots.forEach(s => {
     const date = s.created_at ? new Date(s.created_at + 'Z').toLocaleString('ar-SA', { timeZone: 'UTC' }) : '--';
     const originLabel = { Local: 'محلي', Winning: 'رابحة', China: 'الصين', Japan: 'اليابان' }[s.origin] || s.origin;
 
+    // A snapshot is a TRUE duplicate if its hash appears multiple times AND it's not the "keep" copy
+    const isDuplicate = s.data_hash
+      && (hashCounts[s.data_hash] || 0) > 1
+      && s.id !== hashKeepId[s.data_hash];
+    const isOriginalWithDupe = s.data_hash
+      && (hashCounts[s.data_hash] || 0) > 1
+      && s.id === hashKeepId[s.data_hash];
+    const totalForHash = hashTotal[s.data_hash] || 1;
+
+    const duplicateBadge = isDuplicate ? `
+      <span style="
+        background: rgba(245,158,11,0.15);
+        color: #f59e0b;
+        border: 1px solid rgba(245,158,11,0.4);
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 99px;
+        font-weight: 700;
+      " title="هذه نسخة مكررة (data_hash متطابق مع ${totalForHash} نسخ) — يُنصح بحذفها">
+        ⚠️ نسخة مكررة
+      </span>
+    ` : isOriginalWithDupe ? `
+      <span style="
+        background: rgba(16,185,129,0.12);
+        color: #10b981;
+        border: 1px solid rgba(16,185,129,0.35);
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 99px;
+        font-weight: 600;
+      " title="هذه النسخة الأصلية التي يُنصح بالاحتفاظ بها (${totalForHash} نسخ متطابقة)">
+        ✅ الأصل (احتفظ بها)
+      </span>
+    ` : '';
+
+    const cardBorder = isDuplicate
+      ? 'border-right: 3px solid #f59e0b;'
+      : isOriginalWithDupe
+        ? 'border-right: 3px solid #10b981;'
+        : '';
+
     html += `
-      <div class="snapshot-card">
+      <div class="snapshot-card" style="${cardBorder}">
         <div class="snapshot-meta">
           <span class="snapshot-badge origin-${s.origin}">📌 ${originLabel}</span>
           ${s.api_version ? `<span class="snapshot-badge" style="background:rgba(99,102,241,0.1);color:#6366f1">🔖 v${s.api_version}</span>` : ''}
+          ${duplicateBadge}
           <span class="snapshot-date">🕐 ${date}</span>
         </div>
         <div class="snapshot-stats">
           <span><span class="stat-label">🆔</span> <span class="stat-value">#${s.id}</span></span>
           <span><span class="stat-label">📦 المنتجات:</span> <span class="stat-value">${s.product_count ?? 0}</span></span>
+          ${s.data_hash ? `<span style="font-size:0.75rem; color:var(--color-text-muted);">🔑 <code>${s.data_hash.slice(0, 10)}…</code></span>` : ''}
         </div>
         <div class="snapshot-actions">
           <button onclick="viewSnapshotJson(${s.id})">📄 عرض JSON</button>

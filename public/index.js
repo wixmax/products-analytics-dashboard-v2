@@ -110,18 +110,84 @@ function toggleApiMode() {
 }
 
 let availableSnapshotDates = [];
+// Keeps a reference to the active flatpickr instance for re-rendering
+let _fpDateInstance = null;
+
+/**
+ * Map frontend mode values to backend origin strings
+ */
+function _getOriginFromMode(mode) {
+  const map = { winning: 'Winning', insights: 'Local', china: 'China', japan: 'Japan' };
+  return map[mode] || '';
+}
+
+/**
+ * Fetch available-dates from backend for the given origin, then refresh
+ * the flatpickr calendar in-place (no full re-init needed after first call).
+ */
+async function refreshDatePickerForOrigin(origin) {
+  try {
+    const params = origin ? `?origin=${encodeURIComponent(origin)}` : '';
+    const res = await fetch(`/api/products/available-dates${params}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (data && Array.isArray(data.snapshotDates)) {
+      availableSnapshotDates = Array.from(new Set(data.snapshotDates));
+    }
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const allDates = data && Array.isArray(data.dates) ? Array.from(new Set(data.dates)) : [...availableSnapshotDates];
+    const allowedSet = new Set(allDates);
+    allowedSet.add(todayStr);
+
+    if (_fpDateInstance) {
+      // Update enable rules and redraw
+      _fpDateInstance.set('enable', [
+        function(date) {
+          const fmt = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+          return allowedSet.has(fmt);
+        }
+      ]);
+      // Clear selected date if it's no longer available for this origin
+      const cur = _fpDateInstance.selectedDates[0];
+      if (cur) {
+        const curStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+        if (!allowedSet.has(curStr)) {
+          _fpDateInstance.clear();
+          localStorage.removeItem('api_filter_date');
+          updateGeneratedURL();
+        }
+      }
+      _fpDateInstance.redraw();
+    }
+  } catch (err) {
+    console.error('Failed to refresh available dates for origin:', err);
+  }
+}
 
 async function initDatePickerWithSnapshotIndicators() {
+  let allSelectableDates = [];
+
+  // Get current origin from the endpoint selector (if already chosen)
+  const initialMode = document.getElementById('api-endpoint-select')?.value || '';
+  const initialOrigin = _getOriginFromMode(initialMode);
+
   try {
-    const res = await fetch("/api/products/available-dates");
+    const params = initialOrigin ? `?origin=${encodeURIComponent(initialOrigin)}` : '';
+    const res = await fetch(`/api/products/available-dates${params}`);
     if (res.ok) {
       const data = await res.json();
+      if (data && Array.isArray(data.snapshotDates)) {
+        availableSnapshotDates = Array.from(new Set(data.snapshotDates));
+      }
       if (data && Array.isArray(data.dates)) {
-        availableSnapshotDates = data.dates;
+        allSelectableDates = Array.from(new Set(data.dates));
       }
     }
   } catch (err) {
-    console.error("Failed to fetch available snapshot dates:", err);
+    console.error('Failed to fetch available snapshot dates:', err);
   }
 
   const now = new Date();
@@ -130,20 +196,19 @@ async function initDatePickerWithSnapshotIndicators() {
   const dayStr = String(now.getDate()).padStart(2, '0');
   const todayStr = `${yearStr}-${monthStr}-${dayStr}`;
 
-  const allowedSet = new Set(availableSnapshotDates);
+  const allowedSet = new Set(allSelectableDates);
   allowedSet.add(todayStr);
 
-  const fpInstance = flatpickr("#filter-date", {
-    dateFormat: "Y-m-d",
+  _fpDateInstance = flatpickr('#filter-date', {
+    dateFormat: 'Y-m-d',
     allowInput: false,
-    maxDate: "today",
+    maxDate: 'today',
     enable: [
       function(date) {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const d = String(date.getDate()).padStart(2, '0');
-        const formatted = `${y}-${m}-${d}`;
-        return allowedSet.has(formatted);
+        return allowedSet.has(`${y}-${m}-${d}`);
       }
     ],
     onDayCreate: function(dObj, dStr, fp, dayElem) {
@@ -153,25 +218,44 @@ async function initDatePickerWithSnapshotIndicators() {
       const d = String(dayElem.dateObj.getDate()).padStart(2, '0');
       const dateStr = `${y}-${m}-${d}`;
 
-      if (availableSnapshotDates.includes(dateStr)) {
-        dayElem.classList.add("has-snapshot-date");
+      const isToday    = (dateStr === todayStr);
+      const hasSnapshot = availableSnapshotDates.includes(dateStr);
+
+      if (isToday) {
+        if (hasSnapshot) {
+          dayElem.classList.add('today-has-snapshot');
+          dayElem.title = `تاريخ اليوم (${dateStr}) - يوجد نسخة مسجلة في قاعدة البيانات ✅`;
+          const badge = document.createElement('span');
+          badge.className = 'snapshot-date-badge today-snapshot-badge';
+          badge.innerHTML = '●';
+          dayElem.appendChild(badge);
+        } else {
+          dayElem.classList.add('today-no-snapshot');
+          dayElem.title = `تاريخ اليوم (${dateStr}) - لا توجد نسخة مسجلة بعد (جاهز للجلب ⚡)`;
+          const badge = document.createElement('span');
+          badge.className = 'snapshot-date-badge today-no-snapshot-badge';
+          badge.innerHTML = '⚡';
+          dayElem.appendChild(badge);
+        }
+      } else if (hasSnapshot) {
+        dayElem.classList.add('has-snapshot-date');
         dayElem.title = `نسخة مسجلة في قاعدة البيانات (${dateStr})`;
-        const badge = document.createElement("span");
-        badge.className = "snapshot-date-badge";
-        badge.innerHTML = "●";
+        const badge = document.createElement('span');
+        badge.className = 'snapshot-date-badge';
+        badge.innerHTML = '●';
         dayElem.appendChild(badge);
       }
     },
     onChange: (dates, dateStr) => {
-      if (dateStr) localStorage.setItem("api_filter_date", dateStr);
-      else localStorage.removeItem("api_filter_date");
+      if (dateStr) localStorage.setItem('api_filter_date', dateStr);
+      else localStorage.removeItem('api_filter_date');
       updateGeneratedURL();
     }
   });
 
-  const cachedDate = localStorage.getItem("api_filter_date");
+  const cachedDate = localStorage.getItem('api_filter_date');
   if (cachedDate && allowedSet.has(cachedDate)) {
-    fpInstance.setDate(cachedDate);
+    _fpDateInstance.setDate(cachedDate);
   }
 }
 
@@ -300,6 +384,11 @@ function initEventListeners() {
           "api_selected_countries",
           JSON.stringify(selectedValues),
         );
+      }
+      // If the endpoint/origin changes, refresh calendar dates for that origin
+      if (id === "api-endpoint-select") {
+        const newOrigin = _getOriginFromMode(e.target.value);
+        refreshDatePickerForOrigin(newOrigin);
       }
       updateGeneratedURL();
     });

@@ -242,6 +242,9 @@
           <input type="file" id="snapshot-import-input" accept=".json" style="display:none" onchange="importSnapshotFile(event)">
         </div>
 
+        <!-- Duplicate Snapshots Alert (populated by JS) -->
+        <div id="duplicate-alert-container"></div>
+
         <!-- Version chips -->
         <div class="version-filter" id="version-filter"></div>
 
