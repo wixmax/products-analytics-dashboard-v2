@@ -1265,31 +1265,92 @@ function loadVideoPlaceholder(ph) {
     ph.appendChild(playBtn);
   }
 
-  ph.addEventListener("click", function (e) {
-    e.stopPropagation();
+  let activePlayer = null;
+  let activeVid = null;
+  let mountedTarget = null;
+
+  const ensureVideoMounted = () => {
+    if (activeVid && mountedTarget) return { vid: activeVid, player: activePlayer, container: mountedTarget };
+
     const src = ph.getAttribute("data-vid-src");
     const poster = ph.getAttribute("data-vid-poster") || "";
+    if (!src || !ph.parentNode) return null;
 
-    if (!src) return;
+    activeVid = createVidEl(ph.id, src, poster);
+    mountedTarget = activeVid;
+    ph.parentNode.replaceChild(activeVid, ph);
+    activePlayer = initVjs(activeVid, true);
+    return { vid: activeVid, player: activePlayer, container: mountedTarget };
+  };
 
-    const vid = createVidEl(ph.id, src, poster);
-    ph.parentNode.replaceChild(vid, ph);
-    const player = initVjs(vid);
-    if (player && typeof player.play === "function") {
-      player.play();
-    } else {
-      vid.play();
+  const playVideo = (isMuted = false) => {
+    const mounted = ensureVideoMounted();
+    if (!mounted) return;
+    const { vid, player } = mounted;
+
+    const doPlay = () => {
+      if (player && typeof player.play === "function") {
+        if (typeof player.addClass === "function") player.addClass("vjs-has-started");
+        if (isMuted) {
+          player.muted(true);
+        } else {
+          player.muted(false);
+        }
+        const promise = player.play();
+        if (promise !== undefined) {
+          promise.catch(() => {
+            player.muted(true);
+            player.play();
+          });
+        }
+      } else if (vid && typeof vid.play === "function") {
+        vid.muted = isMuted;
+        vid.play().catch(() => {
+          vid.muted = true;
+          vid.play();
+        });
+      }
+    };
+
+    if (player && typeof player.ready === "function") {
+      player.ready(doPlay);
     }
+    doPlay();
+  };
+
+  const pauseVideo = () => {
+    if (activePlayer && typeof activePlayer.pause === "function") {
+      activePlayer.pause();
+    } else if (activeVid && typeof activeVid.pause === "function") {
+      activeVid.pause();
+    }
+  };
+
+  // Click handler (unmutes audio and plays)
+  ph.addEventListener("click", function (e) {
+    e.stopPropagation();
+    playVideo(false);
+  });
+
+  // Hover handlers on product card (plays with sound on hover, pauses on mouseleave)
+  const cardContainer = ph.closest(".product-card") || ph;
+  
+  cardContainer.addEventListener("mouseenter", function () {
+    playVideo(false);
+  });
+
+  cardContainer.addEventListener("mouseleave", function () {
+    pauseVideo();
   });
 }
 
 function createVidEl(id, src, posterUrl) {
   const vid = document.createElement('video');
   vid.id = id ? id.replace('vp-', 'vjs-') : '';
-  vid.className = 'video-js vjs-big-play-centered';
+  vid.className = 'video-js';
   vid.controls = true;
   vid.playsInline = true;
-  vid.preload = 'none';
+  vid.preload = 'auto';
   if (posterUrl) vid.poster = posterUrl;
   const source = document.createElement('source');
   source.src = src;
@@ -1298,16 +1359,24 @@ function createVidEl(id, src, posterUrl) {
   return vid;
 }
 
-function initVjs(vid) {
+function initVjs(vid, shouldAutoplay = false) {
   try {
     if (typeof videojs === 'function' && !vid.dataset.vjsInited) {
       vid.dataset.vjsInited = '1';
-      const player = videojs(vid, { fluid: true, controls: true, preload: 'none' });
+      const player = videojs(vid, { 
+        fluid: true, 
+        controls: true, 
+        preload: 'auto',
+        autoplay: shouldAutoplay ? true : false,
+        bigPlayButton: false
+      });
       player.on('play', () => {
         const all = videojs.getPlayers();
         Object.keys(all).forEach(id => {
           const p = all[id];
-          if (p !== player && !p.paused()) p.pause();
+          if (p !== player && p && typeof p.pause === 'function' && !p.paused()) {
+            p.pause();
+          }
         });
       });
       return player;
