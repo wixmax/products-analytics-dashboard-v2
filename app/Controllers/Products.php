@@ -1947,4 +1947,67 @@ private function generateLiveStrategy($product, $activity)
             'dates'         => array_values($allDates),
         ]);
     }
+
+    public function saveThumbnail()
+    {
+        $json = $this->request->getJSON(true) ?? $this->request->getPost();
+        $productId = $json['product_id'] ?? null;
+        $productUrl = $json['product_url'] ?? null;
+        $imageData = $json['image_data'] ?? null;
+
+        if (empty($imageData) || (empty($productId) && empty($productUrl))) {
+            return $this->fail('product_id or product_url and image_data are required.');
+        }
+
+        if (!preg_match('/^data:image\/([\w\+\-]+);base64,/', $imageData, $type)) {
+            return $this->fail('Invalid base64 image format.');
+        }
+
+        $rawExt = strtolower($type[1]);
+        $ext = ($rawExt === 'jpeg') ? 'jpg' : $rawExt;
+
+        $data = substr($imageData, strpos($imageData, ',') + 1);
+        $data = base64_decode($data);
+        if ($data === false) {
+            return $this->fail('Base64 decode failed.');
+        }
+
+        $uploadDir = FCPATH . 'uploads' . DIRECTORY_SEPARATOR . 'video' . DIRECTORY_SEPARATOR . 'thumbnails';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $identifier = !empty($productId) ? 'id_' . $productId : 'url_' . md5($productUrl);
+        $filename = 'thumb_' . $identifier . '.' . $ext;
+        $filePath = $uploadDir . DIRECTORY_SEPARATOR . $filename;
+
+        file_put_contents($filePath, $data);
+
+        $publicUrl = base_url('uploads/video/thumbnails/' . $filename);
+
+        // Update in products table for specific product
+        $model = new ProductModel();
+        if (!empty($productId)) {
+            $p = $model->find($productId);
+            if ($p) {
+                $existingImages = array_filter(explode(';', $p['ad_image_urls'] ?? ''));
+                if (empty($existingImages)) {
+                    $model->update($productId, ['ad_image_urls' => $publicUrl]);
+                }
+            }
+        } elseif (!empty($productUrl) && trim($productUrl) !== '') {
+            $products = $model->where('product_url', $productUrl)->findAll();
+            foreach ($products as $p) {
+                $existingImages = array_filter(explode(';', $p['ad_image_urls'] ?? ''));
+                if (empty($existingImages)) {
+                    $model->update($p['id'], ['ad_image_urls' => $publicUrl]);
+                }
+            }
+        }
+
+        return $this->respond([
+            'success' => true,
+            'thumbnail_url' => $publicUrl
+        ]);
+    }
 }

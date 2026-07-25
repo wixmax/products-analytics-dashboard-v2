@@ -186,6 +186,9 @@ function loadNextSavedBatch() {
   }
 
   initVideoJs(container);
+  if (typeof ensureVideoThumbnails === "function") {
+    ensureVideoThumbnails(container);
+  }
 
   if (renderedSavedCount >= currentSavedList.length) {
     const s = document.getElementById("saved-scroll-sentinel");
@@ -254,7 +257,7 @@ function buildSavedCardHtml(p) {
             <div class="product-media">
                 ${
                   videoUrls.length > 0
-                    ? `<div class="vid-placeholder" data-vid-src="${videoUrls[0]}" data-vid-poster="${imageUrls[0] || ""}" id="vp-${safeId}">${imageUrls[0] ? `<img src="${imageUrls[0]}" alt="" class="vid-placeholder-img">` : `<div class="vid-placeholder-bg"></div>`}<div class="vid-play-btn">▶</div></div>`
+                    ? `<div class="vid-placeholder" data-vid-src="${videoUrls[0]}" data-vid-poster="${imageUrls[0] || ""}" data-product-id="${p.id || ""}" data-product-url="${p.productUrl || ""}" id="vp-${safeId}">${imageUrls[0] ? `<img src="${imageUrls[0]}" alt="" class="vid-placeholder-img">` : `<div class="vid-placeholder-bg"></div>`}<div class="vid-play-btn">▶</div></div>`
                     : imageUrls.length > 0
                       ? `<img src="${imageUrls[0]}" alt="${p.title}">`
                       : '<div class="no-media"><span>📦 لا توجد وسائط</span></div>'
@@ -1036,30 +1039,31 @@ async function toggleStoreListAction() {
 let vidObserver = null;
 
 function loadVideoPlaceholder(ph) {
-  const src = ph.dataset.vidSrc;
-  const poster = ph.dataset.vidPoster;
-  if (poster) {
+  if (ph.dataset.vidClickHandled) return;
+  ph.dataset.vidClickHandled = "1";
+
+  if (!ph.querySelector(".vid-play-btn")) {
+    const playBtn = document.createElement("div");
+    playBtn.className = "vid-play-btn";
+    playBtn.textContent = "▶";
+    ph.appendChild(playBtn);
+  }
+
+  ph.addEventListener("click", function (e) {
+    e.stopPropagation();
+    const src = ph.getAttribute("data-vid-src");
+    const poster = ph.getAttribute("data-vid-poster") || "";
+
+    if (!src) return;
+
     const vid = createVidEl(ph.id, src, poster);
     ph.parentNode.replaceChild(vid, ph);
-    initVjs(vid);
-    return;
-  }
-  ph.style.display = 'block';
-  ph.style.position = 'relative';
-  ph.innerHTML = '';
-  const vid = createVidEl(ph.id, src, '');
-  vid.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;';
-  ph.appendChild(vid);
-  const overlay = document.createElement('div');
-  overlay.className = 'vid-placeholder-overlay';
-  overlay.innerHTML = '<div class="vid-placeholder-bg"></div><div class="vid-play-btn">▶</div>';
-  ph.appendChild(overlay);
-  const player = initVjs(vid);
-  overlay.addEventListener('click', (e) => {
-    e.stopPropagation();
-    overlay.style.display = 'none';
-    const p = player || videojs.getPlayer(vid.id) || videojs(vid);
-    if (p && typeof p.play === 'function') p.play();
+    const player = initVjs(vid);
+    if (player && typeof player.play === "function") {
+      player.play();
+    } else {
+      vid.play();
+    }
   });
 }
 

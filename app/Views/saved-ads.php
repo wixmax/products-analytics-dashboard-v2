@@ -98,6 +98,11 @@
             <button class="btn btn-error" onclick="clearAllSaved()">
               🗑️ مسح الكل
             </button>
+            <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin')): ?>
+              <button class="btn btn-secondary" onclick="generateAllVideoThumbnails()" title="توليد وتخزين صور الفيديوهات لجميع البطاقات الظاهرة">
+                🎬 توليد صور الفيديوهات
+              </button>
+            <?php endif; ?>
             <button class="theme-toggle" id="theme-toggle-btn">🌓</button>
           </div>
         </div>
@@ -558,6 +563,7 @@
 
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
     <script src="<?= base_url('analysis-helper.js') ?>?v=1.0"></script>
+    <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=1.0"></script>
     <script src="<?= base_url('saved-ads.js') ?>?v=2.3"></script>
   </body>
 </html>

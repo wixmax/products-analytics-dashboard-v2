@@ -143,3 +143,5 @@ testsprite_tests\tmp\config.json
 testsprite_tests/tmp/mcp.log
 testsprite_tests/*
 testsprite_tests/tmp/mcp.log
+
+/public/uploads/video

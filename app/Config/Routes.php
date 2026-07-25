@@ -56,6 +56,7 @@ $routes->post('/api/products/import', 'Products::importJson');
 // Saved Ads & Bookmark Endpoints
 $routes->get('/api/products/saved', 'Products::saved');
 $routes->post('/api/products/saved/toggle', 'Products::toggleSave');
+$routes->post('/api/products/save-thumbnail', 'Products::saveThumbnail');
 $routes->post('/api/products/saved/rating', 'Products::updateRating');
 $routes->post('/api/products/saved/notes', 'Products::updateNotes');
 $routes->post('/api/products/saved/price', 'Products::updatePrice');
