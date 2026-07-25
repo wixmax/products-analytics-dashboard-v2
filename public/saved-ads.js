@@ -93,17 +93,25 @@ function populateCollectionFilters() {
   }
 }
 
+// State for Progressive Lazy Rendering in saved-ads.js
+let currentSavedList = [];
+let renderedSavedCount = 0;
+const SAVED_PER_BATCH = 16;
+let savedScrollObserver = null;
+
 function renderSavedGrid() {
   const container = document.getElementById("saved-products-container");
-  const searchQuery = document
-    .getElementById("saved-search")
-    .value.toLowerCase();
-  const sortOrder = document.getElementById("saved-sort").value;
-  const statusFilter = document.getElementById("status-filter").value;
-  const collectionFilter = document.getElementById("collection-filter").value;
+  if (!container) return;
+
+  const searchQuery = (document.getElementById("saved-search")?.value || "").trim().toLowerCase();
+  const sortOrder = document.getElementById("saved-sort")?.value || "newest";
+  const statusFilter = document.getElementById("status-filter")?.value || "all";
+  const collectionFilter = document.getElementById("collection-filter")?.value || "all";
+  const countryFilter = document.getElementById("country-filter")?.value || "all";
 
   let filtered = savedProducts.filter((p) => {
     const matchesSearch =
+      !searchQuery ||
       (p.title && p.title.toLowerCase().includes(searchQuery)) ||
       (p.ad_body && p.ad_body.toLowerCase().includes(searchQuery)) ||
       (p.ad_title && p.ad_title.toLowerCase().includes(searchQuery));
@@ -116,47 +124,20 @@ function renderSavedGrid() {
     const matchesCollection =
       collectionFilter === "all" || productCollection === collectionFilter;
 
-    return matchesSearch && matchesStatus && matchesCollection;
+    const matchesCountry =
+      countryFilter === "all" || !countryFilter || p.country === countryFilter;
+
+    return matchesSearch && matchesStatus && matchesCollection && matchesCountry;
   });
 
   currentFiltered = filtered;
 
   // Sorting
   filtered.sort((a, b) => {
-    if (sortOrder === "newest")
-      return new Date(b.saved_at) - new Date(a.saved_at);
-    if (sortOrder === "oldest")
-      return new Date(a.saved_at) - new Date(b.saved_at);
-    if (sortOrder === "rating-desc") return (b.rating || 0) - (a.rating || 0);
-    if (sortOrder === "rating-asc") return (a.rating || 0) - (b.rating || 0);
-    return 0;
-  });
-
-// State for Progressive Lazy Rendering in saved-ads.js
-let currentSavedList = [];
-let renderedSavedCount = 0;
-const SAVED_PER_BATCH = 16;
-let savedScrollObserver = null;
-
-function renderSavedGrid() {
-  const container = document.getElementById("saved-products-container");
-  if (!container) return;
-
-  const collectionFilter = document.getElementById("collection-filter")?.value || "";
-  const countryFilter = document.getElementById("country-filter")?.value || "";
-  const searchFilter = document.getElementById("search-saved")?.value?.toLowerCase() || "";
-  const sortOrder = document.getElementById("sort-saved")?.value || "date-desc";
-
-  let filtered = savedProducts.filter((p) => {
-    if (collectionFilter && p.collection !== collectionFilter) return false;
-    if (countryFilter && p.country !== countryFilter) return false;
-    if (searchFilter && !(p.title || "").toLowerCase().includes(searchFilter)) return false;
-    return true;
-  });
-
-  filtered.sort((a, b) => {
-    if (sortOrder === "date-desc") return new Date(b.saved_at || 0) - new Date(a.saved_at || 0);
-    if (sortOrder === "date-asc") return new Date(a.saved_at || 0) - new Date(b.saved_at || 0);
+    if (sortOrder === "newest" || sortOrder === "date-desc")
+      return new Date(b.saved_at || 0) - new Date(a.saved_at || 0);
+    if (sortOrder === "oldest" || sortOrder === "date-asc")
+      return new Date(a.saved_at || 0) - new Date(b.saved_at || 0);
     if (sortOrder === "rating-desc") return (b.rating || 0) - (a.rating || 0);
     if (sortOrder === "rating-asc") return (a.rating || 0) - (b.rating || 0);
     return 0;
@@ -172,12 +153,12 @@ function renderSavedGrid() {
 
   if (filtered.length === 0) {
     container.innerHTML = `
-            <div class="empty-state" style="grid-column: 1/-1;">
-                <div class="empty-icon">⭐</div>
-                <h3>لا توجد منتجات محفوظة</h3>
-                <p>قم بحفظ بعض المنتجات من لوحة التحكم لعرضها هنا.</p>
-            </div>
-        `;
+      <div class="empty-state" style="grid-column: 1/-1;">
+        <div class="empty-icon">⭐</div>
+        <h3>لا توجد منتجات محفوظة</h3>
+        <p>قم بحفظ بعض المنتجات من لوحة التحكم لعرضها هنا.</p>
+      </div>
+    `;
     return;
   }
 
@@ -185,6 +166,7 @@ function renderSavedGrid() {
   loadNextSavedBatch();
   setupSavedScrollObserver();
 }
+
 
 function loadNextSavedBatch() {
   const container = document.getElementById("saved-products-container");
