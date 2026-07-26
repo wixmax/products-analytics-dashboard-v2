@@ -48,13 +48,23 @@ let currentFilteredProducts = [];
 let savedProducts = [];
 let collections = ["عامة", "ملابس", "إلكترونيات", "أدوات منزلية"];
 let watchedStores = [];
+let activeAiFilterEvaluations = null;
+let currentAiFilterVerdict = "all";
 
 async function loadInitialDatabaseData() {
   try {
     const collectionsRes = await fetch("/api/products/collections");
     if (collectionsRes.ok) {
       const data = await collectionsRes.json();
-      collections = data && data.length > 0 ? data : ["\u0639\u0627\u0645\u0629", "\u0645\u0644\u0627\u0628\u0633", "\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0627\u062a", "\u0623\u062f\u0648\u0627\u062a \u0645\u0646\u0632\u0644\u064a\u0629"];
+      collections =
+        data && data.length > 0
+          ? data
+          : [
+              "\u0639\u0627\u0645\u0629",
+              "\u0645\u0644\u0627\u0628\u0633",
+              "\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0627\u062a",
+              "\u0623\u062f\u0648\u0627\u062a \u0645\u0646\u0632\u0644\u064a\u0629",
+            ];
     }
     const savedRes = await fetch("/api/products/saved");
     if (savedRes.ok) {
@@ -117,8 +127,13 @@ let _fpDateInstance = null;
  * Map frontend mode values to backend origin strings
  */
 function _getOriginFromMode(mode) {
-  const map = { winning: 'Winning', insights: 'Local', china: 'China', japan: 'Japan' };
-  return map[mode] || '';
+  const map = {
+    winning: "Winning",
+    insights: "Local",
+    china: "China",
+    japan: "Japan",
+  };
+  return map[mode] || "";
 }
 
 /**
@@ -127,7 +142,7 @@ function _getOriginFromMode(mode) {
  */
 async function refreshDatePickerForOrigin(origin) {
   try {
-    const params = origin ? `?origin=${encodeURIComponent(origin)}` : '';
+    const params = origin ? `?origin=${encodeURIComponent(origin)}` : "";
     const res = await fetch(`/api/products/available-dates${params}`);
     if (!res.ok) return;
     const data = await res.json();
@@ -137,33 +152,36 @@ async function refreshDatePickerForOrigin(origin) {
     }
 
     const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const allDates = data && Array.isArray(data.dates) ? Array.from(new Set(data.dates)) : [...availableSnapshotDates];
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const allDates =
+      data && Array.isArray(data.dates)
+        ? Array.from(new Set(data.dates))
+        : [...availableSnapshotDates];
     const allowedSet = new Set(allDates);
     allowedSet.add(todayStr);
 
     if (_fpDateInstance) {
       // Update enable rules and redraw
-      _fpDateInstance.set('enable', [
-        function(date) {
-          const fmt = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+      _fpDateInstance.set("enable", [
+        function (date) {
+          const fmt = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
           return allowedSet.has(fmt);
-        }
+        },
       ]);
       // Clear selected date if it's no longer available for this origin
       const cur = _fpDateInstance.selectedDates[0];
       if (cur) {
-        const curStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+        const curStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
         if (!allowedSet.has(curStr)) {
           _fpDateInstance.clear();
-          localStorage.removeItem('api_filter_date');
+          localStorage.removeItem("api_filter_date");
           updateGeneratedURL();
         }
       }
       _fpDateInstance.redraw();
     }
   } catch (err) {
-    console.error('Failed to refresh available dates for origin:', err);
+    console.error("Failed to refresh available dates for origin:", err);
   }
 }
 
@@ -171,11 +189,14 @@ async function initDatePickerWithSnapshotIndicators() {
   let allSelectableDates = [];
 
   // Get current origin from the endpoint selector (if already chosen)
-  const initialMode = document.getElementById('api-endpoint-select')?.value || '';
+  const initialMode =
+    document.getElementById("api-endpoint-select")?.value || "";
   const initialOrigin = _getOriginFromMode(initialMode);
 
   try {
-    const params = initialOrigin ? `?origin=${encodeURIComponent(initialOrigin)}` : '';
+    const params = initialOrigin
+      ? `?origin=${encodeURIComponent(initialOrigin)}`
+      : "";
     const res = await fetch(`/api/products/available-dates${params}`);
     if (res.ok) {
       const data = await res.json();
@@ -187,75 +208,89 @@ async function initDatePickerWithSnapshotIndicators() {
       }
     }
   } catch (err) {
-    console.error('Failed to fetch available snapshot dates:', err);
+    console.error("Failed to fetch available snapshot dates:", err);
   }
 
   const now = new Date();
   const yearStr = now.getFullYear();
-  const monthStr = String(now.getMonth() + 1).padStart(2, '0');
-  const dayStr = String(now.getDate()).padStart(2, '0');
+  const monthStr = String(now.getMonth() + 1).padStart(2, "0");
+  const dayStr = String(now.getDate()).padStart(2, "0");
   const todayStr = `${yearStr}-${monthStr}-${dayStr}`;
 
   const allowedSet = new Set(allSelectableDates);
   allowedSet.add(todayStr);
 
-  _fpDateInstance = flatpickr('#filter-date', {
-    dateFormat: 'Y-m-d',
+  _fpDateInstance = flatpickr("#filter-date", {
+    dateFormat: "Y-m-d",
     allowInput: false,
-    maxDate: 'today',
+    maxDate: "today",
     enable: [
-      function(date) {
+      function (date) {
         const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
         return allowedSet.has(`${y}-${m}-${d}`);
-      }
+      },
     ],
-    onDayCreate: function(dObj, dStr, fp, dayElem) {
+    onDayCreate: function (dObj, dStr, fp, dayElem) {
       if (!dayElem.dateObj) return;
       const y = dayElem.dateObj.getFullYear();
-      const m = String(dayElem.dateObj.getMonth() + 1).padStart(2, '0');
-      const d = String(dayElem.dateObj.getDate()).padStart(2, '0');
+      const m = String(dayElem.dateObj.getMonth() + 1).padStart(2, "0");
+      const d = String(dayElem.dateObj.getDate()).padStart(2, "0");
       const dateStr = `${y}-${m}-${d}`;
 
-      const isToday    = (dateStr === todayStr);
+      const isToday = dateStr === todayStr;
       const hasSnapshot = availableSnapshotDates.includes(dateStr);
 
       if (isToday) {
         if (hasSnapshot) {
-          dayElem.classList.add('today-has-snapshot');
+          dayElem.classList.add("today-has-snapshot");
           dayElem.title = `تاريخ اليوم (${dateStr}) - يوجد نسخة مسجلة في قاعدة البيانات ✅`;
-          const badge = document.createElement('span');
-          badge.className = 'snapshot-date-badge today-snapshot-badge';
-          badge.innerHTML = '●';
+          const badge = document.createElement("span");
+          badge.className = "snapshot-date-badge today-snapshot-badge";
+          badge.innerHTML = "●";
           dayElem.appendChild(badge);
         } else {
-          dayElem.classList.add('today-no-snapshot');
+          dayElem.classList.add("today-no-snapshot");
           dayElem.title = `تاريخ اليوم (${dateStr}) - لا توجد نسخة مسجلة بعد (جاهز للجلب ⚡)`;
-          const badge = document.createElement('span');
-          badge.className = 'snapshot-date-badge today-no-snapshot-badge';
-          badge.innerHTML = '⚡';
+          const badge = document.createElement("span");
+          badge.className = "snapshot-date-badge today-no-snapshot-badge";
+          badge.innerHTML = "⚡";
           dayElem.appendChild(badge);
         }
       } else if (hasSnapshot) {
-        dayElem.classList.add('has-snapshot-date');
+        dayElem.classList.add("has-snapshot-date");
         dayElem.title = `نسخة مسجلة في قاعدة البيانات (${dateStr})`;
-        const badge = document.createElement('span');
-        badge.className = 'snapshot-date-badge';
-        badge.innerHTML = '●';
+        const badge = document.createElement("span");
+        badge.className = "snapshot-date-badge";
+        badge.innerHTML = "●";
         dayElem.appendChild(badge);
       }
     },
     onChange: (dates, dateStr) => {
-      if (dateStr) localStorage.setItem('api_filter_date', dateStr);
-      else localStorage.removeItem('api_filter_date');
+      if (dateStr) {
+        localStorage.setItem("api_filter_date", dateStr);
+        document.cookie = `api_filter_date=${dateStr}; path=/; max-age=86400`;
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set("date", dateStr);
+        window.history.replaceState(null, "", newUrl);
+      } else {
+        localStorage.removeItem("api_filter_date");
+        document.cookie = `api_filter_date=; path=/; max-age=0`;
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.delete("date");
+        window.history.replaceState(null, "", newUrl);
+      }
       updateGeneratedURL();
-    }
+      fetchAiAnalysisHistory();
+    },
   });
 
-  const cachedDate = localStorage.getItem('api_filter_date');
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramDate = urlParams.get("date");
+  const cachedDate = paramDate || localStorage.getItem("api_filter_date");
   if (cachedDate && allowedSet.has(cachedDate)) {
-    _fpDateInstance.setDate(cachedDate);
+    _fpDateInstance.setDate(cachedDate, false);
   }
 }
 
@@ -294,9 +329,19 @@ window.addEventListener("DOMContentLoaded", () => {
   let initialProductsList = [];
   if (window.INITIAL_PRODUCTS_FROM_DB) {
     const data = window.INITIAL_PRODUCTS_FROM_DB;
-    const target = data.result?.data?.json ?? data.data?.json ?? data.json ?? data;
-    initialProductsList = target?.productsEntries || target?.results || (Array.isArray(target) ? target : []);
+    const target =
+      data.result?.data?.json ?? data.data?.json ?? data.json ?? data;
+    initialProductsList =
+      target?.productsEntries ||
+      target?.results ||
+      (Array.isArray(target) ? target : []);
   }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramDate = urlParams.get("date");
+  const userSavedDate = paramDate || localStorage.getItem("api_filter_date");
+
+  let loadedSnapshotDate = "";
 
   if (initialProductsList.length > 0) {
     const origin = window.INITIAL_PRODUCTS_FROM_DB.origin || "Winning";
@@ -310,18 +355,27 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (apiVersion) {
       let versionNum = apiVersion;
-      let dateStr = "";
-
-      const datePatternMatch = apiVersion.match(/^(.*)-(\d{4}-\d{2}-\d{2})$/) || apiVersion.match(/^(.*)(\d{4}-\d{2}-\d{2})$/);
+      const datePatternMatch =
+        apiVersion.match(/^(.*)-(\d{4}-\d{2}-\d{2})$/) ||
+        apiVersion.match(/^(.*)(\d{4}-\d{2}-\d{2})$/);
       if (datePatternMatch) {
         versionNum = datePatternMatch[1];
-        dateStr = datePatternMatch[2];
+        loadedSnapshotDate = datePatternMatch[2];
+      } else if (window.INITIAL_PRODUCTS_FROM_DB.created_at) {
+        loadedSnapshotDate = window.INITIAL_PRODUCTS_FROM_DB.created_at.slice(
+          0,
+          10,
+        );
       }
 
       document.getElementById("filter-version").value = versionNum;
-      if (dateStr) {
-        document.getElementById("filter-date")._flatpickr?.setDate(dateStr);
-      }
+    }
+
+    const activeDate = userSavedDate || loadedSnapshotDate;
+    if (activeDate) {
+      document
+        .getElementById("filter-date")
+        ?._flatpickr?.setDate(activeDate, false);
     }
 
     toggleApiMode();
@@ -330,10 +384,7 @@ window.addEventListener("DOMContentLoaded", () => {
       ? `آخر لقطة محفوظة (#${window.INITIAL_PRODUCTS_FROM_DB.snapshot_id} - ${window.INITIAL_PRODUCTS_FROM_DB.created_at.slice(0, 16)})`
       : "آخر لقطة محفوظة";
 
-    processLoadedData(
-      window.INITIAL_PRODUCTS_FROM_DB,
-      dateLabel,
-    );
+    processLoadedData(window.INITIAL_PRODUCTS_FROM_DB, dateLabel);
   }
 });
 
@@ -419,7 +470,10 @@ function getActiveFiltersObject() {
     (opt) => opt.value,
   );
   let country = "";
-  if (selectedCountryValues.length === 0 || selectedCountryValues.includes("all")) {
+  if (
+    selectedCountryValues.length === 0 ||
+    selectedCountryValues.includes("all")
+  ) {
     country = COUNTRIES_LIST.map((c) => c.code).join(";");
   } else {
     country = selectedCountryValues.join(";");
@@ -688,25 +742,48 @@ function processLoadedData(rawData, sourceInfo) {
     if (Array.isArray(rawData)) {
       if (rawData.length > 0) {
         const first = rawData[0];
-        if (first && typeof first === "object" && (first.productUrl !== undefined || first.product_url !== undefined || first.title !== undefined || first.product_title !== undefined)) {
+        if (
+          first &&
+          typeof first === "object" &&
+          (first.productUrl !== undefined ||
+            first.product_url !== undefined ||
+            first.title !== undefined ||
+            first.product_title !== undefined)
+        ) {
           // Direct list of products
           rawList = rawData;
         } else {
           // Wrapped array
           const base = rawData[0];
-          const targetData = base?.result?.data?.json ?? base?.data?.json ?? base?.json ?? base ?? {};
-          rawList = targetData.productsEntries || targetData.results || (Array.isArray(targetData) ? targetData : []);
+          const targetData =
+            base?.result?.data?.json ??
+            base?.data?.json ??
+            base?.json ??
+            base ??
+            {};
+          rawList =
+            targetData.productsEntries ||
+            targetData.results ||
+            (Array.isArray(targetData) ? targetData : []);
         }
       } else {
         rawList = [];
       }
     } else if (rawData && typeof rawData === "object") {
       // Single object wrapper or single product
-      const targetData = rawData.result?.data?.json ?? rawData.data?.json ?? rawData.json ?? rawData;
-      rawList = targetData.productsEntries || targetData.results || (Array.isArray(targetData) ? targetData : [targetData]);
+      const targetData =
+        rawData.result?.data?.json ??
+        rawData.data?.json ??
+        rawData.json ??
+        rawData;
+      rawList =
+        targetData.productsEntries ||
+        targetData.results ||
+        (Array.isArray(targetData) ? targetData : [targetData]);
     }
 
     allProducts = rawList.map((p) => {
+      const priceVal = p.price || p.actualPrice || p.price_1 || 0;
       return {
         title: p.title || p.product_title || "بدون عنوان",
         productUrl: p.productUrl || p.product_url || "",
@@ -719,11 +796,14 @@ function processLoadedData(rawData, sourceInfo) {
         ad_body: p.ad_body || "",
         ad_image_urls: p.ad_image_urls || "",
         ad_video_urls: p.ad_video_urls || "",
-        actualPrice: p.actualPrice || p.price_1 || 0,
+        actualPrice: priceVal,
+        price: priceVal,
         active_ads: p.active_ads !== undefined ? p.active_ads : true,
         api_version: p.api_version || "",
       };
     });
+
+    window.adaptedResult = { productsEntries: allProducts };
 
     // Display Insights charts from real database analytics
     fetchAndRenderAnalytics();
@@ -840,6 +920,102 @@ function populateCountryDropdownFilter(products) {
 // =========================================
 function filterProducts() {
   let results = [...allProducts];
+
+  // 0. AI Evaluation Filter (Show only products evaluated/selected by AI when AI analysis is active)
+  if (
+    activeAiFilterEvaluations &&
+    Array.isArray(activeAiFilterEvaluations) &&
+    activeAiFilterEvaluations.length > 0
+  ) {
+    const evalMap = new Set();
+    const verdictMap = new Map();
+
+    activeAiFilterEvaluations.forEach((ev) => {
+      const v = ev.verdict || "";
+      if (ev.url) {
+        evalMap.add(ev.url);
+        verdictMap.set(ev.url, v);
+      }
+      if (ev.id) {
+        evalMap.add(String(ev.id));
+        verdictMap.set(String(ev.id), v);
+      }
+      if (ev.title) {
+        const t = ev.title.trim().toLowerCase();
+        evalMap.add(t);
+        verdictMap.set(t, v);
+      }
+      if (ev.product_title) {
+        const t = ev.product_title.trim().toLowerCase();
+        evalMap.add(t);
+        verdictMap.set(t, v);
+      }
+    });
+
+    results = results.filter((p) => {
+      const pUrl = p.productUrl || p.product_url || "";
+      const pTitle = (p.title || "").trim().toLowerCase();
+      const pId = p.id ? String(p.id) : "";
+
+      const isEvaluated =
+        evalMap.has(pUrl) ||
+        evalMap.has(pTitle) ||
+        evalMap.has(pId) ||
+        Array.from(evalMap).some(
+          (key) =>
+            key.length > 5 && (pTitle.includes(key) || key.includes(pTitle)),
+        );
+
+      if (!isEvaluated) return false;
+
+      if (currentAiFilterVerdict && currentAiFilterVerdict !== "all") {
+        if (currentAiFilterVerdict === "budget_fit") {
+          const budgetFitSet = new Set();
+          activeAiFilterEvaluations.forEach((ev) => {
+            if (ev.is_budget_fit === true || ev.is_budget_fit === "true" || ev.is_budget_fit === 1) {
+              if (ev.url) budgetFitSet.add(ev.url);
+              if (ev.product_url) budgetFitSet.add(ev.product_url);
+              if (ev.id) budgetFitSet.add(String(ev.id));
+              if (ev.title) budgetFitSet.add(ev.title.trim().toLowerCase());
+              if (ev.product_title) budgetFitSet.add(ev.product_title.trim().toLowerCase());
+              if (ev.name) budgetFitSet.add(ev.name.trim().toLowerCase());
+            }
+          });
+
+          const targetCount = Number(document.getElementById("ai-cnt-budget")?.textContent) || 2;
+          if (budgetFitSet.size > targetCount || budgetFitSet.size === 0) {
+            budgetFitSet.clear();
+            const topBudgetEvals = [...activeAiFilterEvaluations]
+              .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
+              .slice(0, targetCount);
+
+            topBudgetEvals.forEach((ev) => {
+              if (ev.url) budgetFitSet.add(ev.url);
+              if (ev.product_url) budgetFitSet.add(ev.product_url);
+              if (ev.id) budgetFitSet.add(String(ev.id));
+              if (ev.title) budgetFitSet.add(ev.title.trim().toLowerCase());
+              if (ev.product_title) budgetFitSet.add(ev.product_title.trim().toLowerCase());
+              if (ev.name) budgetFitSet.add(ev.name.trim().toLowerCase());
+            });
+          }
+
+          return (
+            budgetFitSet.has(pUrl) ||
+            budgetFitSet.has(pTitle) ||
+            budgetFitSet.has(pId) ||
+            Array.from(budgetFitSet).some(
+              (key) =>
+                key.length > 5 && (pTitle.includes(key) || key.includes(pTitle))
+            )
+          );
+        }
+        const cardVerdict =
+          verdictMap.get(pUrl) || verdictMap.get(pTitle) || verdictMap.get(pId);
+        return cardVerdict === currentAiFilterVerdict;
+      }
+      return true;
+    });
+  }
 
   // 1. Text Search (Title, Ad Copy, Url)
   const query = document
@@ -1002,7 +1178,7 @@ function loadNextProductBatch() {
   renderedProductsCount = end;
 
   const batchHtml = batch.map((p) => buildProductCardHtml(p)).join("");
-  
+
   const sentinel = document.getElementById("infinite-scroll-sentinel");
   if (sentinel) {
     sentinel.insertAdjacentHTML("beforebegin", batchHtml);
@@ -1013,6 +1189,9 @@ function loadNextProductBatch() {
   initVideoJs(container);
   if (typeof ensureVideoThumbnails === "function") {
     ensureVideoThumbnails(container);
+  }
+  if (window.currentAiEvaluations && window.currentAiEvaluations.length > 0) {
+    applyAiBadgesToProductCards(window.currentAiEvaluations);
   }
 
   if (renderedProductsCount >= currentProductsList.length) {
@@ -1038,12 +1217,15 @@ function setupInfiniteScrollObserver() {
     infiniteScrollObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting && renderedProductsCount < currentProductsList.length) {
+          if (
+            entry.isIntersecting &&
+            renderedProductsCount < currentProductsList.length
+          ) {
             loadNextProductBatch();
           }
         });
       },
-      { rootMargin: "300px" }
+      { rootMargin: "300px" },
     );
     infiniteScrollObserver.observe(sentinel);
   }
@@ -1190,13 +1372,17 @@ function initBackToTop() {
   btn.innerHTML = "⬆️";
   document.body.appendChild(btn);
 
-  window.addEventListener("scroll", () => {
-    if (window.scrollY > 300) {
-      btn.classList.add("visible");
-    } else {
-      btn.classList.remove("visible");
-    }
-  }, { passive: true });
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (window.scrollY > 300) {
+        btn.classList.add("visible");
+      } else {
+        btn.classList.remove("visible");
+      }
+    },
+    { passive: true },
+  );
 
   btn.addEventListener("click", () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1230,16 +1416,22 @@ function initVideoJs(scope) {
     el.dataset.vjsInited = "1";
     try {
       if (typeof videojs === "function") {
-        const player = videojs(el, { fluid: true, controls: true, preload: "none" });
-        player.on('play', () => {
+        const player = videojs(el, {
+          fluid: true,
+          controls: true,
+          preload: "none",
+        });
+        player.on("play", () => {
           const all = videojs.getPlayers();
-          Object.keys(all).forEach(id => {
+          Object.keys(all).forEach((id) => {
             const p = all[id];
             if (p !== player && !p.paused()) p.pause();
           });
         });
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   });
 
   (scope || document)
@@ -1270,7 +1462,8 @@ function loadVideoPlaceholder(ph) {
   let mountedTarget = null;
 
   const ensureVideoMounted = () => {
-    if (activeVid && mountedTarget) return { vid: activeVid, player: activePlayer, container: mountedTarget };
+    if (activeVid && mountedTarget)
+      return { vid: activeVid, player: activePlayer, container: mountedTarget };
 
     const src = ph.getAttribute("data-vid-src");
     const poster = ph.getAttribute("data-vid-poster") || "";
@@ -1290,7 +1483,8 @@ function loadVideoPlaceholder(ph) {
 
     const doPlay = () => {
       if (player && typeof player.play === "function") {
-        if (typeof player.addClass === "function") player.addClass("vjs-has-started");
+        if (typeof player.addClass === "function")
+          player.addClass("vjs-has-started");
         if (isMuted) {
           player.muted(true);
         } else {
@@ -1334,7 +1528,7 @@ function loadVideoPlaceholder(ph) {
 
   // Hover handlers on product card (plays with sound on hover, pauses on mouseleave)
   const cardContainer = ph.closest(".product-card") || ph;
-  
+
   cardContainer.addEventListener("mouseenter", function () {
     playVideo(false);
   });
@@ -1345,43 +1539,50 @@ function loadVideoPlaceholder(ph) {
 }
 
 function createVidEl(id, src, posterUrl) {
-  const vid = document.createElement('video');
-  vid.id = id ? id.replace('vp-', 'vjs-') : '';
-  vid.className = 'video-js';
+  const vid = document.createElement("video");
+  vid.id = id ? id.replace("vp-", "vjs-") : "";
+  vid.className = "video-js";
   vid.controls = true;
   vid.playsInline = true;
-  vid.preload = 'auto';
+  vid.preload = "auto";
   if (posterUrl) vid.poster = posterUrl;
-  const source = document.createElement('source');
+  const source = document.createElement("source");
   source.src = src;
-  source.type = 'video/mp4';
+  source.type = "video/mp4";
   vid.appendChild(source);
   return vid;
 }
 
 function initVjs(vid, shouldAutoplay = false) {
   try {
-    if (typeof videojs === 'function' && !vid.dataset.vjsInited) {
-      vid.dataset.vjsInited = '1';
-      const player = videojs(vid, { 
-        fluid: true, 
-        controls: true, 
-        preload: 'auto',
+    if (typeof videojs === "function" && !vid.dataset.vjsInited) {
+      vid.dataset.vjsInited = "1";
+      const player = videojs(vid, {
+        fluid: true,
+        controls: true,
+        preload: "auto",
         autoplay: shouldAutoplay ? true : false,
-        bigPlayButton: false
+        bigPlayButton: false,
       });
-      player.on('play', () => {
+      player.on("play", () => {
         const all = videojs.getPlayers();
-        Object.keys(all).forEach(id => {
+        Object.keys(all).forEach((id) => {
           const p = all[id];
-          if (p !== player && p && typeof p.pause === 'function' && !p.paused()) {
+          if (
+            p !== player &&
+            p &&
+            typeof p.pause === "function" &&
+            !p.paused()
+          ) {
             p.pause();
           }
         });
       });
       return player;
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    /* ignore */
+  }
 }
 
 // =========================================
@@ -2163,7 +2364,7 @@ function updateDetailsRawDataView() {
   if (!product) return;
   const rawDataContainer = document.getElementById("details-raw-data-list");
   if (!rawDataContainer) return;
-  
+
   let listHtml = "";
   for (const [key, value] of Object.entries(product)) {
     if (value !== null && value !== undefined && value !== "") {
@@ -2177,7 +2378,10 @@ function updateDetailsRawDataView() {
       `;
     }
   }
-  if (currentProductDetailsWithAnalysis && currentProductDetailsWithAnalysis.computed_metrics) {
+  if (
+    currentProductDetailsWithAnalysis &&
+    currentProductDetailsWithAnalysis.computed_metrics
+  ) {
     for (const [key, value] of Object.entries(
       currentProductDetailsWithAnalysis.computed_metrics,
     )) {
@@ -2200,42 +2404,48 @@ function updateDetailsRawDataView() {
 
 async function handleDetailsPriceChange(val) {
   if (!currentProductForDetails) return;
-  
+
   currentProductForDetails.actualPrice = val;
   currentProductForDetails.price_1 = val;
   if (currentProductDetailsWithAnalysis) {
     currentProductDetailsWithAnalysis.actualPrice = val;
     currentProductDetailsWithAnalysis.price_1 = val;
   }
-  
-  if (typeof allProducts !== 'undefined') {
-    const pMain = allProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+
+  if (typeof allProducts !== "undefined") {
+    const pMain = allProducts.find(
+      (p) => p.productUrl === currentProductForDetails.productUrl,
+    );
     if (pMain) {
       pMain.actualPrice = val;
       pMain.price_1 = val;
     }
   }
-  if (typeof currentFilteredProducts !== 'undefined') {
-    const pFiltered = currentFilteredProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+  if (typeof currentFilteredProducts !== "undefined") {
+    const pFiltered = currentFilteredProducts.find(
+      (p) => p.productUrl === currentProductForDetails.productUrl,
+    );
     if (pFiltered) {
       pFiltered.actualPrice = val;
       pFiltered.price_1 = val;
     }
   }
-  
-  const pSaved = savedProducts.find(p => p.productUrl === currentProductForDetails.productUrl);
+
+  const pSaved = savedProducts.find(
+    (p) => p.productUrl === currentProductForDetails.productUrl,
+  );
   if (pSaved) {
     pSaved.actualPrice = val;
     pSaved.price_1 = val;
-    
+
     try {
       const res = await fetch("/api/products/saved/price", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           product_url: pSaved.productUrl,
-          price: val
-        })
+          price: val,
+        }),
       });
       if (res.ok) {
         showToast("✅ تم تحديث سعر المنتج في قاعدة البيانات", "success");
@@ -2244,9 +2454,12 @@ async function handleDetailsPriceChange(val) {
       console.error("Failed to save price update to database", e);
     }
   } else {
-    showToast("⚠️ السعر محدث مؤقتاً. لحفظه في قاعدة البيانات بشكل دائم، يرجى حفظ المنتج أولاً.", "info");
+    showToast(
+      "⚠️ السعر محدث مؤقتاً. لحفظه في قاعدة البيانات بشكل دائم، يرجى حفظ المنتج أولاً.",
+      "info",
+    );
   }
-  
+
   updateDetailsRawDataView();
 }
 
@@ -2263,7 +2476,12 @@ function initBackToTop() {
   const mainContent = document.querySelector(".main-content");
 
   const toggleBtn = () => {
-    const windowScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const windowScroll =
+      window.scrollY ||
+      window.pageYOffset ||
+      document.documentElement.scrollTop ||
+      document.body.scrollTop ||
+      0;
     const mainScroll = mainContent ? mainContent.scrollTop : 0;
     const currentScroll = Math.max(windowScroll, mainScroll);
 
@@ -2296,4 +2514,1433 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", initBackToTop);
 } else {
   initBackToTop();
+}
+
+/* ════════════════════════════════════════════════════════
+   AI PRODUCT ANALYST SYSTEM (PHASE 1 LOGIC)
+   ════════════════════════════════════════════════════════ */
+
+window.currentAiAnalysis = null;
+window.currentAiEvaluations = [];
+
+function openAiAnalysisModal() {
+  const modal = document.getElementById("ai-analysis-modal");
+  if (modal) modal.style.display = "flex";
+  handleAiProviderChangeInModal();
+}
+
+async function handleAiProviderChangeInModal() {
+  const providerSelect = document.getElementById("ai-provider-select");
+  const modelSelect = document.getElementById("ai-model-select");
+  if (!modelSelect) return;
+
+  const provider = providerSelect ? providerSelect.value : "auto";
+  modelSelect.innerHTML =
+    '<option value="">✨ الموديل الافتراضي للمورد</option>';
+
+  if (provider === "internal") {
+    modelSelect.innerHTML =
+      '<option value="internal-engine">⚡ المحرك الداخلي الفائق</option>';
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/settings/ai_providers_config");
+    if (res.ok) {
+      const data = await res.json();
+      const config =
+        data.value && typeof data.value === "string"
+          ? JSON.parse(data.value)
+          : data.value || null;
+
+      let targetProvider = provider;
+      if (provider === "auto" && config && config.active_provider) {
+        targetProvider = config.active_provider;
+      }
+
+      if (config && config.providers && config.providers[targetProvider]) {
+        const pData = config.providers[targetProvider];
+        const models = pData.models || [];
+        const activeModel = pData.active_model || "";
+
+        let opts = models
+          .map(
+            (m) =>
+              `<option value="${m}" ${m === activeModel ? "selected" : ""}>${m} ${m === activeModel ? "(الافتراضي 🌟)" : ""}</option>`,
+          )
+          .join("");
+        if (opts) {
+          modelSelect.innerHTML =
+            '<option value="">✨ الموديل الافتراضي للمورد</option>' + opts;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Error loading models for AI modal:", e);
+  }
+}
+
+function closeAiAnalysisModal() {
+  const modal = document.getElementById("ai-analysis-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function openAiHistoryDrawer() {
+  const drawer = document.getElementById("ai-history-drawer");
+  if (drawer) {
+    drawer.style.display = "flex";
+    fetchAiAnalysisHistory();
+  }
+}
+
+function closeAiHistoryDrawer() {
+  const drawer = document.getElementById("ai-history-drawer");
+  if (drawer) drawer.style.display = "none";
+}
+
+function openAiFullReportModal() {
+  const modal = document.getElementById("ai-full-report-modal");
+  if (modal) {
+    renderAiFullReportModalContent();
+    modal.style.display = "flex";
+  }
+}
+
+function closeAiFullReportModal() {
+  const modal = document.getElementById("ai-full-report-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function openAiProductTextModal(identifier) {
+  const modal = document.getElementById("ai-product-text-modal");
+  if (!modal) return;
+
+  let item = null;
+  if (Array.isArray(window.currentAiEvaluations)) {
+    item = window.currentAiEvaluations.find(
+      (ev) =>
+        ev.url === identifier ||
+        ev.id === identifier ||
+        ev.title === identifier ||
+        ev.title.trim() === identifier,
+    );
+  }
+
+  if (
+    !item &&
+    window.currentAiAnalysis &&
+    window.currentAiAnalysis.summary &&
+    window.currentAiAnalysis.summary.top_winner
+  ) {
+    if (window.currentAiAnalysis.summary.top_winner.title === identifier) {
+      item = window.currentAiAnalysis.summary.top_winner;
+    }
+  }
+
+  if (!item) {
+    alert("⚠️ تعذر العثور على بيانات التحليل لهذا المنتج.");
+    return;
+  }
+
+  renderAiProductTextModalContent(item);
+  modal.style.display = "flex";
+}
+
+function closeAiProductTextModal() {
+  const modal = document.getElementById("ai-product-text-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function renderAiProductTextModalContent(item) {
+  const container = document.getElementById("ai-text-modal-body");
+  if (!container) return;
+
+  const fin = item.financials || {};
+  const brk = item.breakdown || {};
+  const nar = item.narrative_analysis || {};
+
+  let badgeColor = "#10b981";
+  if (item.verdict === "promising") badgeColor = "#f59e0b";
+  if (item.verdict === "risk") badgeColor = "#ef4444";
+
+  const summaryText =
+    nar.summary ||
+    (item.reasons ? item.reasons.join(" ") : "تم تقييم المنتج بنجاح.");
+  const marketFitText = nar.market_fit || "يتناسب مع الطلب الحالي في السوق.";
+  const logisticsAdviceText =
+    nar.logistics_advice || "تكلفة الشحن والتوصيل احتسبت وفق متوسط السوق.";
+  const launchStrategyText =
+    nar.launch_strategy ||
+    item.recommendation ||
+    "ينصح باختباره بميزانية مناسبة.";
+
+  container.innerHTML = `
+    <!-- Top Header Overview -->
+    <div style="display: flex; gap: 1rem; background: var(--bg-input); padding: 1.2rem; border-radius: var(--radius-md); margin-bottom: 1.25rem; align-items: center;">
+      <img src="${item.image_url || "/placeholder.webp"}" style="width: 90px; height: 90px; border-radius: var(--radius-sm); object-fit: cover; border: 2px solid var(--color-primary);" onerror="this.src='https://via.placeholder.com/90?text=Product'" />
+      <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+          <span style="background: ${badgeColor}; color: white; padding: 4px 12px; border-radius: 20px; font-weight: 800; font-size: 0.85rem;">
+            ${item.verdict_label || "تقييم المنتج"} (${item.score}/100)
+          </span>
+        </div>
+        <h3 style="font-size: 1.1rem; font-weight: 800; margin: 0 0 6px 0; color: var(--color-text-main);">${item.title}</h3>
+        <a href="${item.url || "#"}" target="_blank" style="font-size: 0.8rem; color: var(--color-primary); text-decoration: underline;">🔗 رابط المنتج المصدر</a>
+      </div>
+    </div>
+
+    <!-- Narrative & Text Analysis Section -->
+    <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+      <div style="background: rgba(99, 102, 241, 0.06); padding: 1rem; border-radius: var(--radius-sm); border-right: 4px solid var(--color-primary);">
+        <h4 style="margin: 0 0 6px 0; font-size: 0.95rem; font-weight: 800; color: var(--color-primary); display: flex; align-items: center; gap: 6px;">
+          🎯 الملخص والتشخيص التجاري للذكاء الاصطناعي
+        </h4>
+        <p style="margin: 0; color: var(--color-text-main); font-size: 0.88rem;">${summaryText}</p>
+      </div>
+
+      <div style="background: rgba(16, 185, 129, 0.06); padding: 1rem; border-radius: var(--radius-sm); border-right: 4px solid #10b981;">
+        <h4 style="margin: 0 0 6px 0; font-size: 0.95rem; font-weight: 800; color: #10b981; display: flex; align-items: center; gap: 6px;">
+          ☀️ ملاءمة الموسم وحجم الطلب إعلانياً
+        </h4>
+        <p style="margin: 0; color: var(--color-text-main); font-size: 0.88rem;">${marketFitText}</p>
+      </div>
+
+      <div style="background: rgba(245, 158, 11, 0.06); padding: 1rem; border-radius: var(--radius-sm); border-right: 4px solid #f59e0b;">
+        <h4 style="margin: 0 0 6px 0; font-size: 0.95rem; font-weight: 800; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
+          🚚 نصائح اللوجستيك والتوصيل في المغرب (COD)
+        </h4>
+        <p style="margin: 0; color: var(--color-text-main); font-size: 0.88rem;">${logisticsAdviceText}</p>
+      </div>
+
+      <div style="background: rgba(139, 92, 246, 0.08); padding: 1rem; border-radius: var(--radius-sm); border-right: 4px solid #8b5cf6;">
+        <h4 style="margin: 0 0 6px 0; font-size: 0.95rem; font-weight: 800; color: #8b5cf6; display: flex; align-items: center; gap: 6px;">
+          🚀 خطة الإطلاق والتسويق المقترحة
+        </h4>
+        <p style="margin: 0; color: var(--color-text-main); font-size: 0.88rem; font-weight: 600;">${launchStrategyText}</p>
+      </div>
+    </div>
+
+    <!-- Financial Breakdown Table -->
+    <h4 style="font-size: 1rem; font-weight: 800; margin: 1.25rem 0 0.5rem 0; color: var(--color-text-main);">
+      💰 جدول دراسة الجدوى المالية والحسابات التقديرية (DH)
+    </h4>
+    <table class="ai-matrix-table" style="margin-bottom: 1.5rem;">
+      <thead>
+        <tr>
+          <th>عنصر الحساب المالي</th>
+          <th>التكلفة التقديرية (DH)</th>
+          <th>ملاحظات الذكاء الاصطناعي</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>سعر شراء الجملة التقديري</td>
+          <td style="font-weight: 700;">${fin.c_wholesale || 0} DH</td>
+          <td>تكلفة توريد القطعة واحدة</td>
+        </tr>
+        <tr>
+          <td>تكلفة الشحن والتوصيل الأساسية</td>
+          <td style="font-weight: 700;">${fin.c_shipping || 0} DH</td>
+          <td>تعريفة التوصيل العادية</td>
+        </tr>
+        <tr>
+          <td>التكلفة الحقيقية للتوصيل (مع 20% مرجوعات)</td>
+          <td style="font-weight: 700; color: #f59e0b;">${fin.real_shipping_with_returns || 0} DH</td>
+          <td>شاملة تعويض الطلبات الملغاة والمرجعة</td>
+        </tr>
+        <tr>
+          <td>تكلفة الاستحواذ الإعلاني التقديرية (CPA)</td>
+          <td style="font-weight: 700; color: var(--color-primary);">${fin.estimated_cpa || 0} DH</td>
+          <td>تكلفة الحصول على طلب واحد عبر الإعلانات</td>
+        </tr>
+        <tr>
+          <td>السعر المستهدف لبيع المنتج للزبون</td>
+          <td style="font-weight: 700; color: var(--color-primary); font-size: 1.05rem;">${fin.target_price || 0} DH</td>
+          <td>سعر البيع المناسب في السوق المغربي</td>
+        </tr>
+        <tr style="background: rgba(16, 185, 129, 0.08);">
+          <td style="font-weight: 800; color: #10b981;">صافي الربح التقديري للقطعة الواحدة</td>
+          <td style="font-weight: 800; color: #10b981; font-size: 1.1rem;">+${fin.net_profit || 0} DH</td>
+          <td style="font-weight: 800; color: #10b981;">هامش صافي (${fin.net_margin_pct || 0}%)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Scoring Points Matrix Table -->
+    <h4 style="font-size: 1rem; font-weight: 800; margin: 1.25rem 0 0.5rem 0; color: var(--color-text-main);">
+      📊 جدول تفكيك النقاط حسب معايير التقييم (نظام 100 نقطة)
+    </h4>
+    <table class="ai-matrix-table">
+      <thead>
+        <tr>
+          <th>المعيار</th>
+          <th>الرصيد الأقصى</th>
+          <th>النقاط الممنوحة</th>
+          <th>مستوى الأداء</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>حجم الطلب والحركية الإعلانية</td>
+          <td>40 نقطة</td>
+          <td style="font-weight: 700;">${brk.demand_score || 0} / 40</td>
+          <td>${brk.demand_score >= 30 ? "🟢 مرتفع جداً" : "🟡 متوسط"}</td>
+        </tr>
+        <tr>
+          <td>ملاءمة الموسم والسوق المغربي</td>
+          <td>30 نقطة</td>
+          <td style="font-weight: 700;">${brk.season_score || 0} / 30</td>
+          <td>${brk.season_score >= 20 ? "🟢 ممتاز" : "🟡 عادي"}</td>
+        </tr>
+        <tr>
+          <td>سهولة اللوجستيك وانخفاض المخاطر</td>
+          <td>20 نقطة</td>
+          <td style="font-weight: 700;">${brk.logistics_score || 0} / 20</td>
+          <td>${brk.logistics_score >= 15 ? "🟢 سهل ومريح" : "🔴 يتطلب حذر"}</td>
+        </tr>
+        <tr>
+          <td>الميزانية وهامش العائد المالي</td>
+          <td>10 نقاط</td>
+          <td style="font-weight: 700;">${brk.budget_score || 0} / 10</td>
+          <td>${brk.budget_score >= 7 ? "🟢 ممتاز" : "🟡 مقبول"}</td>
+        </tr>
+        <tr style="background: var(--bg-input); font-weight: 800;">
+          <td>المجموع الكلي النهائي</td>
+          <td>100 نقطة</td>
+          <td style="color: var(--color-primary); font-size: 1.1rem;">${item.score} / 100</td>
+          <td style="color: ${badgeColor};">${item.verdict_label}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+
+async function handleRunAiAnalysis(event) {
+  if (event) event.preventDefault();
+
+  const submitBtn = document.getElementById("ai-submit-btn");
+  const origBtnText = submitBtn ? submitBtn.innerHTML : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "⏳ جاري التقييم بالذكاء الاصطناعي...";
+  }
+
+  try {
+    const provider =
+      document.getElementById("ai-provider-select")?.value || "auto";
+    const model = document.getElementById("ai-model-select")?.value || "";
+    const mode =
+      document.getElementById("ai-mode-select")?.value || "comprehensive";
+    const budget = parseFloat(
+      document.getElementById("ai-budget-input")?.value || 5000,
+    );
+    const season = document.getElementById("ai-season-select")?.value || "auto";
+    const cShipping = parseFloat(
+      document.getElementById("ai-shipping-input")?.value || 35,
+    );
+
+    let productsSource = [];
+    if (
+      typeof filteredProducts !== "undefined" &&
+      Array.isArray(filteredProducts) &&
+      filteredProducts.length > 0
+    ) {
+      productsSource = filteredProducts;
+    } else if (
+      typeof allProducts !== "undefined" &&
+      Array.isArray(allProducts) &&
+      allProducts.length > 0
+    ) {
+      productsSource = allProducts;
+    } else if (
+      window.adaptedResult &&
+      Array.isArray(window.adaptedResult.productsEntries) &&
+      window.adaptedResult.productsEntries.length > 0
+    ) {
+      productsSource = window.adaptedResult.productsEntries;
+    } else if (window.INITIAL_PRODUCTS_FROM_DB) {
+      const dbData = window.INITIAL_PRODUCTS_FROM_DB;
+      const target =
+        dbData.result?.data?.json ?? dbData.data?.json ?? dbData.json ?? dbData;
+      productsSource =
+        target?.productsEntries ||
+        target?.results ||
+        (Array.isArray(target) ? target : []);
+    }
+
+    const products = productsSource.map((p, idx) => {
+      return {
+        title: p.title || p.product_title || p.name || `منتج #${idx + 1}`,
+        price: Number(p.price || p.actualPrice || p.price_1 || 250),
+        selling_price: Number(p.price || p.actualPrice || p.price_1 || 250),
+        ads_count: Number(p.ads_count || p.active_ads || 1),
+        active_ads: Number(p.ads_count || p.active_ads || 1),
+        ad_video_urls: p.ad_video_urls || p.video_url || "",
+        video_url: p.ad_video_urls || p.video_url || "",
+        ad_body: p.ad_body || p.description || "",
+        ad_title: p.ad_title || "",
+        country: p.country || "MA",
+        product_url: p.productUrl || p.product_url || "",
+      };
+    });
+
+    const payload = {
+      provider: provider,
+      model: model,
+      analysis_mode: mode,
+      ad_budget_total: budget,
+      season: season,
+      c_shipping_default: cShipping,
+      products: products,
+      snapshot_date: document.getElementById("filter-date")?.value?.trim() || localStorage.getItem("api_filter_date") || "",
+    };
+
+    const res = await fetch("/api/ai/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      throw new Error(
+        `استجابة الخادم غير صالحة (${res.status} ${res.statusText})`,
+      );
+    }
+
+    if (!res.ok || !data || data.success === false) {
+      const errMsg =
+        data?.messages?.error ||
+        data?.message ||
+        data?.error ||
+        `خطأ في الخادم (${res.status})`;
+      alert("⚠️ فشل إجراء التقييم: " + errMsg);
+      return;
+    }
+
+    window.currentAiAnalysis = data;
+    window.currentAiEvaluations = data.evaluations || [];
+    activeAiFilterEvaluations = data.evaluations || [];
+    currentAiFilterVerdict = "all";
+
+    renderAiAnalysisDashboard(data);
+    closeAiAnalysisModal();
+    filterProducts();
+    fetchAiAnalysisHistory();
+
+    if (typeof showNotification === "function") {
+      const msg = data.is_cached
+        ? `💾 تم جلب التحليل المحفوظ مسبقاً (${data.ai_powered_by || ""})`
+        : "✨ تم تحليل المنتجات بنجاح وحفظ النتائج في الأرشيف!";
+      showNotification(msg);
+    }
+  } catch (err) {
+    console.error("AI Analysis error:", err);
+    alert("⚠️ تعذر الاتصال بخادم التحليل: " + (err.message || err));
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origBtnText;
+    }
+  }
+}
+
+function renderAiAnalysisDashboard(data) {
+  const dashCard = document.getElementById("ai-stats-dashboard");
+  if (!dashCard) return;
+
+  dashCard.style.display = "block";
+
+  const summary = data.summary || {};
+  const evaluations = data.evaluations || [];
+  document.getElementById("ai-cnt-all").textContent =
+    summary.total_analyzed || 0;
+  document.getElementById("ai-cnt-winning").textContent =
+    summary.winners_count || 0;
+  document.getElementById("ai-cnt-promising").textContent =
+    summary.promising_count || 0;
+  document.getElementById("ai-cnt-risk").textContent = summary.risk_count || 0;
+
+  const budgetFitCount =
+    summary.budget_recommended_count ||
+    evaluations.filter((e) => e.is_budget_fit).length ||
+    0;
+  const budgetCntEl = document.getElementById("ai-cnt-budget");
+  if (budgetCntEl) budgetCntEl.textContent = budgetFitCount;
+
+  const adviceBox = document.getElementById("ai-budget-advice-box");
+  const adviceText = document.getElementById("ai-budget-advice-text");
+  if (summary.budget_allocation_summary && adviceBox && adviceText) {
+    adviceBox.style.display = "block";
+    adviceText.textContent = summary.budget_allocation_summary;
+  } else if (adviceBox) {
+    adviceBox.style.display = "none";
+  }
+
+  document.getElementById("ai-dash-title").textContent =
+    `لوحة تحليلات الذكاء الاصطناعي - ${data.title || ""}`;
+  document.getElementById("ai-dash-subtitle").textContent =
+    `الموسم المعايَن: ${summary.detected_season || "عام"} | متوسط النقاط: ${summary.avg_score || 0}/100`;
+
+  const spotlightContainer = document.getElementById("ai-winner-spotlight");
+  const topWinner = summary.top_winner;
+
+  if (topWinner && spotlightContainer) {
+    spotlightContainer.innerHTML = `
+      <div class="ai-winner-spotlight-box">
+        <img src="${topWinner.image_url || "/placeholder.webp"}" class="ai-spotlight-img" alt="Top Winner" onerror="this.src='https://via.placeholder.com/100?text=Winner'" />
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">🏆 المنتج الأول الرابح (النقاط: ${topWinner.score}/100)</span>
+            <button class="btn btn-primary" style="padding: 4px 12px; font-size: 0.78rem; font-weight: 700; background: linear-gradient(135deg, #10b981, #059669); border: none;" onclick="openAiProductTextModal('${topWinner.title.replace(/'/g, "\\'")}')">
+              📖 قراءة التحليل المفصل والنص التشخيصي
+            </button>
+          </div>
+          <h4 style="font-size: 1rem; font-weight: 800; margin: 0 0 6px 0; color: var(--color-text-main);">${topWinner.title}</h4>
+          <div style="display: flex; gap: 15px; font-size: 0.82rem; color: var(--color-text-muted);">
+            <span>🏷️ السعر المستهدف المقترح: <strong style="color: var(--color-primary); font-weight: 700;">${topWinner.target_price} DH</strong></span>
+            <span>💰 هامش الربح الصافي: <strong style="color: #10b981; font-weight: 700;">+${topWinner.net_margin_pct}%</strong></span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+function applyAiBadgesToProductCards(evaluations) {
+  if (!Array.isArray(evaluations)) return;
+
+  const evalMap = {};
+  evaluations.forEach((ev) => {
+    if (ev.url) evalMap[ev.url] = ev;
+    if (ev.id) evalMap[ev.id] = ev;
+    if (ev.title) evalMap[ev.title.trim()] = ev;
+  });
+
+  const cards = document.querySelectorAll(".product-card, .index-product-card");
+  cards.forEach((card) => {
+    const existingBadge = card.querySelector(".ai-product-badge");
+    if (existingBadge) existingBadge.remove();
+
+    const existingBtn = card.querySelector(".ai-card-read-btn");
+    if (existingBtn) existingBtn.remove();
+
+    const titleEl = card.querySelector(".product-title, h3, h4");
+    const linkEl = card.querySelector("a[href*='http'], [data-product-url]");
+
+    const cardTitle = titleEl ? titleEl.textContent.trim() : "";
+    const cardUrl = linkEl
+      ? linkEl.href || linkEl.getAttribute("data-product-url")
+      : "";
+    const cardId = card.id ? card.id.replace("product-", "") : "";
+
+    const ev = evalMap[cardUrl] || evalMap[cardId] || evalMap[cardTitle];
+
+    if (ev) {
+      card.setAttribute("data-ai-verdict", ev.verdict);
+      card.setAttribute("data-ai-score", ev.score);
+
+      const badge = document.createElement("div");
+      badge.className = `ai-product-badge badge-${ev.verdict}`;
+
+      let icon = "🟢";
+      if (ev.verdict === "promising") icon = "🟡";
+      if (ev.verdict === "risk") icon = "🔴";
+
+      const budgetTag = ev.is_budget_fit
+        ? `<span style="background: #6366f1; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-right: 4px;" title="${ev.budget_allocation_note || "موصى به للميزانية"}">💰 خيار الميزانية</span>`
+        : "";
+
+      badge.innerHTML = `<span>${icon}</span> <span>${ev.score}/100</span> ${budgetTag}`;
+      badge.title = `${ev.verdict_label} - نقاط الملاءمة ${ev.score}/100`;
+
+      const mediaContainer = card.querySelector(".product-media") || card;
+      mediaContainer.style.position = "relative";
+      mediaContainer.appendChild(badge);
+
+      // Append "📖 قراءة التحليل" button at bottom of card
+      const readBtn = document.createElement("button");
+      readBtn.className = "ai-card-read-btn btn btn-secondary";
+      readBtn.style.cssText =
+        "width: 100%; margin-top: 8px; font-size: 0.8rem; font-weight: 700; border-color: var(--color-primary); color: var(--color-primary); display: flex; align-items: center; justify-content: center; gap: 6px;";
+      readBtn.innerHTML = `<span>📖</span> <span>قراءة التحليل بالنص والجداول</span>`;
+      readBtn.onclick = (e) => {
+        e.stopPropagation();
+        openAiProductTextModal(ev.url || ev.id || ev.title);
+      };
+
+      const cardBody =
+        card.querySelector(".product-info, .card-content") || card;
+      cardBody.appendChild(readBtn);
+    }
+  });
+}
+
+function filterProductsByVerdict(verdict) {
+  currentAiFilterVerdict = verdict;
+
+  const pills = document.querySelectorAll(".ai-pill");
+  pills.forEach((p) => p.classList.remove("active"));
+
+  const targetPill = document.getElementById(`pill-filter-${verdict}`);
+  if (targetPill) targetPill.classList.add("active");
+
+  filterProducts();
+}
+
+function resetAiFilter() {
+  activeAiFilterEvaluations = null;
+  currentAiFilterVerdict = "all";
+
+  const pills = document.querySelectorAll(".ai-pill");
+  pills.forEach((p) => p.classList.remove("active"));
+  const pillAll = document.getElementById("pill-filter-all");
+  if (pillAll) pillAll.classList.add("active");
+
+  const dashCard = document.getElementById("ai-stats-dashboard");
+  if (dashCard) dashCard.style.display = "none";
+
+  filterProducts();
+  if (typeof showToast === "function") {
+    showToast(
+      "تم إلغاء تصفية الذكاء الاصطناعي وإعادة عرض كل المنتجات 🔄",
+      "info",
+    );
+  }
+}
+
+async function fetchAiAnalysisHistory(ignoreDateFilter = false) {
+  const container = document.getElementById("ai-history-list");
+  if (!container) return;
+
+  container.innerHTML = `<div style="text-align: center; color: var(--color-text-muted); padding: 2rem 0;">⏳ جاري جلب التحليلات المحفوظة...</div>`;
+
+  try {
+    const filterDateInput = ignoreDateFilter
+      ? ""
+      : (document.getElementById("filter-date")?.value?.trim() || localStorage.getItem("api_filter_date") || "");
+    const filterDate = (filterDateInput && /^\d{4}-\d{2}-\d{2}/.test(filterDateInput)) ? filterDateInput.substring(0, 10) : "";
+
+    const fetchUrl = filterDate ? `/api/ai/history?date=${encodeURIComponent(filterDate)}` : "/api/ai/history";
+    const res = await fetch(fetchUrl);
+    const data = await res.json();
+
+    if (
+      !data.success ||
+      !Array.isArray(data.history) ||
+      data.history.length === 0
+    ) {
+      if (filterDate && !ignoreDateFilter) {
+        container.innerHTML = `
+          <div style="text-align: center; color: var(--color-text-muted); padding: 1.5rem 1rem; background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 8px;">
+            <div style="font-size: 0.95rem; font-weight: 700; margin-bottom: 8px;">📅 لا توجد تحليلات محفوظة بتاريخ <strong>${filterDate}</strong></div>
+            <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 12px;">لم يتم إجراء أي تحليل ذكاء اصطناعي في هذا اليوم تحديداً.</div>
+            <button class="btn btn-secondary" style="font-size: 0.78rem; font-weight: 700; padding: 4px 12px;" onclick="fetchAiAnalysisHistory(true)">
+              🌐 عرض جميع التحليلات المحفوظة
+            </button>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `<div style="text-align: center; color: var(--color-text-muted); padding: 2rem 0;">لا توجد تحليلات محفوظة بعد. قم بإجراء أول تحليل الآن!</div>`;
+      }
+      return;
+    }
+
+    container.innerHTML = "";
+
+    if (filterDate && !ignoreDateFilter) {
+      const headerNote = document.createElement("div");
+      headerNote.style.cssText = "font-size: 0.8rem; color: #10b981; background: rgba(16,185,129,0.1); padding: 8px 12px; border-radius: 6px; font-weight: 700; margin-bottom: 12px; border: 1px solid rgba(16,185,129,0.3); display: flex; justify-content: space-between; align-items: center;";
+      headerNote.innerHTML = `
+        <span>📅 تصفية حسب التاريخ المختار: <strong>${filterDate}</strong> (${data.history.length})</span>
+        <button onclick="fetchAiAnalysisHistory(true)" style="background: none; border: none; color: #10b981; cursor: pointer; text-decoration: underline; font-size: 0.75rem; font-weight: 700;">عرض الكل</button>
+      `;
+      container.appendChild(headerNote);
+    }
+
+    data.history.forEach((item) => {
+      const summary = item.summary || {};
+      const aiPoweredBy = item.ai_powered_by || summary.ai_powered_by || "Internal Engine";
+      const snapshotDate = item.snapshot_date || summary.snapshot_date || "";
+      const el = document.createElement("div");
+      el.className = "ai-history-item";
+      el.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+          <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--color-text-main);">${item.title}</h4>
+          <button style="background: none; border: none; font-size: 0.85rem; cursor: pointer; color: #ef4444;" onclick="deleteAiAnalysisHistoryItem(${item.id}, event)" title="حذف التحليل">&times;</button>
+        </div>
+        <div style="display: flex; gap: 10px; font-size: 0.78rem; color: var(--color-text-muted); margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
+          <span>🕐 ${item.created_at || ""}</span>
+          ${snapshotDate ? `<span style="background: rgba(16,185,129,0.12); color: #10b981; padding: 2px 6px; border-radius: 4px; font-size: 0.73rem; font-weight: 700; border: 1px solid rgba(16,185,129,0.3);">📅 بيانات: ${snapshotDate}</span>` : ""}
+          <span style="background: rgba(99,102,241,0.15); color: #6366f1; padding: 2px 6px; border-radius: 4px; font-size: 0.73rem; font-weight: 700; border: 1px solid rgba(99,102,241,0.3);">🤖 ${aiPoweredBy}</span>
+          <span>🟢 ${summary.winners_count || 0} رابح</span>
+          <span>🟡 ${summary.promising_count || 0} واعد</span>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 700;" onclick="loadAiAnalysisHistoryDetail(${item.id})">
+            🔄 استرجاع وتطبيق النتيجة
+          </button>
+        </div>
+      `;
+      container.appendChild(el);
+    });
+  } catch (err) {
+    console.error("Fetch AI History error:", err);
+    container.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 1.5rem 0;">⚠️ حدث خطأ أثناء تحميل السجل.</div>`;
+  }
+}
+
+async function loadAiAnalysisHistoryDetail(id) {
+  try {
+    const res = await fetch(`/api/ai/history/${id}`);
+    const data = await res.json();
+
+    if (!data.success || !data.analysis) {
+      alert("⚠️ تعذر استرجاع تفاصيل هذا التحليل.");
+      return;
+    }
+
+    const analysisData = {
+      success: true,
+      title: data.analysis.title,
+      summary: data.analysis.summary,
+      evaluations: data.analysis.evaluations,
+    };
+
+    window.currentAiAnalysis = analysisData;
+    window.currentAiEvaluations = data.analysis.evaluations || [];
+    activeAiFilterEvaluations = data.analysis.evaluations || [];
+    currentAiFilterVerdict = "all";
+
+    renderAiAnalysisDashboard(analysisData);
+    closeAiHistoryDrawer();
+    filterProducts();
+
+    if (typeof showNotification === "function") {
+      showNotification(`🔄 تم استرجاع التحليل: ${data.analysis.title}`);
+    }
+  } catch (err) {
+    console.error("Load AI History Detail error:", err);
+    alert("⚠️ خطأ في الاسترجاع.");
+  }
+}
+
+async function deleteAiAnalysisHistoryItem(id, event) {
+  if (event) event.stopPropagation();
+  if (!confirm("هل أنت تأكد من رغبتك في حذف هذا التحليل من السجل؟")) return;
+
+  try {
+    const res = await fetch(`/api/ai/history/${id}/delete`, { method: "POST" });
+    const data = await res.json();
+    if (data.success) {
+      fetchAiAnalysisHistory();
+    } else {
+      alert("فشل الحذف.");
+    }
+  } catch (err) {
+    console.error("Delete history item error:", err);
+  }
+}
+
+function renderAiFullReportModalContent() {
+  const container = document.getElementById("ai-report-modal-body");
+  if (!container) return;
+
+  if (
+    !window.currentAiAnalysis ||
+    !Array.isArray(window.currentAiEvaluations) ||
+    window.currentAiEvaluations.length === 0
+  ) {
+    container.innerHTML = `<div style="text-align: center; color: var(--color-text-muted); padding: 3rem 0;">لا تتوفر نتائج تحليل حالية. يرجى تشغيل الذكاء الاصطناعي أولاً.</div>`;
+    return;
+  }
+
+  const summary = window.currentAiAnalysis.summary || {};
+  const evaluations = window.currentAiEvaluations;
+
+  let tableRows = evaluations
+    .map((item) => {
+      const fin = item.financials || {};
+      const brk = item.breakdown || {};
+
+      let badgeColor = "#10b981";
+      if (item.verdict === "promising") badgeColor = "#f59e0b";
+      if (item.verdict === "risk") badgeColor = "#ef4444";
+
+      const escapedTitle = item.title.replace(/'/g, "\\'");
+
+      return `
+      <tr>
+        <td style="font-weight: 700; max-width: 180px;">${item.title}</td>
+        <td>
+          <span style="background: ${badgeColor}; color: white; padding: 3px 8px; border-radius: 12px; font-weight: 800; font-size: 0.75rem;">
+            ${item.score}/100
+          </span>
+        </td>
+        <td>${brk.demand_score || 0}/40</td>
+        <td>${brk.season_score || 0}/30</td>
+        <td>${brk.logistics_score || 0}/20</td>
+        <td style="font-weight: 700; color: var(--color-primary);">${fin.target_price || 0} DH</td>
+        <td style="font-weight: 700; color: #10b981;">+${fin.net_margin_pct || 0}%</td>
+        <td style="display: flex; gap: 4px; align-items: center;">
+          <button class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="openAiProductTextModal('${escapedTitle}')">
+            📖 النص
+          </button>
+          <button class="btn btn-success" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700; background: linear-gradient(135deg, #10b981, #059669); border: none;" onclick="openPhase2ByEvaluationIndex(${evaluations.indexOf(item)})">
+            🚀 Phase 2
+          </button>
+          <button class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700; background: #6366f1; border: none; color: white;" onclick="openSavedPhase2Modal('${escapedTitle}')">
+            📂 المحفوظ
+          </button>
+        </td>
+      </tr>
+    `;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <div style="background: var(--bg-input); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; display: flex; justify-content: space-around; text-align: center;">
+      <div>
+        <span style="display: block; font-size: 0.8rem; color: var(--color-text-muted);">إجمالي المنتجات</span>
+        <strong style="font-size: 1.2rem;">${summary.total_analyzed || 0}</strong>
+      </div>
+      <div>
+        <span style="display: block; font-size: 0.8rem; color: #10b981;">المنجات الرابحة 🟢</span>
+        <strong style="font-size: 1.2rem; color: #10b981;">${summary.winners_count || 0}</strong>
+      </div>
+      <div>
+        <span style="display: block; font-size: 0.8rem; color: #f59e0b;">المنتجات الواعدة 🟡</span>
+        <strong style="font-size: 1.2rem; color: #f59e0b;">${summary.promising_count || 0}</strong>
+      </div>
+      <div>
+        <span style="display: block; font-size: 0.8rem; color: #ef4444;">عالية المخاطر 🔴</span>
+        <strong style="font-size: 1.2rem; color: #ef4444;">${summary.risk_count || 0}</strong>
+      </div>
+    </div>
+
+    <table class="ai-matrix-table">
+      <thead>
+        <tr>
+          <th>عنوان المنتج</th>
+          <th>النقاط</th>
+          <th>الطلب (40)</th>
+          <th>الموسم (30)</th>
+          <th>اللوجستيك (20)</th>
+          <th>السعر المقترح</th>
+          <th>هامش الربح %</th>
+          <th>قراءة التحليل المفصل</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows}
+      </tbody>
+    </table>
+  `;
+}
+
+// =========================================
+// 12. Phase 2: Single Product Deep-Dive Engine & UI Handlers
+// =========================================
+// Dynamic loading of AI models into Phase 2 selection dropdown based on system settings
+async function populatePhase2AiModels() {
+  const select = document.getElementById("p2-provider-select");
+  if (!select) return;
+
+  const currentVal = select.value || "auto";
+
+  try {
+    const res = await fetch("/api/settings/ai_providers_config");
+    let config = null;
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.value) {
+        config =
+          typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+      }
+    }
+
+    let html = `
+      <option value="auto" data-provider="auto" data-model="" ${currentVal === "auto" ? "selected" : ""}>✨ التلقائي (الموديل الافتراضي في النظام)</option>
+      <option value="internal" data-provider="internal" data-model="internal-engine" ${currentVal === "internal" ? "selected" : ""}>⚡ المحرك الداخلي السريع (Internal Engine)</option>
+    `;
+
+    const providerDisplayNames = {
+      openrouter: "🌐 OpenRouter",
+      apiyi: "🚀 APIyi",
+      openai: "🤖 OpenAI",
+      gemini: "💎 Google Gemini",
+      deepseek: "🐋 DeepSeek",
+      custom: "⚡ محرك مخصص / Ollama",
+    };
+
+    const defaultProviders = {
+      openrouter: {
+        name: "🌐 OpenRouter",
+        models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
+        active_model: "openai/gpt-4o-mini",
+      },
+      apiyi: {
+        name: "🚀 APIyi",
+        models: ["gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet-20241022", "deepseek-chat"],
+        active_model: "gpt-4o-mini",
+      },
+      openai: {
+        name: "🤖 OpenAI",
+        models: ["gpt-4o-mini", "gpt-4o"],
+        active_model: "gpt-4o-mini",
+      },
+      gemini: {
+        name: "💎 Google Gemini",
+        models: ["gemini-1.5-flash", "gemini-1.5-pro"],
+        active_model: "gemini-1.5-flash",
+      },
+      deepseek: {
+        name: "🐋 DeepSeek",
+        models: ["deepseek-chat"],
+        active_model: "deepseek-chat",
+      },
+    };
+
+    const providersData =
+      config && config.providers ? config.providers : defaultProviders;
+    const globalActiveProvider =
+      config && config.active_provider ? config.active_provider : "openrouter";
+
+    for (const [pKey, pData] of Object.entries(providersData)) {
+      const models = pData && Array.isArray(pData.models) ? pData.models : [];
+      if (models.length > 0) {
+        const pName =
+          (pData && pData.name) || providerDisplayNames[pKey] || pKey;
+        const activeModel = (pData && pData.active_model) || models[0] || "";
+
+        html += `<optgroup label="${pName}">`;
+        models.forEach((m) => {
+          const isGlobalDefault =
+            pKey === globalActiveProvider && m === activeModel;
+          const badge = isGlobalDefault
+            ? " 🌟 (افتراضي النظام)"
+            : m === activeModel
+              ? " ⭐"
+              : "";
+          const isSelected = currentVal === m;
+          html += `<option value="${m}" data-provider="${pKey}" data-model="${m}" ${isSelected ? "selected" : ""}>${m}${badge}</option>`;
+        });
+        html += `</optgroup>`;
+      }
+    }
+
+    select.innerHTML = html;
+  } catch (e) {
+    console.error("Error populating Phase 2 AI models:", e);
+  }
+}
+
+function openPhase2InputModal(product) {
+  if (!product) {
+    showToast("لم يتم تحديد منتج للتحليل العميق.", "error");
+    return;
+  }
+
+  // Populate AI Models from System Settings dynamically
+  populatePhase2AiModels();
+
+  document.getElementById("p2-product-id").value =
+    product.id || product.product_id || "";
+  document.getElementById("p2-product-title-input").value =
+    product.title || product.name || "منتج بدون عنوان";
+  document.getElementById("p2-product-raw-json").value =
+    JSON.stringify(product);
+
+  const defaultPrice = parseFloat(
+    product.price || product.actualPrice || product.price_1 || 250,
+  );
+  document.getElementById("p2-price-selling").value =
+    isNaN(defaultPrice) || defaultPrice <= 0 ? 250 : defaultPrice;
+
+  const defaultWholesale = parseFloat(
+    product.c_wholesale || product.wholesale_price || 70,
+  );
+  document.getElementById("p2-c-wholesale").value =
+    isNaN(defaultWholesale) || defaultWholesale <= 0 ? 70 : defaultWholesale;
+
+  document.getElementById("p2-c-shipping").value = product.c_shipping || 35;
+  document.getElementById("p2-c-packaging").value = product.c_packaging || 10;
+  document.getElementById("p2-stock-quantity").value =
+    product.stock_quantity || product.stock_qty || product.quantity || 100;
+  document.getElementById("p2-total-ad-budget").value =
+    product.total_ad_budget || product.ad_budget || 1000;
+  document.getElementById("p2-extra-notes").value = product.notes || "";
+
+  const modal = document.getElementById("phase2-input-modal");
+  if (modal) modal.style.display = "flex";
+}
+
+function openPhase2FromDetails() {
+  if (!currentProductForDetails) {
+    showToast("لم يتم العثور على المنتج الحالي.", "error");
+    return;
+  }
+  openPhase2InputModal(currentProductForDetails);
+}
+
+function closePhase2InputModal() {
+  const modal = document.getElementById("phase2-input-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function closePhase2ResultsModal() {
+  const modal = document.getElementById("phase2-results-modal");
+  if (modal) modal.style.display = "none";
+}
+
+async function handleRunPhase2DeepAnalysis(e) {
+  if (e) e.preventDefault();
+
+  const rawJsonStr = document.getElementById("p2-product-raw-json").value;
+  let product = {};
+  try {
+    product = JSON.parse(rawJsonStr);
+  } catch (err) {
+    product = {
+      title: document.getElementById("p2-product-title-input").value,
+    };
+  }
+
+  const providerSelect = document.getElementById("p2-provider-select");
+  const selectedOpt =
+    providerSelect && providerSelect.selectedIndex >= 0
+      ? providerSelect.options[providerSelect.selectedIndex]
+      : null;
+
+  const provider = selectedOpt
+    ? selectedOpt.getAttribute("data-provider") || selectedOpt.value
+    : "auto";
+  const model = selectedOpt ? selectedOpt.getAttribute("data-model") || "" : "";
+
+  const payload = {
+    product: product,
+    product_id: document.getElementById("p2-product-id").value,
+    provider: provider,
+    model: model,
+    price_selling: parseFloat(
+      document.getElementById("p2-price-selling").value,
+    ),
+    c_wholesale: parseFloat(document.getElementById("p2-c-wholesale").value),
+    c_shipping: parseFloat(document.getElementById("p2-c-shipping").value),
+    c_packaging: parseFloat(document.getElementById("p2-c-packaging").value),
+    stock_quantity: parseInt(
+      document.getElementById("p2-stock-quantity").value || 100,
+    ),
+    total_ad_budget: parseFloat(
+      document.getElementById("p2-total-ad-budget").value || 1000,
+    ),
+    extra_notes: document.getElementById("p2-extra-notes").value,
+  };
+
+  const submitBtn = document.getElementById("p2-submit-btn");
+  const originalText = submitBtn ? submitBtn.innerHTML : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML =
+      "⏳ جاري إعداد دراسة الجدوى وتوليد النصوص الإعلانية...";
+  }
+
+  try {
+    const res = await fetch("/api/ai/analyze-deep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success && data.result) {
+      closePhase2InputModal();
+      renderPhase2Results(data.result, product.title);
+      showToast("تم توليد دراسة الجدوى وتكتيكات الإطلاق بنجاح! 🚀", "success");
+    } else {
+      showToast(data.error || "فشل إجراء التحليل التفصيلي للمنتج.", "error");
+    }
+  } catch (err) {
+    console.error("Phase 2 Analysis Error:", err);
+    showToast("تعذر الاتصال بخادم التحليل Deep Analyze.", "error");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    }
+  }
+}
+
+function renderPhase2Results(result, productTitle) {
+  const modal = document.getElementById("phase2-results-modal");
+  const body = document.getElementById("p2-results-body");
+  if (!modal || !body) return;
+
+  const fm = result.financial_model || {};
+  const ta = result.target_audience || {};
+  const os = result.offers_strategy || {};
+  const creatives = result.ad_creatives || [];
+  const log = result.logistics_and_call_center || {};
+  const verdict = result.executive_verdict || "";
+  const providerTag = result.ai_powered_by || "Phase 2 Blueprint";
+
+  const subtitleEl = document.getElementById("p2-results-subtitle");
+  if (subtitleEl)
+    subtitleEl.textContent = `${productTitle || "منتج"} | المحرك: ${providerTag}`;
+
+  let creativesHtml = creatives
+    .map(
+      (c, i) => `
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span style="font-weight: 700; color: var(--color-primary); font-size: 0.85rem;">🎬 الزاوية ${i + 1}: ${c.angle || ""}</span>
+        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${(c.headline || "").replace(/'/g, "\\'") + "\\n" + (c.body || "").replace(/'/g, "\\'")}'); showToast('تم نسخ النص الإعلاني! 📋', 'info');" style="padding: 2px 8px; font-size: 0.75rem;">📋 نسخ النص</button>
+      </div>
+      <div style="font-weight: 700; color: var(--color-text-main); font-size: 0.95rem; margin-bottom: 4px;">${c.headline || ""}</div>
+      <div style="color: var(--color-text-muted); font-size: 0.85rem; line-height: 1.5; white-space: pre-line;">${c.body || ""}</div>
+    </div>
+  `,
+    )
+    .join("");
+
+  body.innerHTML = `
+    <!-- Top Summary Banner -->
+    <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.12)); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+      <div style="flex: 1; min-width: 250px;">
+        <span style="font-weight: 800; font-size: 1.1rem; color: #10b981; display: block;">🏆 ملخص الجدوى والربحية المحتملة</span>
+        <span style="font-size: 0.85rem; color: var(--color-text-muted);">${verdict}</span>
+      </div>
+      <div style="display: flex; gap: 15px; background: var(--bg-card); padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+        <div style="text-align: center;">
+          <span style="font-size: 0.72rem; color: var(--color-text-muted); display: block;">ربح الطلبية الصافي</span>
+          <strong style="color: #10b981; font-size: 1.15rem;">${fm.net_profit_per_order || 0} DH</strong>
+        </div>
+        <div style="text-align: center; border-right: 1px solid var(--border-color); padding-right: 15px;">
+          <span style="font-size: 0.72rem; color: var(--color-text-muted); display: block;">هامش الربح %</span>
+          <strong style="color: #6366f1; font-size: 1.15rem;">${fm.net_margin_pct || 0}%</strong>
+        </div>
+        <div style="text-align: center; border-right: 1px solid var(--border-color); padding-right: 15px;">
+          <span style="font-size: 0.72rem; color: var(--color-text-muted); display: block;">الربح اليومي المستهدف</span>
+          <strong style="color: #f59e0b; font-size: 1.15rem;">${fm.projected_daily_net_profit_dh || 0} DH</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Financial Blueprint Matrix -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="font-size: 1rem; font-weight: 800; color: var(--color-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
+        💳 النموذج المالي وحساب تكاليف COD المغرب
+      </h4>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+        <div style="background: var(--bg-input); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">سعر البيع المقترح</span>
+          <strong style="font-size: 1rem; color: var(--color-text-main);">${fm.selling_price || 0} DH</strong>
+        </div>
+        <div style="background: var(--bg-input); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">شراء الجملة (C_wholesale)</span>
+          <strong style="font-size: 1rem; color: var(--color-text-main);">${fm.c_wholesale || 0} DH</strong>
+        </div>
+        <div style="background: var(--bg-input); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">الشحن الفعلي (مع المرجوعات 20%)</span>
+          <strong style="font-size: 1rem; color: #ef4444;">${fm.real_shipping_with_returns || 0} DH</strong>
+        </div>
+        <div style="background: var(--bg-input); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">التأكيد والتغليف (Packaging)</span>
+          <strong style="font-size: 1rem; color: var(--color-text-main);">${fm.c_packaging || 0} DH</strong>
+        </div>
+        <div style="background: rgba(239, 68, 68, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(239, 68, 68, 0.3);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">أقصى تكلفة إعلانية Breakeven CPA</span>
+          <strong style="font-size: 1rem; color: #ef4444;">${fm.breakeven_cpa || 0} DH</strong>
+        </div>
+        <div style="background: rgba(16, 185, 129, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(16, 185, 129, 0.3);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">المستهدف الإعلاني Target CPA</span>
+          <strong style="font-size: 1rem; color: #10b981;">${fm.target_cpa || 0} DH</strong>
+        </div>
+        <div style="background: rgba(99, 102, 241, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(99, 102, 241, 0.3);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">الميزانية الإعلانية اليومية</span>
+          <strong style="font-size: 1rem; color: #6366f1;">${fm.daily_ad_budget_dh || 0} DH</strong>
+        </div>
+        <div style="background: rgba(16, 185, 129, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(16, 185, 129, 0.3);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">📦 كمية المخزون المستهدفة</span>
+          <strong style="font-size: 1rem; color: #10b981;">${fm.stock_quantity || 100} قطعة</strong>
+        </div>
+        <div style="background: rgba(245, 158, 11, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(245, 158, 11, 0.3);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">💵 رأس مال شراء المخزون</span>
+          <strong style="font-size: 1rem; color: #f59e0b;">${fm.initial_inventory_capital || fm.stock_quantity * fm.c_wholesale || 0} DH</strong>
+        </div>
+        <div style="background: rgba(139, 92, 246, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(139, 92, 246, 0.3);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">⏳ نفاد المخزون المقدر</span>
+          <strong style="font-size: 1rem; color: #8b5cf6;">${fm.days_to_sell_out || 0} يوم</strong>
+        </div>
+        <div style="background: rgba(236, 72, 153, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(236, 72, 153, 0.3);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">🎯 المبيعات اليومية الموصى بها</span>
+          <strong style="font-size: 1rem; color: #ec4899;">${fm.target_daily_orders || 15} طلب/يوم</strong>
+        </div>
+        <div style="background: rgba(14, 165, 233, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(14, 165, 233, 0.3);">
+          <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">💳 الميزانية الإعلانية الإجمالية</span>
+          <strong style="font-size: 1rem; color: #0ea5e9;">${fm.total_ad_budget || 1000} DH</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audience & Offers Grid -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem;">
+        <h5 style="font-size: 0.95rem; font-weight: 800; color: var(--color-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
+          🎯 الجمهور المستهدف والقنوات الإعلانية
+        </h5>
+        <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; display: flex; flex-direction: column; gap: 8px;">
+          <li><strong>الفئة العمرية:</strong> ${ta.age_range || ""}</li>
+          <li><strong>الجنس:</strong> ${ta.gender || ""}</li>
+          <li><strong>أبرز المدن:</strong> ${Array.isArray(ta.top_cities) ? ta.top_cities.join("، ") : ta.top_cities || ""}</li>
+          <li><strong>منصات الإطلاق:</strong> ${Array.isArray(ta.best_platforms) ? ta.best_platforms.join(" | ") : ta.best_platforms || ""}</li>
+          <li><strong>الاهتمامات:</strong> ${Array.isArray(ta.interests) ? ta.interests.join("، ") : ta.interests || ""}</li>
+        </ul>
+      </div>
+
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem;">
+        <h5 style="font-size: 0.95rem; font-weight: 800; color: var(--color-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
+          🏷️ استراتيجية العروض والحزم (Bundles)
+        </h5>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem;">
+          <div style="background: var(--bg-input); padding: 6px 10px; border-radius: 4px; border-right: 3px solid #6366f1;">
+            <strong>القطعة الواحدة:</strong> ${os.single_unit || ""}
+          </div>
+          <div style="background: var(--bg-input); padding: 6px 10px; border-radius: 4px; border-right: 3px solid #10b981;">
+            <strong>عرض القطعتين:</strong> ${os.bundle_2_units || ""}
+          </div>
+          <div style="background: var(--bg-input); padding: 6px 10px; border-radius: 4px; border-right: 3px solid #f59e0b;">
+            <strong>عرض 3 قطع:</strong> ${os.bundle_3_units || ""}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ad Creatives & Copies -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="font-size: 1rem; font-weight: 800; color: var(--color-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
+        📢 النصوص والزوايا الإعلانية الموصى بها (Ad Copy Angles)
+      </h4>
+      ${creativesHtml}
+    </div>
+
+    <!-- Logistics & Call Center Advice -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem; font-size: 0.85rem;">
+      <h5 style="font-size: 0.95rem; font-weight: 800; color: var(--color-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
+        📞 نصائح مركز الاتصال والشحن (Call Center & Logistics)
+      </h5>
+      <div style="display: flex; flex-direction: column; gap: 6px; color: var(--color-text-muted);">
+        <div>📞 <strong>تأكيد الطلبيات:</strong> ${log.confirmation_script_tip || ""}</div>
+        <div>📦 <strong>التغليف والحماية:</strong> ${log.packaging_advice || ""}</div>
+        <div>🚚 <strong>شركة التوصيل:</strong> ${log.shipping_carrier_recommendation || ""}</div>
+      </div>
+    </div>
+  `;
+
+  modal.style.display = "flex";
+}
+
+function openPhase2ByEvaluationIndex(idx) {
+  if (window.currentAiEvaluations && window.currentAiEvaluations[idx]) {
+    const item = window.currentAiEvaluations[idx];
+    openPhase2InputModal({
+      title: item.title,
+      price: item.financials?.target_price || 250,
+      c_wholesale: item.financials?.wholesale_price || 70,
+      notes: item.full_narrative || "",
+    });
+  }
+}
+
+// =========================================
+// Phase 2 Saved Analyses History Logic
+// =========================================
+let currentPhase2HistoryCache = [];
+let allPhase2HistoryCache = [];
+let currentFilterTitle = "";
+
+async function openSavedPhase2Modal(productTitle = "", productId = "") {
+  const modal = document.getElementById("phase2-history-modal");
+  const body = document.getElementById("p2-history-list-body");
+  const searchInput = document.getElementById("p2-history-search-input");
+
+  currentFilterTitle = productTitle;
+  if (searchInput) searchInput.value = productTitle;
+  if (modal) modal.style.display = "flex";
+  if (body)
+    body.innerHTML =
+      '<div style="text-align: center; padding: 2rem; color: var(--color-text-muted);">⏳ جاري تحميل السجل المحفوظ للمنتج...</div>';
+
+  try {
+    let url = "/api/ai/phase2-history";
+    const queryParams = [];
+    if (productTitle)
+      queryParams.push(`title=${encodeURIComponent(productTitle)}`);
+    if (productId)
+      queryParams.push(`product_id=${encodeURIComponent(productId)}`);
+    if (queryParams.length > 0) url += "?" + queryParams.join("&");
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (res.ok && data.success && Array.isArray(data.history)) {
+      currentPhase2HistoryCache = data.history;
+      allPhase2HistoryCache = data.all_history || data.history;
+      renderPhase2HistoryList(currentPhase2HistoryCache, productTitle);
+    } else {
+      if (body)
+        body.innerHTML =
+          '<div style="text-align: center; padding: 2rem; color: #ef4444;">❌ تعذر تحميل سجل التحليلات التفصيلية.</div>';
+    }
+  } catch (err) {
+    console.error("Error fetching Phase 2 history:", err);
+    if (body)
+      body.innerHTML =
+        '<div style="text-align: center; padding: 2rem; color: #ef4444;">❌ خطأ في الاتصال بالخادم.</div>';
+  }
+}
+
+function openSavedPhase2ForCurrentProduct() {
+  const domTitle =
+    document.getElementById("details-title")?.textContent?.trim() || "";
+  const title =
+    currentProductForDetails?.title ||
+    currentProductForDetails?.name ||
+    (domTitle && domTitle !== "تفاصيل الإعلان والنشاط" ? domTitle : "");
+  const productId =
+    currentProductForDetails?.id ||
+    currentProductForDetails?.product_id ||
+    document.getElementById("p2-product-id")?.value ||
+    "";
+  openSavedPhase2Modal(title, productId);
+}
+
+function closePhase2HistoryModal() {
+  const modal = document.getElementById("phase2-history-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function showAllPhase2History() {
+  const searchInput = document.getElementById("p2-history-search-input");
+  if (searchInput) searchInput.value = "";
+  currentFilterTitle = "";
+  currentPhase2HistoryCache = allPhase2HistoryCache;
+  renderPhase2HistoryList(allPhase2HistoryCache);
+}
+
+function renderPhase2HistoryList(items, filterTitle = "") {
+  const body = document.getElementById("p2-history-list-body");
+  if (!body) return;
+
+  if (!items || items.length === 0) {
+    const displayTitle = filterTitle || currentFilterTitle;
+    body.innerHTML = `
+      <div style="text-align: center; padding: 2.5rem 1rem; color: var(--color-text-muted);">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">📭</div>
+        <h4 style="font-weight: 800; font-size: 1.1rem; color: var(--color-text-main); margin-bottom: 0.5rem;">
+          ${displayTitle ? `لا توجد تحليلات تفصيلية محفوظة للمنتج: "${displayTitle}"` : "لا توجد تحليلات تفصيلية محفوظة حتى الآن"}
+        </h4>
+        <p style="font-size: 0.88rem; max-width: 500px; margin: 0 auto 1.25rem auto; line-height: 1.5; color: var(--color-text-muted);">
+          ${displayTitle ? "لم يتم إجراء أي تحليل تفصيلي (Phase 2) لهذا المنتج بعد. يمكنك إدخال التكاليف وإجراء أول تحليل لتوليد دراسة الجدوى وحفظها تلقائياً!" : "لم يتم العثور على أي نتائج مطابقة."}
+        </p>
+        <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+          <button class="btn btn-success" onclick="closePhase2HistoryModal(); openPhase2FromDetails();" style="padding: 0.65rem 1.4rem; font-weight: 700; background: linear-gradient(135deg, #10b981, #059669); border: none; font-size: 0.88rem; border-radius: var(--radius-sm); cursor: pointer;">
+            🚀 إجراء أول تحليل تفصيلي (Phase 2) الآن
+          </button>
+          ${
+            displayTitle
+              ? `
+          <button class="btn btn-secondary" onclick="showAllPhase2History();" style="padding: 0.65rem 1.4rem; font-weight: 700; font-size: 0.88rem; border-radius: var(--radius-sm); cursor: pointer;">
+            🌐 عرض سجل جميع المنتجات
+          </button>
+          `
+              : ""
+          }
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  body.innerHTML = items
+    .map((item, idx) => {
+      const res = item.result || {};
+      const fm = res.financial_model || {};
+      const cleanTitle =
+        item.product_title ||
+        (item.title
+          ? item.title.replace(/^تحليل\s+تفصيلي\s*\(Phase\s*2\):\s*/iu, "")
+          : "منتج بدون عنوان");
+      const createdAt = item.created_at || "";
+      const verdict = res.executive_verdict || "";
+      const aiPoweredBy =
+        item.ai_powered_by ||
+        res.ai_powered_by ||
+        (item.summary && item.summary.ai_powered_by) ||
+        "Internal Engine";
+
+      return `
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+          <div>
+            <h4 style="font-weight: 800; font-size: 1rem; color: var(--color-primary); margin: 0 0 4px 0;">📦 ${cleanTitle}</h4>
+            <div style="display: flex; gap: 10px; align-items: center; font-size: 0.78rem; color: var(--color-text-muted); flex-wrap: wrap;">
+              <span>📅 تاريخ التحليل: ${createdAt}</span>
+              <span style="background: rgba(99,102,241,0.15); color: #6366f1; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem; border: 1px solid rgba(99,102,241,0.3);">🤖 المزود والموديل: ${aiPoweredBy}</span>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="viewPhase2HistoryItem(${idx})" style="padding: 6px 14px; font-size: 0.82rem; font-weight: 700; background: linear-gradient(135deg, #10b981, #059669); border: none; white-space: nowrap; cursor: pointer;">
+            👁️ عرض الدراسة
+          </button>
+        </div>
+
+        ${verdict ? `<div style="font-size: 0.82rem; color: var(--color-text-main); background: var(--bg-input); padding: 6px 10px; border-radius: 4px; border-right: 3px solid #10b981;">💡 ${verdict}</div>` : ""}
+
+        <div style="display: flex; gap: 15px; font-size: 0.8rem; color: var(--color-text-muted); flex-wrap: wrap;">
+          <span>💰 سعر البيع: <strong style="color: var(--color-text-main);">${fm.selling_price || 0} DH</strong></span>
+          <span>📈 هامش الربح: <strong style="color: #10b981;">+${fm.net_margin_pct || 0}%</strong></span>
+          <span>💵 صافي الربح: <strong style="color: #6366f1;">${fm.net_profit_per_order || 0} DH/طلب</strong></span>
+          <span>📊 الميزانية اليومية: <strong style="color: #f59e0b;">${fm.daily_ad_budget_dh || 0} DH</strong></span>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+}
+
+function viewPhase2HistoryItem(idx) {
+  if (currentPhase2HistoryCache && currentPhase2HistoryCache[idx]) {
+    const item = currentPhase2HistoryCache[idx];
+    if (item.result) {
+      closePhase2HistoryModal();
+      const cleanTitle =
+        item.product_title ||
+        (item.title
+          ? item.title.replace(/^تحليل\s+تفصيلي\s*\(Phase\s*2\):\s*/iu, "")
+          : "منتج");
+      renderPhase2Results(item.result, cleanTitle);
+    }
+  }
+}
+
+function filterPhase2HistoryList() {
+  const query = (
+    document.getElementById("p2-history-search-input")?.value || ""
+  )
+    .toLowerCase()
+    .trim();
+  if (!query) {
+    currentPhase2HistoryCache = allPhase2HistoryCache;
+    renderPhase2HistoryList(allPhase2HistoryCache);
+    return;
+  }
+  const filtered = allPhase2HistoryCache.filter((item) => {
+    const title = (item.product_title || item.title || "").toLowerCase();
+    const verdict = (item.result?.executive_verdict || "").toLowerCase();
+    return title.includes(query) || verdict.includes(query);
+  });
+  currentPhase2HistoryCache = filtered;
+  renderPhase2HistoryList(filtered, query);
 }

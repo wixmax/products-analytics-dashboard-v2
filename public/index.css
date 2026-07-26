@@ -2016,3 +2016,114 @@ textarea:focus {
   font-weight: 600;
 }
 
+/* ════════════════════════════════════════════════════════
+   AI PRODUCT ANALYST SYSTEM (PHASE 1 STYLES)
+   ════════════════════════════════════════════════════════ */
+.ai-product-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  animation: fadeInBadge 0.3s ease;
+}
+
+.ai-product-badge.badge-winning {
+  background: rgba(16, 185, 129, 0.9);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.ai-product-badge.badge-promising {
+  background: rgba(245, 158, 11, 0.9);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.ai-product-badge.badge-risk {
+  background: rgba(239, 68, 68, 0.9);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+@keyframes fadeInBadge {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-winner-spotlight-box {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.15));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 1.25rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.ai-spotlight-img {
+  width: 100px;
+  height: 100px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  border: 2px solid var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-pill {
+  transition: all 0.2s ease;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.ai-pill.active {
+  background: var(--color-primary) !important;
+  color: #ffffff !important;
+}
+
+.ai-history-item {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.ai-history-item:hover {
+  border-color: var(--color-primary);
+  transform: translateX(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.ai-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.ai-matrix-table th,
+.ai-matrix-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: right;
+}
+
+.ai-matrix-table th {
+  background: var(--bg-input);
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+

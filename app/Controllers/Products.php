@@ -1625,6 +1625,12 @@ class Products extends ResourceController
     {
         $model = new \App\Models\SettingModel();
         $setting = $model->where('key', $key)->first();
+        if ($setting && !empty($setting['value']) && is_string($setting['value'])) {
+            $decoded = json_decode($setting['value'], true);
+            if (json_last_error() === JSON_ERROR_NONE && (is_array($decoded) || is_object($decoded))) {
+                $setting['value'] = $decoded;
+            }
+        }
         return $this->respond($setting ?: ['key' => $key, 'value' => null]);
     }
 
@@ -1647,6 +1653,10 @@ class Products extends ResourceController
             if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
                 return $this->failForbidden('عذراً، تعديل هذه الإعدادات مخصص للمشرفين والمسؤولين فقط.');
             }
+        }
+
+        if (is_array($value) || is_object($value)) {
+            $value = json_encode($value, JSON_UNESCAPED_UNICODE);
         }
 
         $existing = $model->where('key', $key)->first();
@@ -2009,5 +2019,402 @@ private function generateLiveStrategy($product, $activity)
             'success' => true,
             'thumbnail_url' => $publicUrl
         ]);
+    }
+
+    // ==========================================
+    // AI WINNING PRODUCT ANALYSIS (PHASE 1)
+    // ==========================================
+
+    public function aiAnalyze()
+    {
+        try {
+            $userId = auth()->user()->id ?? auth()->id() ?? 1;
+            $tenantId = session()->get('tenant_id') ?? null;
+
+            $json = $this->request->getJSON(true) ?? $this->request->getPost() ?? [];
+            
+            $provider = trim($json['provider'] ?? 'auto');
+            $modelName = trim($json['model'] ?? '');
+            $analysisMode = trim($json['analysis_mode'] ?? 'comprehensive');
+
+            $params = [
+                'provider' => $provider,
+                'model' => $modelName,
+                'analysis_mode' => $analysisMode,
+                'ad_budget_total' => floatval($json['ad_budget_total'] ?? 5000),
+                'season' => trim($json['season'] ?? 'auto'),
+                'c_shipping_default' => floatval($json['c_shipping_default'] ?? 35),
+                'return_rate' => floatval($json['return_rate'] ?? 0.20),
+            ];
+
+            // Get products payload from request or fallback to active products in DB
+            @set_time_limit(180);
+            $productsInput = $json['products'] ?? [];
+            if (empty($productsInput)) {
+                $model = new ProductModel();
+                $productsInput = $model->where('origin', 'Winning')->findAll(30);
+            }
+
+            if (empty($productsInput)) {
+                return $this->fail('لا توجد منتجات متاحة للتحليل في الوقت الحالي.');
+            }
+
+            $analysisModel = new \App\Models\AiProductAnalysisModel();
+
+            // Execute AI Service
+            $aiService = new \App\Libraries\AiService();
+            $analysisOutput = $aiService->evaluateProducts($productsInput, $params);
+
+            $evaluations = $analysisOutput['evaluations'] ?? [];
+            $summaryStats = $analysisOutput['summary'] ?? [];
+            $aiPoweredBy = $analysisOutput['ai_powered_by'] ?? 'Internal Engine';
+            $summaryStats['ai_powered_by'] = $aiPoweredBy;
+
+            // Resolve the snapshot_date from the frontend filter or default to today
+            $snapshotDate = trim($json['snapshot_date'] ?? '');
+            if (empty($snapshotDate) || !preg_match('/^\d{4}-\d{2}-\d{2}/', $snapshotDate)) {
+                $snapshotDate = date('Y-m-d');
+            } else {
+                $snapshotDate = substr($snapshotDate, 0, 10); // Ensure YYYY-MM-DD format
+            }
+            $summaryStats['snapshot_date'] = $snapshotDate;
+            $detectedSeason = $summaryStats['detected_season'] ?? 'عام';
+
+            $modeTitles = [
+                'seasonal' => 'تقييم مواسم السوق',
+                'ad_volume' => 'تقييم كثرة الإعلانات والطلب',
+                'max_margin' => 'تقييم أعلى هامش ربح',
+                'easy_logistics' => 'تقييم سهولة اللوجستيك',
+                'comprehensive' => 'تقييم شامل 100 نقطة'
+            ];
+            $modeName = $modeTitles[$analysisMode] ?? 'تقييم شامل';
+            $analysisTitle = "تحليل {$modeName} ({$detectedSeason}) - [{$snapshotDate}]";
+
+            // Save Analysis to Database History
+            $savedId = null;
+            try {
+                $savedId = $analysisModel->insert([
+                    'user_id' => $userId,
+                    'tenant_id' => $tenantId,
+                    'title' => $analysisTitle,
+                    'analysis_mode' => $analysisMode,
+                    'parameters_json' => json_encode($params, JSON_UNESCAPED_UNICODE),
+                    'summary_stats_json' => json_encode($summaryStats, JSON_UNESCAPED_UNICODE),
+                    'results_json' => json_encode($evaluations, JSON_UNESCAPED_UNICODE),
+                    'snapshot_date' => $snapshotDate,
+                    'provider' => $aiPoweredBy,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+            } catch (\Throwable $dbEx) {
+                log_message('error', 'Failed to save AI analysis history: ' . $dbEx->getMessage());
+            }
+
+            return $this->respond([
+                'success' => true,
+                'analysis_id' => $savedId,
+                'title' => $analysisTitle,
+                'summary' => $summaryStats,
+                'evaluations' => $evaluations,
+                'ai_powered_by' => $analysisOutput['ai_powered_by'] ?? 'Internal Engine'
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'AI Analyze Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return $this->fail('حدث خطأ في النظام أثناء إجراء التحليل: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function aiHistory()
+    {
+        try {
+            $userId = auth()->user()->id ?? auth()->id() ?? 1;
+            $dateFilter = trim($this->request->getGet('date') ?? '');
+
+            $db = \Config\Database::connect();
+            $builder = $db->table('ai_product_analyses');
+            $builder->where('user_id', $userId);
+
+            if (!empty($dateFilter) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFilter)) {
+                // Primary: match by snapshot_date column (the date of the data being analyzed)
+                // Fallback: also check created_at and JSON fields for older records without snapshot_date
+                $startOfDay = $dateFilter . ' 00:00:00';
+                $endOfDay   = $dateFilter . ' 23:59:59';
+
+                $builder->groupStart()
+                        ->where('snapshot_date', $dateFilter)
+                        ->orGroupStart()
+                            ->where('created_at >=', $startOfDay)
+                            ->where('created_at <=', $endOfDay)
+                        ->groupEnd()
+                        ->orLike('parameters_json', $dateFilter)
+                        ->orLike('summary_stats_json', $dateFilter)
+                        ->groupEnd();
+            }
+
+            $history = $builder->orderBy('created_at', 'DESC')
+                               ->limit(50)
+                               ->get()
+                               ->getResultArray();
+
+            $list = array_map(function($item) {
+                $summary = json_decode($item['summary_stats_json'] ?? '{}', true);
+                // Read provider from dedicated column first, then fallback to JSON
+                $aiPoweredBy = $item['provider'] ?? $summary['ai_powered_by'] ?? 'Internal Engine';
+                return [
+                    'id' => $item['id'],
+                    'title' => $item['title'],
+                    'analysis_mode' => $item['analysis_mode'],
+                    'parameters' => json_decode($item['parameters_json'] ?? '{}', true),
+                    'summary' => $summary,
+                    'ai_powered_by' => $aiPoweredBy,
+                    'snapshot_date' => $item['snapshot_date'] ?? $summary['snapshot_date'] ?? null,
+                    'created_at' => $item['created_at'],
+                ];
+            }, $history);
+
+            return $this->respond([
+                'success' => true,
+                'history' => $list,
+                'filter_date' => $dateFilter
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Error in aiHistory: ' . $e->getMessage());
+            return $this->respond([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'history' => []
+            ], 500);
+        }
+    }
+
+    public function aiHistoryDetail($id = null)
+    {
+        $userId = auth()->user()->id ?? auth()->id() ?? 1;
+        $model = new \App\Models\AiProductAnalysisModel();
+        $item = $model->where('id', $id)->where('user_id', $userId)->first();
+
+        if (!$item) {
+            return $this->failNotFound('Analysis record not found or unauthorized.');
+        }
+
+        return $this->respond([
+            'success' => true,
+            'analysis' => [
+                'id' => $item['id'],
+                'title' => $item['title'],
+                'analysis_mode' => $item['analysis_mode'],
+                'parameters' => json_decode($item['parameters_json'] ?? '{}', true),
+                'summary' => json_decode($item['summary_stats_json'] ?? '{}', true),
+                'evaluations' => json_decode($item['results_json'] ?? '[]', true),
+                'created_at' => $item['created_at'],
+            ]
+        ]);
+    }
+
+    public function aiDeleteHistory($id = null)
+    {
+        $userId = auth()->user()->id ?? auth()->id() ?? 1;
+        $model = new \App\Models\AiProductAnalysisModel();
+        $item = $model->where('id', $id)->where('user_id', $userId)->first();
+
+        if (!$item) {
+            return $this->failNotFound('Analysis record not found.');
+        }
+
+        $model->delete($id);
+
+        return $this->respond([
+            'success' => true,
+            'message' => 'Analysis record deleted successfully.'
+        ]);
+    }
+
+    public function aiDeepAnalyze()
+    {
+        try {
+            $json = $this->request->getJSON(true) ?? $this->request->getPost() ?? [];
+
+            $product = $json['product'] ?? [];
+            if (empty($product) && isset($json['product_id'])) {
+                $productsData = $this->getProductsData();
+                foreach ($productsData['products'] as $p) {
+                    if (($p['id'] ?? null) == $json['product_id']) {
+                        $product = $p;
+                        break;
+                    }
+                }
+            }
+
+            if (empty($product)) {
+                return $this->fail('لم يتم العثور على بيانات المنتج المطلوب تحليله.', 400);
+            }
+
+            $params = [
+                'provider'             => trim($json['provider'] ?? 'auto'),
+                'model'                => trim($json['model'] ?? ''),
+                'price_selling'        => floatval($json['price_selling'] ?? $json['price'] ?? $product['price'] ?? 0),
+                'c_wholesale'          => floatval($json['c_wholesale'] ?? 0),
+                'c_shipping'           => floatval($json['c_shipping'] ?? 35),
+                'c_packaging'          => floatval($json['c_packaging'] ?? 10),
+                'stock_quantity'       => intval($json['stock_quantity'] ?? $json['stock_qty'] ?? 100),
+                'total_ad_budget'      => floatval($json['total_ad_budget'] ?? $json['ad_budget'] ?? 1000),
+                'target_daily_orders'  => isset($json['target_daily_orders']) ? intval($json['target_daily_orders']) : 0,
+                'return_rate'          => floatval($json['return_rate'] ?? 0.20),
+                'extra_notes'          => trim($json['extra_notes'] ?? ''),
+            ];
+
+            @set_time_limit(180);
+            $aiService = new \App\Libraries\AiService();
+            $result = $aiService->evaluateSingleProductDeep($product, $params);
+
+            // Auto-save Phase 2 analysis result into database history
+            $savedId = null;
+            try {
+                $session = session();
+                $userId = $session->get('user_id') ?? 1;
+                $tenantId = $session->get('tenant_id') ?? 1;
+                
+                $analysisModel = new \App\Models\AiProductAnalysisModel();
+                $productTitle = $product['title'] ?? $product['name'] ?? 'منتج غير معرف';
+                $aiPoweredBy = $result['ai_powered_by'] ?? 'Internal Engine';
+
+                // Get snapshot_date from request or default to today
+                $snapshotDate = trim($json['snapshot_date'] ?? '');
+                if (empty($snapshotDate) || !preg_match('/^\d{4}-\d{2}-\d{2}/', $snapshotDate)) {
+                    $snapshotDate = date('Y-m-d');
+                } else {
+                    $snapshotDate = substr($snapshotDate, 0, 10);
+                }
+                
+                $saveData = [
+                    'user_id'            => $userId,
+                    'tenant_id'          => $tenantId,
+                    'title'              => 'تحليل تفصيلي (Phase 2): ' . $productTitle,
+                    'analysis_mode'      => 'phase2',
+                    'summary_stats_json' => json_encode([
+                        'phase'         => 2,
+                        'product_title' => $productTitle,
+                        'ai_powered_by' => $aiPoweredBy,
+                        'financials'    => $result['financial_model'] ?? []
+                    ], JSON_UNESCAPED_UNICODE),
+                    'results_json'       => json_encode($result, JSON_UNESCAPED_UNICODE),
+                    'snapshot_date'      => $snapshotDate,
+                    'provider'           => $aiPoweredBy,
+                    'created_at'         => date('Y-m-d H:i:s')
+                ];
+                
+                $savedId = $analysisModel->insert($saveData);
+            } catch (\Throwable $ex) {
+                log_message('warning', 'Could not save Phase 2 analysis history: ' . $ex->getMessage());
+            }
+
+            return $this->respond([
+                'success'  => true,
+                'saved_id' => $savedId,
+                'result'   => $result
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Exception in aiDeepAnalyze controller: ' . $e->getMessage());
+            return $this->respond([
+                'success' => false,
+                'error'   => 'فشل إجراء الدراسة التفصيلية للمنتج: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/ai/phase2-history
+     * Returns saved Phase 2 product deep-dive analyses
+     */
+    public function aiPhase2History()
+    {
+        try {
+            $session = session();
+            $userId = $session->get('user_id') ?? 1;
+            $tenantId = $session->get('tenant_id') ?? 1;
+
+            $productTitle = trim($this->request->getGet('title') ?? '');
+            $productId    = trim($this->request->getGet('product_id') ?? '');
+
+            $analysisModel = new \App\Models\AiProductAnalysisModel();
+            
+            // Get all Phase 2 analyses for tenant
+            $items = $analysisModel->where('tenant_id', $tenantId)
+                                   ->like('title', 'Phase 2')
+                                   ->orderBy('created_at', 'DESC')
+                                   ->findAll(100);
+
+            $formatted = [];
+            foreach ($items as $item) {
+                $results = !empty($item['results_json']) ? json_decode($item['results_json'], true) : null;
+                $summary = !empty($item['summary_stats_json']) ? json_decode($item['summary_stats_json'], true) : null;
+                $params  = !empty($item['parameters_json']) ? json_decode($item['parameters_json'], true) : null;
+                
+                $itemProductId = $summary['product_id'] ?? $params['product_id'] ?? null;
+                $itemProductTitle = $summary['product_title'] ?? str_replace('تحليل تفصيلي (Phase 2): ', '', $item['title']);
+                $aiPoweredBy = $results['ai_powered_by'] ?? $summary['ai_powered_by'] ?? 'Internal Engine';
+
+                $formatted[] = [
+                    'id'            => $item['id'],
+                    'title'         => $item['title'],
+                    'product_title' => $itemProductTitle,
+                    'product_id'    => $itemProductId,
+                    'ai_powered_by' => $aiPoweredBy,
+                    'created_at'    => $item['created_at'],
+                    'summary'       => $summary,
+                    'result'        => $results
+                ];
+            }
+
+            $matchedForTitle = [];
+            $hasFilter = (!empty($productTitle) || !empty($productId));
+
+            if ($hasFilter && count($formatted) > 0) {
+                $cleanTitle = mb_strtolower(trim(preg_replace('/^تحليل\s+تفصيلي\s*\(Phase\s*2\):\s*/ui', '', $productTitle)));
+
+                foreach ($formatted as $f) {
+                    $isMatch = false;
+
+                    // Match by Product ID if available
+                    if (!empty($productId) && !empty($f['product_id']) && (string)$productId === (string)$f['product_id']) {
+                        $isMatch = true;
+                    }
+
+                    // Match by Title substring matching
+                    if (!$isMatch && !empty($cleanTitle)) {
+                        $itemCleanTitle = mb_strtolower(trim(preg_replace('/^تحليل\s+تفصيلي\s*\(Phase\s*2\):\s*/ui', '', $f['product_title'] ?? $f['title'] ?? '')));
+                        
+                        if ($itemCleanTitle === $cleanTitle) {
+                            $isMatch = true;
+                        } elseif (mb_strlen($cleanTitle) >= 3 && (str_contains($itemCleanTitle, $cleanTitle) || str_contains($cleanTitle, $itemCleanTitle))) {
+                            $isMatch = true;
+                        } elseif (mb_strlen($cleanTitle) >= 6 && str_contains($itemCleanTitle, mb_substr($cleanTitle, 0, 6))) {
+                            $isMatch = true;
+                        }
+                    }
+
+                    if ($isMatch) {
+                        $matchedForTitle[] = $f;
+                    }
+                }
+            }
+
+            // Return strictly matched items if filter requested, otherwise all items
+            $historyToReturn = $hasFilter ? $matchedForTitle : $formatted;
+
+            return $this->respond([
+                'success'           => true,
+                'filter_title'      => $productTitle,
+                'filter_product_id' => $productId,
+                'matched_for_title' => $matchedForTitle,
+                'history'           => $historyToReturn,
+                'all_history'       => $formatted
+            ]);
+        } catch (\Throwable $e) {
+            return $this->respond([
+                'success' => false,
+                'error'   => $e->getMessage()
+            ], 500);
+        }
     }
 }

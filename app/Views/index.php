@@ -79,6 +79,12 @@
                 🎬 توليد صور الفيديوهات
               </button>
             <?php endif; ?>
+            <button class="btn btn-primary" onclick="openAiAnalysisModal()" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; color: white; font-weight: 700; gap: 6px; display: flex; align-items: center;">
+              <span>🤖</span> اختيار المنتج الرابح (AI)
+            </button>
+            <button class="btn btn-secondary" onclick="openAiHistoryDrawer()" title="عرض التحليلات السابقة المحفوظة">
+              📜 التحليلات المحفوظة
+            </button>
             <button
               class="theme-toggle"
               id="theme-toggle-btn"
@@ -425,6 +431,45 @@
           </div>
         </div>
 
+        <!-- AI Winning Product Statistics & Spotlight Dashboard -->
+        <div class="ai-stats-dashboard-card" id="ai-stats-dashboard" style="display: none; margin-bottom: 1.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; box-shadow: var(--shadow-md);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.6rem; background: rgba(99, 102, 241, 0.15); padding: 6px 12px; border-radius: var(--radius-sm);">🤖</span>
+              <div>
+                <h3 id="ai-dash-title" style="font-size: 1.05rem; font-weight: 800; margin: 0; color: var(--color-primary);">لوحة تحليلات الذكاء الاصطناعي (Phase 1)</h3>
+                <span id="ai-dash-subtitle" style="font-size: 0.8rem; color: var(--color-text-muted);">تقييم وتصنيف المنتجات الرابحة بالسوق المغربي</span>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <div class="ai-filter-pills" style="display: flex; gap: 6px; background: var(--bg-input); padding: 4px; border-radius: var(--radius-sm);">
+                <button class="ai-pill active" id="pill-filter-all" onclick="filterProductsByVerdict('all')" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 4px; border: none; font-weight: 700; cursor: pointer;">الكل (<span id="ai-cnt-all">0</span>)</button>
+                <button class="ai-pill pill-winner" id="pill-filter-winning" onclick="filterProductsByVerdict('winning')" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 4px; border: none; font-weight: 700; cursor: pointer; color: #10b981;">🟢 رابحة (<span id="ai-cnt-winning">0</span>)</button>
+                <button class="ai-pill pill-promising" id="pill-filter-promising" onclick="filterProductsByVerdict('promising')" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 4px; border: none; font-weight: 700; cursor: pointer; color: #f59e0b;">🟡 واعدة (<span id="ai-cnt-promising">0</span>)</button>
+                <button class="ai-pill pill-risk" id="pill-filter-risk" onclick="filterProductsByVerdict('risk')" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 4px; border: none; font-weight: 700; cursor: pointer; color: #ef4444;">🔴 مخاطرة (<span id="ai-cnt-risk">0</span>)</button>
+                <button class="ai-pill pill-budget" id="pill-filter-budget_fit" onclick="filterProductsByVerdict('budget_fit')" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 4px; border: none; font-weight: 700; cursor: pointer; color: #6366f1; background: rgba(99,102,241,0.15);" title="عرض أفضل منتج أو منتجات موصى باختبارها حصرياً بناءً على ميزانيتك الإعلانية الكلية">💰 مناسب للميزانية (<span id="ai-cnt-budget">0</span>)</button>
+              </div>
+              <button class="btn btn-secondary" onclick="openAiFullReportModal()" style="font-size: 0.8rem; padding: 6px 14px; font-weight: 700; border-color: var(--color-primary); color: var(--color-primary);">
+                📊 التقرير المفصل
+              </button>
+              <button class="btn btn-secondary" onclick="resetAiFilter()" style="font-size: 0.8rem; padding: 6px 14px; font-weight: 700; border-color: var(--border-color); color: var(--color-text-muted);" title="إعادة إظهار كل منتجات الجدول وإلغاء تصفية الذكاء الاصطناعي">
+                🔄 عرض كل المنتجات
+              </button>
+            </div>
+          </div>
+
+          <!-- Budget Advice Banner -->
+          <div id="ai-budget-advice-box" style="display: none; background: rgba(99, 102, 241, 0.08); border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 1rem; font-size: 0.84rem; color: var(--color-text-main);">
+            <span style="font-weight: 800; color: #6366f1;">💡 توصية ميزانية الإعلانات: </span>
+            <span id="ai-budget-advice-text">...</span>
+          </div>
+
+          <!-- Top Winner Spotlight Card -->
+          <div class="ai-winner-spotlight" id="ai-winner-spotlight">
+            <!-- Dynamic Top Winner generated by JS -->
+          </div>
+        </div>
+
         <!-- Product Controls & Search -->
         <div class="product-toolbar">
           <div class="search-box">
@@ -566,6 +611,19 @@
               "
             >
               💡 دليل القراءة
+            </button>
+            <button
+              class="btn btn-secondary"
+              onclick="openSavedPhase2ForCurrentProduct()"
+              style="
+                background: linear-gradient(135deg, #6366f1, #4f46e5);
+                border: none;
+                font-weight: 700;
+                color: white;
+                margin-left: 8px;
+              "
+            >
+              📂 التحليل التفصيلي المحفوظ
             </button>
             <button
               class="btn btn-success"
@@ -796,9 +854,9 @@
               <button
                 class="btn btn-success"
                 id="details-product-action-btn"
-                onclick="showProductAnalysisToast()"
+                onclick="openPhase2FromDetails()"
               >
-                📊 تحليل المنتج
+                📊 تحليل المنتج AI
               </button>
               <button
                 class="btn btn-primary"
@@ -1050,6 +1108,291 @@
         document.getElementById('analytics-help-modal').style.display = 'none';
       }
     </script>
+
+    <!-- AI Analysis Input Configuration Modal -->
+    <div class="modal-overlay" id="ai-analysis-modal" style="display: none; z-index: 10001;">
+      <div class="modal-card" style="max-width: 600px; width: 92%; padding: 1.75rem; border-radius: var(--radius-md); box-shadow: var(--shadow-lg);">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+          <h3 style="font-weight: 800; font-size: 1.2rem; color: var(--color-primary); display: flex; align-items: center; gap: 8px; margin: 0;">
+            🤖 اعدادات تحليل الذكاء الاصطناعي (Phase 1)
+          </h3>
+          <button style="background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--color-text-muted);" onclick="closeAiAnalysisModal()">&times;</button>
+        </div>
+
+        <form id="ai-analysis-form" onsubmit="handleRunAiAnalysis(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label style="font-weight: 700; font-size: 0.85rem; margin: 0;">🤖 المزود (AI Provider):</label>
+                <a href="<?= base_url('settings') ?>" target="_blank" style="font-size: 0.75rem; color: var(--color-primary); text-decoration: none; font-weight: 600;">⚙️ إدارة الإعدادات</a>
+              </div>
+              <select id="ai-provider-select" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 600;" onchange="handleAiProviderChangeInModal()">
+                <option value="auto" selected>✨ التلقائي الافتراضي</option>
+                <option value="openrouter">🌐 OpenRouter</option>
+                <option value="apiyi">🚀 APIyi</option>
+                <option value="openai">🤖 OpenAI (ChatGPT)</option>
+                <option value="gemini">💎 Google Gemini</option>
+                <option value="deepseek">🐋 DeepSeek</option>
+                <option value="custom">⚡ محرك مخصص / Ollama</option>
+                <option value="internal">⚡ المحرك الداخلي السريع</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">🎯 الموديل (AI Model):</label>
+              <select id="ai-model-select" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 600;">
+                <option value="">✨ الموديل الافتراضي للمورد</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style="display: block; font-weight: 700; font-size: 0.9rem; margin-bottom: 6px;">🎯 نمط البحث ومعيار التقييم:</label>
+            <select id="ai-mode-select" class="form-control" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 600;">
+              <option value="comprehensive" selected>⭐ تقييم شامل (نظام 100 نقطة المتكامل)</option>
+              <option value="seasonal">📅 حسب الموسم ومناسبة السوق المغربي</option>
+              <option value="ad_volume">🔥 حسب كثرة الإعلانات والطلب في السوق</option>
+              <option value="max_margin">💰 حسب أعلى هامش ربح مالي صافي (ROI)</option>
+              <option value="easy_logistics">🚚 حسب سهولة اللوجستيك وانخفاض مخاطر التوصيل</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">💵 الميزانية الإعلانية الإجمالية (درهم):</label>
+              <input type="number" id="ai-budget-input" value="5000" min="500" step="500" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" required />
+            </div>
+
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">☀️ الموسم التجاري المستهدف:</label>
+              <select id="ai-season-select" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);">
+                <option value="auto" selected>✨ تحديد تلقائي حسب التاريخ الحالي</option>
+                <option value="الصيف">☀️ موسم الصيف والشواطئ</option>
+                <option value="الشتاء">❄️ موسم الشتاء والبرد</option>
+                <option value="رمضان">🌙 موسم رمضان والعيد</option>
+                <option value="الدخول المدرسي">🎒 موسم الدخول المدرسي</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">🚛 تكلفة التوصيل الأساسية التقديرية (DH):</label>
+            <input type="number" id="ai-shipping-input" value="35" min="10" step="5" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" />
+          </div>
+
+          <div style="background: rgba(99, 102, 241, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border-right: 4px solid var(--color-primary); font-size: 0.82rem; color: var(--color-text-muted); line-height: 1.5;">
+            💡 يتم التقييم بناءً على معايير الجدوى التجارية واللوجستية للسوق المغربي نظام COD (حجم الطلب 40 نقطة، ملاءمة الموسم 30 نقطة، اللوجستيك 20 نقطة، الميزانية 10 نقاط).
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+            <button type="button" class="btn btn-secondary" onclick="closeAiAnalysisModal()">إلغاء</button>
+            <button type="submit" class="btn btn-primary" id="ai-submit-btn" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; font-weight: 700;">
+              🚀 بدء التحليل بالذكاء الاصطناعي
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- AI Saved History Slide Drawer -->
+    <div class="modal-overlay" id="ai-history-drawer" style="display: none; z-index: 10002; justify-content: flex-start;">
+      <div style="width: 480px; max-width: 90%; height: 100vh; background: var(--bg-card); border-left: 1px solid var(--border-color); padding: 1.5rem; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
+          <div>
+            <h3 style="font-weight: 800; font-size: 1.15rem; color: var(--color-primary); margin: 0; display: flex; align-items: center; gap: 8px;">
+              📜 التحليلات المحفوظة لحسابك
+            </h3>
+            <span style="font-size: 0.78rem; color: var(--color-text-muted);">سجل عمليات التقييم السابقة للرجوع إليها</span>
+          </div>
+          <button style="background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--color-text-muted);" onclick="closeAiHistoryDrawer()">&times;</button>
+        </div>
+
+        <div id="ai-history-list" style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+          <!-- Loaded dynamically via JS -->
+          <div style="text-align: center; color: var(--color-text-muted); padding: 2rem 0;">جاري تحميل السجل...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Full Detailed Report Modal -->
+    <div class="modal-overlay" id="ai-full-report-modal" style="display: none; z-index: 10003;">
+      <div class="modal-card" style="max-width: 950px; width: 95%; padding: 1.75rem; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); max-height: 90vh; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
+          <div>
+            <h3 id="ai-report-modal-title" style="font-weight: 800; font-size: 1.2rem; color: var(--color-primary); margin: 0; display: flex; align-items: center; gap: 8px;">
+              📊 التقرير المفصل لتقييم المنتجات الرابحة (Phase 1)
+            </h3>
+            <span id="ai-report-modal-subtitle" style="font-size: 0.8rem; color: var(--color-text-muted);">تحليل مالي ولوجستي شامل</span>
+          </div>
+          <button style="background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--color-text-muted);" onclick="closeAiFullReportModal()">&times;</button>
+        </div>
+
+        <div id="ai-report-modal-body" style="overflow-y: auto; flex: 1; padding-left: 5px;">
+          <!-- Dynamic report tables and analysis populated by JS -->
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.85rem;">
+          <button class="btn btn-primary" onclick="closeAiFullReportModal()" style="padding: 0.5rem 1.4rem;">إغلاق التقرير</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Single Product Detailed Analysis & Narrative Modal -->
+    <div class="modal-overlay" id="ai-product-text-modal" style="display: none; z-index: 10004;">
+      <div class="modal-card" style="max-width: 850px; width: 94%; padding: 1.75rem; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); max-height: 90vh; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.6rem; background: rgba(99, 102, 241, 0.15); padding: 6px 12px; border-radius: var(--radius-sm);">📖</span>
+            <div>
+              <h3 id="ai-text-modal-title" style="font-weight: 800; font-size: 1.2rem; color: var(--color-primary); margin: 0;">
+                التقرير والتحليل النصي للمنتج
+              </h3>
+              <span id="ai-text-modal-subtitle" style="font-size: 0.8rem; color: var(--color-text-muted);">تشخيص وتوصيات الذكاء الاصطناعي للسوق المغربي</span>
+            </div>
+          </div>
+          <button style="background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--color-text-muted);" onclick="closeAiProductTextModal()">&times;</button>
+        </div>
+
+        <div id="ai-text-modal-body" style="overflow-y: auto; flex: 1; padding-left: 5px; font-size: 0.9rem; line-height: 1.7;">
+          <!-- Dynamic narrative text, tables, and launch plan populated by JS -->
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.85rem;">
+          <button class="btn btn-primary" onclick="closeAiProductTextModal()" style="padding: 0.5rem 1.4rem;">إغلاق النافذة</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 2 Single Product Deep-Dive Data Entry Modal -->
+    <div class="modal-overlay" id="phase2-input-modal" style="display: none; z-index: 10005;">
+      <div class="modal-card" style="max-width: 650px; width: 92%; padding: 1.75rem; border-radius: var(--radius-md); box-shadow: var(--shadow-lg);">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+          <h3 style="font-weight: 800; font-size: 1.25rem; color: #10b981; display: flex; align-items: center; gap: 8px; margin: 0;">
+            📝 إدخال البيانات المتقدمة وتحليل المنتج التفصيلي (Phase 2)
+          </h3>
+          <button style="background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--color-text-muted);" onclick="closePhase2InputModal()">&times;</button>
+        </div>
+
+        <form id="phase2-input-form" onsubmit="handleRunPhase2DeepAnalysis(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="p2-product-id" value="" />
+          <input type="hidden" id="p2-product-raw-json" value="" />
+
+          <div>
+            <label style="display: block; font-weight: 700; font-size: 0.9rem; margin-bottom: 6px;">📦 المنتج المستهدف:</label>
+            <input type="text" id="p2-product-title-input" class="form-control" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 700;" readonly />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">💰 ثمن شراء الجملة (Wholesale C_wholesale) (DH):</label>
+              <input type="number" id="p2-c-wholesale" value="70" min="0" step="1" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" required />
+            </div>
+
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">🏷️ سعر المنافس / سعر البيع للمستهلك (DH):</label>
+              <input type="number" id="p2-price-selling" value="250" min="10" step="1" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">🚛 تكلفة التوصيل الأساسية (C_shipping) (DH):</label>
+              <input type="number" id="p2-c-shipping" value="35" min="0" step="1" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" required />
+            </div>
+
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">📦 التغليف والتأكيد (Confirmation & Packaging) (DH):</label>
+              <input type="number" id="p2-c-packaging" value="15" min="0" step="1" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">📦 كمية المخزون المتاحة (Units):</label>
+              <input type="number" id="p2-stock-quantity" value="100" min="1" step="1" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" required />
+            </div>
+
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">💰 الميزانية الإعلانية الإجمالية (DH):</label>
+              <input type="number" id="p2-total-ad-budget" value="1000" min="100" step="50" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" required />
+            </div>
+
+            <div>
+              <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">🤖 موديل الذكاء الاصطناعي (AI Model):</label>
+              <select id="p2-provider-select" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 600;">
+                <option value="auto" data-provider="auto" data-model="" selected>✨ التلقائي (حسب إعدادات النظام)</option>
+                <option value="internal" data-provider="internal" data-model="internal-engine">⚡ المحرك الداخلي السريع (Internal Engine)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style="display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px;">📝 ملاحظات إضافية أو تفاصيل المنتج الخاصة:</label>
+            <textarea id="p2-extra-notes" rows="2" placeholder="أضف أي تفاصيل خاصة مثل جودة المنتج، الفئة المستهدفة، أو معلومات التوريد..." class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-size: 0.85rem;"></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+            <button type="button" class="btn btn-secondary" onclick="closePhase2InputModal()">إلغاء</button>
+            <button type="submit" class="btn btn-success" id="p2-submit-btn" style="background: linear-gradient(135deg, #10b981, #059669); border: none; font-weight: 700; padding: 0.6rem 1.4rem;">
+              🚀 إجراء الدراسة والتحليل التفصيلي (Phase 2)
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Phase 2 Single Product Deep-Dive Strategy Blueprint Modal -->
+    <div class="modal-overlay" id="phase2-results-modal" style="display: none; z-index: 10006;">
+      <div class="modal-card" style="max-width: 960px; width: 95%; padding: 1.75rem; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); max-height: 90vh; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 1.8rem; background: rgba(16, 185, 129, 0.15); padding: 8px 14px; border-radius: var(--radius-sm);">🚀</span>
+            <div>
+              <h3 id="p2-results-title" style="font-weight: 800; font-size: 1.25rem; color: #10b981; margin: 0;">
+                خطة الإطلاق والجدوى التفصيلية (Phase 2 Deep Blueprint)
+              </h3>
+              <span id="p2-results-subtitle" style="font-size: 0.82rem; color: var(--color-text-muted);">تحليل مالي، واستهداف، ونصوص إعلانية موجهة للسوق المغربي</span>
+            </div>
+          </div>
+          <button style="background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--color-text-muted);" onclick="closePhase2ResultsModal()">&times;</button>
+        </div>
+
+        <div id="p2-results-body" style="overflow-y: auto; flex: 1; padding-left: 5px;">
+          <!-- Loaded dynamically via JS -->
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.85rem;">
+          <button class="btn btn-secondary" onclick="window.print()" style="font-size: 0.85rem;">🖨️ طباعة التقرير / حفظ PDF</button>
+          <button class="btn btn-primary" onclick="closePhase2ResultsModal()" style="padding: 0.5rem 1.4rem;">إغلاق النافذة</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 2 Saved Analyses History Modal -->
+    <div class="modal-overlay" id="phase2-history-modal" style="display: none; z-index: 10007;">
+      <div class="modal-card" style="max-width: 850px; width: 92%; padding: 1.75rem; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); max-height: 85vh; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.6rem;">📂</span>
+            <div>
+              <h3 style="font-weight: 800; font-size: 1.2rem; color: #6366f1; margin: 0;">
+                التحليلات التفصيلية المحفوظة (Phase 2 Saved History)
+              </h3>
+              <span style="font-size: 0.8rem; color: var(--color-text-muted);">سجل دراسات الجدوى المالية وتكتيكات الإطلاق السابقة</span>
+            </div>
+          </div>
+          <button style="background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--color-text-muted);" onclick="closePhase2HistoryModal()">&times;</button>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <input type="text" id="p2-history-search-input" placeholder="🔍 ابحث عن اسم المنتج في التحليلات المحفوظة..." class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);" oninput="filterPhase2HistoryList()" />
+        </div>
+
+        <div id="p2-history-list-body" style="overflow-y: auto; flex: 1; padding-left: 4px; display: flex; flex-direction: column; gap: 10px;">
+          <!-- Loaded dynamically via JS -->
+        </div>
+      </div>
+    </div>
 
     <script>
       window.INITIAL_PRODUCTS_FROM_DB = <?= isset($initialData) ? json_encode($initialData) : 'null' ?>;

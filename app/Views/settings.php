@@ -311,7 +311,44 @@
           </div>
 
           <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin')): ?>
-          <!-- Card 1: Data Source Setting (Admin Only) -->
+          <!-- Card AI: AI Providers & Models Settings (Admin Only) -->
+          <div class="settings-card" id="ai-settings-card">
+            <div class="settings-card-title">
+              🤖 إعدادات الذكاء الاصطناعي والموديلات (AI Providers & Models)
+            </div>
+            <p class="settings-card-desc">
+              قم بإدارة مفاتيح API الخاصة بكل مورد (OpenAI, Gemini, OpenRouter, DeepSeek)، وإضافة موديلات متعددة ومخصصة لكل مورد واختيار الموديل الافتراضي للتحليل.
+            </p>
+
+            <div class="settings-form-group">
+              <label style="font-weight: 700;">🌟 المزود الافتراضي للنظام (Default Active Provider):</label>
+              <select id="ai-global-active-provider" class="form-control" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 700;" onchange="handleGlobalProviderChange(this.value)">
+                <option value="openrouter">🌐 OpenRouter (يدعم كافة النماذج والموديلات)</option>
+                <option value="apiyi">🚀 APIyi (DeepSeek / Claude / GPT / Gemini)</option>
+                <option value="openai">🤖 OpenAI (ChatGPT)</option>
+                <option value="gemini">💎 Google Gemini</option>
+                <option value="deepseek">🐋 DeepSeek</option>
+                <option value="custom">⚡ محرك مخصص / Ollama محلي</option>
+                <option value="internal">⚙️ المحرك الداخلي السريع (Internal Engine)</option>
+              </select>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 1.5rem 0;" />
+
+            <h4 style="font-weight: 800; font-size: 1rem; margin-bottom: 1rem; color: var(--color-primary); display: flex; align-items: center; gap: 8px;">
+              🛠️ مفاتيح API والموديلات المتاحة حسب المورد:
+            </h4>
+
+            <div id="ai-providers-accordion" style="display: flex; flex-direction: column; gap: 1rem;">
+              <!-- Provider Rows will be rendered dynamically -->
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+              <button class="btn btn-primary" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; font-weight: 700; padding: 10px 24px;" onclick="saveAiProvidersSettings()">
+                💾 حفظ إعدادات والموديلات
+              </button>
+            </div>
+          </div>
           <div class="settings-card">
             <div class="settings-card-title">
               🌐 مصدر جلب البيانات الافتراضي
@@ -524,8 +561,211 @@
         }
       }
 
+      // Global AI Providers Config State
+      let aiConfigState = {
+        active_provider: "openrouter",
+        providers: {
+          openrouter: {
+            name: "🌐 OpenRouter",
+            api_key: "",
+            active_model: "openai/gpt-4o-mini",
+            models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.5-flash"]
+          },
+          openai: {
+            name: "🤖 OpenAI (ChatGPT)",
+            api_key: "",
+            active_model: "gpt-4o-mini",
+            models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-mini", "o3-mini"]
+          },
+          gemini: {
+            name: "💎 Google Gemini",
+            api_key: "",
+            active_model: "gemini-1.5-flash",
+            models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"]
+          },
+          deepseek: {
+            name: "🐋 DeepSeek",
+            api_key: "",
+            active_model: "deepseek-chat",
+            models: ["deepseek-chat", "deepseek-reasoner"]
+          },
+          apiyi: {
+            name: "🚀 APIyi",
+            api_key: "",
+            active_model: "gpt-4o-mini",
+            models: ["gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet-20241022", "deepseek-chat", "deepseek-reasoner", "gemini-2.5-flash"]
+          },
+          custom: {
+            name: "⚡ محرك مخصص / Ollama محلي",
+            api_key: "",
+            endpoint: "http://localhost:11434/v1/chat/completions",
+            active_model: "llama3",
+            models: ["llama3", "mistral", "qwen2.5"]
+          }
+        }
+      };
+
+      async function loadAiProvidersSettings() {
+        try {
+          const res = await fetch('/api/settings/ai_providers_config');
+          if (res.ok) {
+            const data = await res.json();
+            if (data.value) {
+              const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+              if (parsed && parsed.providers) {
+                // Merge with default to preserve names if any key missing
+                aiConfigState.active_provider = parsed.active_provider || aiConfigState.active_provider;
+                for (const pKey in parsed.providers) {
+                  if (aiConfigState.providers[pKey]) {
+                    aiConfigState.providers[pKey].api_key = parsed.providers[pKey].api_key || '';
+                    aiConfigState.providers[pKey].active_model = parsed.providers[pKey].active_model || aiConfigState.providers[pKey].active_model;
+                    if (Array.isArray(parsed.providers[pKey].models) && parsed.providers[pKey].models.length > 0) {
+                      aiConfigState.providers[pKey].models = parsed.providers[pKey].models;
+                    }
+                  } else {
+                    aiConfigState.providers[pKey] = parsed.providers[pKey];
+                  }
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error loading AI providers settings:", err);
+        }
+
+        renderAiProvidersUI();
+      }
+
+      function handleGlobalProviderChange(val) {
+        if (val) {
+          aiConfigState.active_provider = val;
+        }
+      }
+
+      function renderAiProvidersUI() {
+        const selectGlobal = document.getElementById('ai-global-active-provider');
+        if (selectGlobal && aiConfigState.active_provider) {
+          selectGlobal.value = aiConfigState.active_provider;
+        }
+
+        const container = document.getElementById('ai-providers-accordion');
+        if (!container) return;
+
+        let html = '';
+        for (const pKey in aiConfigState.providers) {
+          const provider = aiConfigState.providers[pKey];
+          html += `
+            <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <h5 style="font-weight: 700; font-size: 1rem; margin: 0; display: flex; align-items: center; gap: 8px; color: var(--color-text-main);">
+                  ${provider.name}
+                </h5>
+                <span style="font-size: 0.75rem; color: var(--color-text-muted); font-family: monospace;">[${pKey}]</span>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.75rem;">
+                <div>
+                  <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px;">🔑 مفتاح API (API Key):</label>
+                  <input type="password" id="api-key-${pKey}" value="${provider.api_key || ''}" class="form-control" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-card); color: var(--color-text-main);" placeholder="أدخل مفتاح API الخاص بـ ${provider.name}" onchange="updateAiConfigStateKey('${pKey}', this.value)" />
+                </div>
+
+                <div>
+                  <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px;">🎯 الموديل الافتراضي للتحليل:</label>
+                  <select id="active-model-${pKey}" class="form-control" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-card); color: var(--color-text-main); font-weight: 600;" onchange="updateAiConfigStateActiveModel('${pKey}', this.value)">
+                    ${provider.models.map(m => `<option value="${m}" ${m === provider.active_model ? 'selected' : ''}>${m}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+
+              <div style="margin-bottom: 0.75rem;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 6px;">📚 الموديلات المتاحة المسجلة:</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                  ${provider.models.map(m => `
+                    <span style="background: rgba(99, 102, 241, 0.15); color: var(--color-primary); padding: 4px 10px; border-radius: 16px; font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(99, 102, 241, 0.3);">
+                      <span>${m}</span>
+                      <button type="button" style="background: none; border: none; color: #ef4444; font-weight: 800; cursor: pointer; padding: 0 2px; font-size: 0.9rem;" onclick="removeModelFromProvider('${pKey}', '${m}')" title="حذف هذا الموديل">&times;</button>
+                    </span>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="new-model-input-${pKey}" class="form-control" style="flex: 1; padding: 6px 12px; font-size: 0.82rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-card); color: var(--color-text-main);" placeholder="إضافة موديل جديد لـ ${provider.name} (مثال: gpt-4.5-preview)" onkeypress="if(event.key === 'Enter'){ event.preventDefault(); addCustomModelToProvider('${pKey}'); }" />
+                <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 14px; font-weight: 700;" onclick="addCustomModelToProvider('${pKey}')">+ إضافة موديل</button>
+              </div>
+            </div>
+          `;
+        }
+        container.innerHTML = html;
+      }
+
+      function updateAiConfigStateKey(pKey, val) {
+        if (aiConfigState.providers[pKey]) {
+          aiConfigState.providers[pKey].api_key = val.trim();
+        }
+      }
+
+      function updateAiConfigStateActiveModel(pKey, val) {
+        if (aiConfigState.providers[pKey]) {
+          aiConfigState.providers[pKey].active_model = val.trim();
+        }
+      }
+
+      function addCustomModelToProvider(pKey) {
+        const input = document.getElementById(`new-model-input-${pKey}`);
+        if (!input) return;
+        const newModel = input.value.trim();
+        if (!newModel) return;
+
+        if (!aiConfigState.providers[pKey].models.includes(newModel)) {
+          aiConfigState.providers[pKey].models.push(newModel);
+          // If first model, set active
+          if (!aiConfigState.providers[pKey].active_model) {
+            aiConfigState.providers[pKey].active_model = newModel;
+          }
+          showToast(`تم إدراج الموديل (${newModel}) لقائمة ${aiConfigState.providers[pKey].name} ✨`, "success");
+        }
+        input.value = "";
+        renderAiProvidersUI();
+      }
+
+      function removeModelFromProvider(pKey, modelName) {
+        if (!aiConfigState.providers[pKey]) return;
+        aiConfigState.providers[pKey].models = aiConfigState.providers[pKey].models.filter(m => m !== modelName);
+        if (aiConfigState.providers[pKey].active_model === modelName) {
+          aiConfigState.providers[pKey].active_model = aiConfigState.providers[pKey].models[0] || '';
+        }
+        showToast(`تم حذف الموديل (${modelName}) 🗑️`, "info");
+        renderAiProvidersUI();
+      }
+
+      async function saveAiProvidersSettings() {
+        const selectGlobal = document.getElementById('ai-global-active-provider');
+        if (selectGlobal) {
+          aiConfigState.active_provider = selectGlobal.value;
+        }
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'ai_providers_config', value: aiConfigState })
+          });
+
+          if (res.ok) {
+            showToast("تم حفظ إعدادات وموديلات الذكاء الاصطناعي بنجاح! 🤖💾", "success");
+          } else {
+            showToast("فشل حفظ إعدادات الذكاء الاصطناعي.", "error");
+          }
+        } catch (err) {
+          console.error("Error saving AI settings:", err);
+          showToast("خطأ في الاتصال بالسيرفر أثناء حفظ الإعدادات.", "error");
+        }
+      }
+
       // Load Settings from server
       async function loadSettings() {
+        await loadAiProvidersSettings();
         const radioApi = document.getElementById('radio-source-api');
         const radioDb = document.getElementById('radio-source-db');
         if (radioApi && radioDb) {

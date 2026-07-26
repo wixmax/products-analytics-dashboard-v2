@@ -91,6 +91,14 @@ $routes->get('/api/settings/(:segment)', 'Products::getSetting/$1');
 $routes->post('/api/settings', 'Products::saveSetting');
 $routes->post('/api/products/clear-database-data', 'Products::clearDatabaseData');
 
+// AI Winning Product Analysis Endpoints
+$routes->post('/api/ai/analyze', 'Products::aiAnalyze');
+$routes->post('/api/ai/analyze-deep', 'Products::aiDeepAnalyze');
+$routes->get('/api/ai/history', 'Products::aiHistory');
+$routes->get('/api/ai/history/(:num)', 'Products::aiHistoryDetail/$1');
+$routes->post('/api/ai/history/(:num)/delete', 'Products::aiDeleteHistory/$1');
+$routes->get('/api/ai/phase2-history', 'Products::aiPhase2History');
+
 // Update Database Schema Route (non-destructive migrations update)
 $routes->get('update-db', '\App\Controllers\InstallController::updateDatabaseSchema');
 

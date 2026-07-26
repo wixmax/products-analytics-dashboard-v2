@@ -7,9 +7,28 @@ class Home extends BaseController
     public function index(): string
     {
         $snapshotModel = new \App\Models\SnapshotModel();
-        $latestSnapshot = $snapshotModel->where('origin', 'Winning')
-                                        ->orderBy('created_at', 'DESC')
-                                        ->first();
+        
+        $requestedDate = $this->request->getGet('date') ?? ($_COOKIE['api_filter_date'] ?? null) ?? $this->request->getCookie('api_filter_date');
+        $requestedSnapshotId = $this->request->getGet('snapshot_id');
+
+        $latestSnapshot = null;
+        if (!empty($requestedSnapshotId)) {
+            $latestSnapshot = $snapshotModel->find($requestedSnapshotId);
+        } elseif (!empty($requestedDate)) {
+            $cleanDate = trim($requestedDate);
+            $latestSnapshot = $snapshotModel->groupStart()
+                                                ->like('api_version', $cleanDate)
+                                                ->orWhere("CAST(created_at AS TEXT) LIKE '{$cleanDate}%'")
+                                            ->groupEnd()
+                                            ->orderBy('id', 'DESC')
+                                            ->first();
+        }
+
+        if (!$latestSnapshot) {
+            $latestSnapshot = $snapshotModel->where('origin', 'Winning')
+                                            ->orderBy('id', 'DESC')
+                                            ->first();
+        }
         
         $initialData = null;
         if ($latestSnapshot && !empty($latestSnapshot['raw_json'])) {
