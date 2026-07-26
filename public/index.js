@@ -283,6 +283,7 @@ async function initDatePickerWithSnapshotIndicators() {
       }
       updateGeneratedURL();
       fetchAiAnalysisHistory();
+      refreshCountryIndicatorsForDate(dateStr);
     },
   });
 
@@ -440,6 +441,7 @@ function initEventListeners() {
       if (id === "api-endpoint-select") {
         const newOrigin = _getOriginFromMode(e.target.value);
         refreshDatePickerForOrigin(newOrigin);
+        refreshCountryIndicatorsForDate();
       }
       updateGeneratedURL();
     });
@@ -901,18 +903,88 @@ function renderAnalyticsDashboard(adapted) {
   }
 }
 
+function updateApiCountryDropdownIndicators(countryCounts = {}) {
+  const apiCountrySelect = document.getElementById("api-filter-country");
+  if (!apiCountrySelect) return;
+
+  const currentSelections = Array.from(apiCountrySelect.selectedOptions).map(
+    (opt) => opt.value
+  );
+
+  let html = `<option value="all" ${currentSelections.includes("all") ? "selected" : ""}>🌍 الكل (All Countries)</option>`;
+
+  COUNTRIES_LIST.forEach((c) => {
+    const count = countryCounts[c.code] !== undefined ? countryCounts[c.code] : 0;
+    const isSelected =
+      currentSelections.includes(c.code) ||
+      (currentSelections.length === 0 && c.code === "MA");
+
+    let badgeText = count > 0 ? ` 🟢 [${count}]` : ` ⚪ [0]`;
+
+    html += `<option value="${c.code}" ${isSelected ? "selected" : ""}>${c.flag} ${c.name} (${c.code})${badgeText}</option>`;
+  });
+
+  apiCountrySelect.innerHTML = html;
+}
+
+async function refreshCountryIndicatorsForDate(dateStr) {
+  try {
+    const mode = document.getElementById("api-endpoint-select")?.value || "winning";
+    const origin = _getOriginFromMode(mode);
+    const dateParam = dateStr || document.getElementById("filter-date")?.value || "";
+
+    const res = await fetch(
+      `/api/products/available-countries?origin=${encodeURIComponent(origin)}&date=${encodeURIComponent(dateParam)}`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.countryCounts) {
+        updateApiCountryDropdownIndicators(data.countryCounts);
+      }
+    }
+  } catch (err) {
+    console.warn("Could not refresh country indicators for snapshot date:", err);
+  }
+}
+
 function populateCountryDropdownFilter(products) {
   const dropdown = document.getElementById("country-filter");
-  // Extract unique country codes
-  const codes = [...new Set(products.map((p) => p.country).filter(Boolean))];
-
-  let html = '<option value="all">جميع الدول 🌍</option>';
-  codes.forEach((code) => {
-    const meta = COUNTRIES_LIST.find((c) => c.code === code);
-    const name = meta ? `${meta.flag} ${meta.name}` : `🌍 ${code}`;
-    html += `<option value="${code}">${name}</option>`;
+  const countryCounts = {};
+  products.forEach((p) => {
+    if (p.country) {
+      countryCounts[p.country] = (countryCounts[p.country] || 0) + 1;
+    }
   });
-  dropdown.innerHTML = html;
+
+  if (dropdown) {
+    const codes = Object.keys(countryCounts);
+    let html = '<option value="all">جميع الدول 🌍</option>';
+    codes.forEach((code) => {
+      const meta = COUNTRIES_LIST.find((c) => c.code === code);
+      const name = meta ? `${meta.flag} ${meta.name}` : `🌍 ${code}`;
+      const count = countryCounts[code] || 0;
+      html += `<option value="${code}">${name} (${count})</option>`;
+    });
+    dropdown.innerHTML = html;
+
+    const apiCountrySelect = document.getElementById("api-filter-country");
+    if (apiCountrySelect) {
+      const selectedApiCountries = Array.from(apiCountrySelect.selectedOptions).map(
+        (opt) => opt.value
+      );
+      if (
+        selectedApiCountries.length === 1 &&
+        selectedApiCountries[0] !== "all" &&
+        codes.includes(selectedApiCountries[0])
+      ) {
+        dropdown.value = selectedApiCountries[0];
+      } else {
+        dropdown.value = "all";
+      }
+    }
+  }
+
+  updateApiCountryDropdownIndicators(countryCounts);
 }
 
 // =========================================
@@ -1034,9 +1106,24 @@ function filterProducts() {
   }
 
   // 2. Country Filter Dropdown
-  const selectedCountry = document.getElementById("country-filter").value;
+  const selectedCountry = document.getElementById("country-filter")?.value || "all";
   if (selectedCountry !== "all") {
     results = results.filter((p) => p.country === selectedCountry);
+  } else {
+    // If country-filter is "all", check if api-filter-country has specific selected countries (not "all")
+    const apiCountrySelect = document.getElementById("api-filter-country");
+    if (apiCountrySelect) {
+      const selectedApiCountries = Array.from(apiCountrySelect.selectedOptions).map(
+        (opt) => opt.value
+      );
+      if (
+        selectedApiCountries.length > 0 &&
+        !selectedApiCountries.includes("all") &&
+        selectedApiCountries.length < COUNTRIES_LIST.length
+      ) {
+        results = results.filter((p) => selectedApiCountries.includes(p.country));
+      }
+    }
   }
 
   // 3. Launch Date Filter
@@ -1613,13 +1700,38 @@ function downloadFilteredJSON() {
     return;
   }
 
-  const dataStr = JSON.stringify(currentFilteredProducts, null, 2);
+  // Clean products: strip all base64 data:image entries from every string field
+  const base64Pattern = /data:image\/[^;,\s]+;base64,[A-Za-z0-9+/=]+/g;
+  const cleanedProducts = currentFilteredProducts.map((p) => {
+    const clone = { ...p };
+    for (const key of Object.keys(clone)) {
+      if (typeof clone[key] === "string" && clone[key].includes("data:image")) {
+        // Remove base64 strings, then clean up leftover separators
+        clone[key] = clone[key]
+          .replace(base64Pattern, "")
+          .replace(/[;,]\s*[;,]/g, ";")   // collapse double separators
+          .replace(/^[;,\s]+/, "")          // trim leading separators
+          .replace(/[;,\s]+$/, "");         // trim trailing separators
+      }
+    }
+    return clone;
+  });
+
+  const dataStr = JSON.stringify(cleanedProducts, null, 2);
   const blob = new Blob([dataStr], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
+  // Build filename: snapshot_date + download datetime
+  const snapshotDate =
+    document.getElementById("filter-date")?.value?.trim() ||
+    localStorage.getItem("api_filter_date") ||
+    "all";
+  const now = new Date();
+  const downloadDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+
   const a = document.createElement("a");
   a.href = url;
-  a.download = `filtered_products_${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `products_snapshot_${snapshotDate}_dl_${downloadDate}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -2841,6 +2953,12 @@ async function handleRunAiAnalysis(event) {
 
     let productsSource = [];
     if (
+      typeof currentFilteredProducts !== "undefined" &&
+      Array.isArray(currentFilteredProducts) &&
+      currentFilteredProducts.length > 0
+    ) {
+      productsSource = currentFilteredProducts;
+    } else if (
       typeof filteredProducts !== "undefined" &&
       Array.isArray(filteredProducts) &&
       filteredProducts.length > 0
@@ -2868,6 +2986,28 @@ async function handleRunAiAnalysis(event) {
         (Array.isArray(target) ? target : []);
     }
 
+    // Filter productsSource strictly by active country filter
+    const selectedGridCountry = document.getElementById("country-filter")?.value || "all";
+    const apiCountrySelect = document.getElementById("api-filter-country");
+    const selectedApiCountries = apiCountrySelect
+      ? Array.from(apiCountrySelect.selectedOptions).map((opt) => opt.value)
+      : [];
+
+    let activeCountryFilterStr = "";
+    if (selectedGridCountry !== "all") {
+      productsSource = productsSource.filter((p) => p.country === selectedGridCountry);
+      activeCountryFilterStr = selectedGridCountry;
+    } else if (
+      selectedApiCountries.length > 0 &&
+      !selectedApiCountries.includes("all") &&
+      selectedApiCountries.length < (typeof COUNTRIES_LIST !== "undefined" ? COUNTRIES_LIST.length : 100)
+    ) {
+      productsSource = productsSource.filter((p) =>
+        selectedApiCountries.includes(p.country)
+      );
+      activeCountryFilterStr = selectedApiCountries.join(";");
+    }
+
     const products = productsSource.map((p, idx) => {
       return {
         title: p.title || p.product_title || p.name || `منتج #${idx + 1}`,
@@ -2875,8 +3015,6 @@ async function handleRunAiAnalysis(event) {
         selling_price: Number(p.price || p.actualPrice || p.price_1 || 250),
         ads_count: Number(p.ads_count || p.active_ads || 1),
         active_ads: Number(p.ads_count || p.active_ads || 1),
-        ad_video_urls: p.ad_video_urls || p.video_url || "",
-        video_url: p.ad_video_urls || p.video_url || "",
         ad_body: p.ad_body || p.description || "",
         ad_title: p.ad_title || "",
         country: p.country || "MA",
@@ -2891,9 +3029,36 @@ async function handleRunAiAnalysis(event) {
       ad_budget_total: budget,
       season: season,
       c_shipping_default: cShipping,
+      requested_country: activeCountryFilterStr,
       products: products,
       snapshot_date: document.getElementById("filter-date")?.value?.trim() || localStorage.getItem("api_filter_date") || "",
     };
+
+    const liveStatusBox = document.getElementById("ai-modal-live-status");
+    const liveStatusText = document.getElementById("ai-modal-status-text");
+    const liveStatusDetail = document.getElementById("ai-modal-status-detail");
+
+    if (liveStatusBox) liveStatusBox.style.display = "block";
+    if (liveStatusText) {
+      liveStatusText.textContent = `⏳ جاري الاتصال بالمزود (${provider}) وتحليل المنتجات...`;
+      liveStatusText.style.color = "var(--color-primary)";
+    }
+    if (liveStatusDetail) {
+      liveStatusDetail.textContent = `جاري إرسال ${products.length} منتج إلى الموديل [${model || 'التلقائي'}]... يمكنك الضغط على 'إظهار Input' لمعاينة الطلب.`;
+    }
+
+    window.lastAiInputPayload = payload;
+    window.lastAiOutputResponse = {
+      status: "in_progress",
+      message: "⏳ العملية قيد التنفيذ والمعالجة حالياً على خادم الذكاء الاصطناعي... لم تنتهِ بعد.",
+      started_at: new Date().toLocaleTimeString(),
+      provider: provider,
+      model: model || "auto",
+      products_count: products.length
+    };
+    if (typeof addAiConsoleLog === "function") {
+      addAiConsoleLog(`بدء تحليل الذكاء الاصطناعي... [المزود: ${provider} | الموديل: ${model || 'تلقائي'} | المنتجات: ${products.length}]`, 'process');
+    }
 
     const res = await fetch("/api/ai/analyze", {
       method: "POST",
@@ -2905,9 +3070,27 @@ async function handleRunAiAnalysis(event) {
     try {
       data = await res.json();
     } catch (e) {
+      if (liveStatusText) {
+        liveStatusText.textContent = `❌ خطأ في استجابة الخادم (HTTP ${res.status})`;
+        liveStatusText.style.color = "#ef4444";
+      }
+      if (liveStatusDetail) {
+        liveStatusDetail.textContent = `تعذر فك شفرة الـ JSON القادم من الخادم: ${res.statusText}`;
+      }
+      if (typeof addAiConsoleLog === "function") {
+        addAiConsoleLog(`خطأ في استجابة الخادم: ${res.status} ${res.statusText}`, 'error');
+      }
       throw new Error(
         `استجابة الخادم غير صالحة (${res.status} ${res.statusText})`,
       );
+    }
+
+    window.lastAiOutputResponse = data;
+    if (data && data.raw_input_payload) {
+      window.lastAiInputPayload = data.raw_input_payload;
+    }
+    if (data && data.raw_output_response) {
+      window.lastAiOutputResponse = data.raw_output_response;
     }
 
     if (!res.ok || !data || data.success === false) {
@@ -2916,8 +3099,31 @@ async function handleRunAiAnalysis(event) {
         data?.message ||
         data?.error ||
         `خطأ في الخادم (${res.status})`;
+      
+      if (liveStatusText) {
+        liveStatusText.textContent = `❌ فشل التقييم: ${errMsg}`;
+        liveStatusText.style.color = "#ef4444";
+      }
+      if (liveStatusDetail) {
+        liveStatusDetail.textContent = `اضغط على 'إظهار Output' لمشاهدة الاستجابة الخام والتفاصيل.`;
+      }
+      if (typeof addAiConsoleLog === "function") {
+        addAiConsoleLog(`فشل إتمام التحليل: ${errMsg}`, 'error');
+      }
       alert("⚠️ فشل إجراء التقييم: " + errMsg);
       return;
+    }
+
+    if (liveStatusText) {
+      liveStatusText.textContent = `✅ اكتمل التحليل بنجاح! [${data.ai_powered_by || 'Done'}]`;
+      liveStatusText.style.color = "#10b981";
+    }
+    if (liveStatusDetail) {
+      liveStatusDetail.textContent = `تم تحليل ${data.evaluations?.length || 0} منتج وحفظ النتيجة. يمكنك فك كود الاستجابة عبر 'إظهار Output'.`;
+    }
+
+    if (typeof addAiConsoleLog === "function") {
+      addAiConsoleLog(`اكتمل التحليل بنجاح! المحرك/المزود المستعمل: [${data.ai_powered_by || 'Unknown'}]`, 'success');
     }
 
     window.currentAiAnalysis = data;
@@ -2938,6 +3144,9 @@ async function handleRunAiAnalysis(event) {
     }
   } catch (err) {
     console.error("AI Analysis error:", err);
+    if (typeof addAiConsoleLog === "function") {
+      addAiConsoleLog(`فشل الاتصال بخادم التحليل: ${err.message || err}`, 'error');
+    }
     alert("⚠️ تعذر الاتصال بخادم التحليل: " + (err.message || err));
   } finally {
     if (submitBtn) {
@@ -3508,6 +3717,17 @@ async function handleRunPhase2DeepAnalysis(e) {
     };
   }
 
+  if (product && typeof product === 'object') {
+    delete product.ad_image_urls;
+    delete product.images;
+    delete product.image_url;
+    delete product.image;
+    delete product.ad_video_urls;
+    delete product.video_url;
+    delete product.video_path;
+    delete product.video;
+  }
+
   const providerSelect = document.getElementById("p2-provider-select");
   const selectedOpt =
     providerSelect && providerSelect.selectedIndex >= 0
@@ -3539,6 +3759,32 @@ async function handleRunPhase2DeepAnalysis(e) {
     extra_notes: document.getElementById("p2-extra-notes").value,
   };
 
+  const p2StatusBox = document.getElementById("p2-modal-live-status");
+  const p2StatusText = document.getElementById("p2-modal-status-text");
+  const p2StatusDetail = document.getElementById("p2-modal-status-detail");
+
+  if (p2StatusBox) p2StatusBox.style.display = "block";
+  if (p2StatusText) {
+    p2StatusText.textContent = `⏳ جاري إعداد دراسة الجدوى وتوليد النصوص الإعلانية...`;
+    p2StatusText.style.color = "#10b981";
+  }
+  if (p2StatusDetail) {
+    p2StatusDetail.textContent = `المزود: [${provider}] | الموديل: [${model || 'تلقائي'}]... يمكنك الضغط على 'إظهار Input' لمعاينة الطلب.`;
+  }
+
+  window.lastAiInputPayload = payload;
+  window.lastAiOutputResponse = {
+    status: "in_progress",
+    message: "⏳ جارٍ إعداد وتوليد دراسة الجدوى التفصيلية للمنتج على خادم الذكاء الاصطناعي... لم تنتهِ بعد.",
+    started_at: new Date().toLocaleTimeString(),
+    provider: provider,
+    model: model || "auto",
+    product_title: product.title || "منتج"
+  };
+  if (typeof addAiConsoleLog === "function") {
+    addAiConsoleLog(`بدء دراسة الجدوى وتوليد النصوص للمنتج (${product.title || 'منتج'})... [المزود: ${provider} | الموديل: ${model || 'تلقائي'}]`, 'process');
+  }
+
   const submitBtn = document.getElementById("p2-submit-btn");
   const originalText = submitBtn ? submitBtn.innerHTML : "";
   if (submitBtn) {
@@ -3555,15 +3801,41 @@ async function handleRunPhase2DeepAnalysis(e) {
     });
 
     const data = await res.json();
+    window.lastAiOutputResponse = data;
+
     if (res.ok && data.success && data.result) {
+      if (p2StatusText) {
+        p2StatusText.textContent = `✅ اكتملت الدراسة والتحليل العميق بنجاح!`;
+      }
+      if (typeof addAiConsoleLog === "function") {
+        addAiConsoleLog(`تم توليد دراسة الجدوى للمنتج (${product.title || 'منتج'}) بنجاح!`, 'success');
+      }
       closePhase2InputModal();
       renderPhase2Results(data.result, product.title);
       showToast("تم توليد دراسة الجدوى وتكتيكات الإطلاق بنجاح! 🚀", "success");
     } else {
-      showToast(data.error || "فشل إجراء التحليل التفصيلي للمنتج.", "error");
+      const errMsg = data.error || data.message || "فشل إجراء التحليل التفصيلي للمنتج.";
+      if (p2StatusText) {
+        p2StatusText.textContent = `❌ فشل تحليل Phase 2: ${errMsg}`;
+        p2StatusText.style.color = "#ef4444";
+      }
+      if (p2StatusDetail) {
+        p2StatusDetail.textContent = `اضغط على 'إظهار Output' لمشاهدة الاستجابة الخام القادمة من الخادم.`;
+      }
+      if (typeof addAiConsoleLog === "function") {
+        addAiConsoleLog(`فشل دراسة الجدوى للمنتج: ${errMsg}`, 'error');
+      }
+      showToast(errMsg, "error");
     }
   } catch (err) {
     console.error("Phase 2 Analysis Error:", err);
+    if (p2StatusText) {
+      p2StatusText.textContent = `❌ تعذر الاتصال بخادم التحليل`;
+      p2StatusText.style.color = "#ef4444";
+    }
+    if (typeof addAiConsoleLog === "function") {
+      addAiConsoleLog(`تعذر الاتصال بخادم التحليل Deep Analyze: ${err.message || err}`, 'error');
+    }
     showToast("تعذر الاتصال بخادم التحليل Deep Analyze.", "error");
   } finally {
     if (submitBtn) {
@@ -3944,3 +4216,124 @@ function filterPhase2HistoryList() {
   currentPhase2HistoryCache = filtered;
   renderPhase2HistoryList(filtered, query);
 }
+
+// ==========================================
+// Operations Console & Input/Output Inspector
+// ==========================================
+window.lastAiInputPayload = null;
+window.lastAiOutputResponse = null;
+let currentAiIoTab = 'input';
+
+function addAiConsoleLog(message, type = 'info') {
+  const logBody = document.getElementById('ai-console-log-body');
+  const badge = document.getElementById('ai-console-status-badge');
+  
+  if (badge) {
+    if (type === 'error') {
+      badge.textContent = '❌ خطأ';
+      badge.style.background = 'rgba(239, 68, 68, 0.15)';
+      badge.style.color = '#ef4444';
+    } else if (type === 'success') {
+      badge.textContent = '✅ مكتمل بنجاح';
+      badge.style.background = 'rgba(16, 185, 129, 0.15)';
+      badge.style.color = '#10b981';
+    } else if (type === 'process') {
+      badge.textContent = '⏳ جاري التنفيذ...';
+      badge.style.background = 'rgba(99, 102, 241, 0.15)';
+      badge.style.color = '#6366f1';
+    }
+  }
+
+  if (!logBody) return;
+
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0];
+
+  let color = 'var(--color-text-main)';
+  let prefix = 'ℹ️';
+  if (type === 'error') { color = '#ef4444'; prefix = '❌'; }
+  if (type === 'success') { color = '#10b981'; prefix = '✅'; }
+  if (type === 'process') { color = '#6366f1'; prefix = '🚀'; }
+  if (type === 'warning') { color = '#f59e0b'; prefix = '⚠️'; }
+
+  const entry = document.createElement('div');
+  entry.style.color = color;
+  entry.style.marginBottom = '4px';
+  entry.innerHTML = `<span style="opacity:0.65;">[${timeStr}]</span> ${prefix} ${message}`;
+
+  logBody.appendChild(entry);
+  logBody.scrollTop = logBody.scrollHeight;
+}
+
+function clearAiConsoleLogs() {
+  const logBody = document.getElementById('ai-console-log-body');
+  const badge = document.getElementById('ai-console-status-badge');
+  if (logBody) {
+    logBody.innerHTML = '<div style="color: var(--color-text-muted);">[00:00:00] ℹ️ تم مسح سجل العمليات المباشرة.</div>';
+  }
+  if (badge) {
+    badge.textContent = 'جاهز';
+    badge.style.background = 'rgba(16, 185, 129, 0.15)';
+    badge.style.color = '#10b981';
+  }
+}
+
+function openAiInputOutputInspectorModal(tab = 'input') {
+  const modal = document.getElementById('ai-io-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  switchAiIoTab(tab);
+}
+
+function closeAiIoModal() {
+  const modal = document.getElementById('ai-io-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function switchAiIoTab(tab) {
+  currentAiIoTab = tab;
+  const btnInput = document.getElementById('ai-io-tab-input');
+  const btnOutput = document.getElementById('ai-io-tab-output');
+  const box = document.getElementById('ai-io-content-box');
+  if (!box) return;
+
+  if (tab === 'input') {
+    if (btnInput) {
+      btnInput.style.borderColor = 'var(--color-primary)';
+      btnInput.style.color = 'var(--color-primary)';
+    }
+    if (btnOutput) {
+      btnOutput.style.borderColor = 'var(--border-color)';
+      btnOutput.style.color = 'var(--color-text-muted)';
+    }
+    const val = window.lastAiInputPayload ? (typeof window.lastAiInputPayload === 'string' ? window.lastAiInputPayload : JSON.stringify(window.lastAiInputPayload, null, 2)) : 'لا توجد مدخلات مسجلة بعد للعملية الأخيرة.';
+    box.value = val;
+  } else {
+    if (btnOutput) {
+      btnOutput.style.borderColor = 'var(--color-primary)';
+      btnOutput.style.color = 'var(--color-primary)';
+    }
+    if (btnInput) {
+      btnInput.style.borderColor = 'var(--border-color)';
+      btnInput.style.color = 'var(--color-text-muted)';
+    }
+    const val = window.lastAiOutputResponse ? (typeof window.lastAiOutputResponse === 'string' ? window.lastAiOutputResponse : JSON.stringify(window.lastAiOutputResponse, null, 2)) : 'لا توجد مخرجات مسجلة بعد للعملية الأخيرة.';
+    box.value = val;
+  }
+}
+
+function copyAiIoContent() {
+  const box = document.getElementById('ai-io-content-box');
+  if (!box || !box.value) return;
+  navigator.clipboard.writeText(box.value);
+  if (typeof showToast === 'function') {
+    showToast('تم نسخ محتوى ' + (currentAiIoTab === 'input' ? 'المدخلات' : 'المخرجات') + ' للحافظة! 📋', 'success');
+  } else {
+    alert('تم نسخ المحتوى بنجاح!');
+  }
+}
+
+window.openAiInputOutputInspectorModal = openAiInputOutputInspectorModal;
+window.closeAiIoModal = closeAiIoModal;
+window.switchAiIoTab = switchAiIoTab;
+window.copyAiIoContent = copyAiIoContent;

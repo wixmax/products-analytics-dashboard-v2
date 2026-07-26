@@ -48,6 +48,7 @@ $routes->get('/api/products', 'Products::index');
 $routes->get('/api/products/stats', 'Products::stats');
 $routes->get('/api/products/insights-charts', 'Products::insightsCharts');
 $routes->get('/api/products/countries', 'Products::countries');
+$routes->get('/api/products/available-countries', 'Products::availableCountries');
 $routes->match(['GET', 'POST'], '/api/products/sync', 'Products::sync');
 $routes->get('/api/products/available-dates', 'Products::getAvailableDates');
 $routes->post('/api/products/sync-trpc', 'Products::syncTrpc');

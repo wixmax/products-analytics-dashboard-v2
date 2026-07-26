@@ -18,6 +18,20 @@ class AiService
         $this->model    = $config['model'];
     }
 
+    protected string $lastCallError = '';
+    protected ?array $lastInputPayload = null;
+    protected ?array $lastOutputResponse = null;
+
+    public function getLastInputPayload(): ?array
+    {
+        return $this->lastInputPayload;
+    }
+
+    public function getLastOutputResponse(): ?array
+    {
+        return $this->lastOutputResponse;
+    }
+
     /**
      * Check if an API key is non-empty and not a default placeholder like 'your-gemini-key-here'
      */
@@ -90,19 +104,6 @@ class AiService
                         break;
                 }
             }
-
-            // Universal API Key Fallback if specific provider key is missing/placeholder
-            if (!$this->isValidApiKey($apiKey)) {
-                if ($this->isValidApiKey(env('APIYI_API_KEY'))) {
-                    $apiKey = trim(env('APIYI_API_KEY', ''));
-                } elseif ($this->isValidApiKey(env('OPENROUTER_API_KEY'))) {
-                    $apiKey = trim(env('OPENROUTER_API_KEY', ''));
-                } elseif ($this->isValidApiKey(env('OPENAI_API_KEY'))) {
-                    $apiKey = trim(env('OPENAI_API_KEY', ''));
-                } else {
-                    $apiKey = trim(env('AI_API_KEY', ''));
-                }
-            }
         }
 
         // Get Model based on provider
@@ -119,7 +120,7 @@ class AiService
                         $model = trim(env('OPENAI_MODEL', env('AI_MODEL', 'gpt-4o-mini')));
                         break;
                     case 'gemini':
-                        $model = trim(env('GEMINI_MODEL', env('AI_MODEL', 'gemini-1.5-flash')));
+                        $model = trim(env('GEMINI_MODEL', env('AI_MODEL', 'gemini-2.5-flash')));
                         break;
                     case 'deepseek':
                         $model = trim(env('DEEPSEEK_MODEL', env('AI_MODEL', 'deepseek-chat')));
@@ -134,16 +135,75 @@ class AiService
             }
         }
 
-        // Normalize invalid/outdated model names
-        if ($provider === 'gemini' && ($model === 'gemini-3.5-flash-lite' || $model === 'gemini-3.6-flash')) {
-            $model = 'gemini-1.5-flash';
+        // Normalize invalid/outdated model names to currently active ones
+        $deprecatedGeminiModels = [
+            'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-1.5-flash',
+            'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.0-pro',
+            'gemini-pro', 'gemini-2.0-flash-lite'
+        ];
+        if ($provider === 'gemini' && in_array($model, $deprecatedGeminiModels, true)) {
+            $model = 'gemini-2.5-flash';
         }
 
         return [
             'provider' => $provider,
             'api_key'  => $apiKey,
-            'model'    => $model
+            'model'    => $model,
+            'allow_internal_fallback' => isset($dbConfig['allow_internal_fallback']) ? (bool)$dbConfig['allow_internal_fallback'] : true
         ];
+    }
+
+    /**
+     * Sanitize product image fields to strip out base64 data URIs completely.
+     * Keep ONLY valid HTTP/HTTPS URLs or relative paths.
+     */
+    protected function sanitizeProductImageUrls(array $products): array
+    {
+        foreach ($products as &$p) {
+            if (!is_array($p)) continue;
+            
+            // Clean ad_image_urls array or string
+            if (isset($p['ad_image_urls'])) {
+                $rawUrls = is_array($p['ad_image_urls']) 
+                    ? $p['ad_image_urls'] 
+                    : explode(';', strval($p['ad_image_urls']));
+
+                $cleanUrls = array_values(array_filter($rawUrls, function($url) {
+                    if (!is_string($url)) return false;
+                    $url = trim($url);
+                    if (empty($url)) return false;
+                    if (str_starts_with($url, 'data:image') || str_starts_with($url, 'data:') || str_contains($url, 'data:image')) return false;
+                    return (str_starts_with($url, 'http://') || str_starts_with($url, 'https://') || str_starts_with($url, '/'));
+                }));
+
+                $p['ad_image_urls'] = $cleanUrls;
+            }
+
+            // Clean images array
+            if (isset($p['images']) && is_array($p['images'])) {
+                $p['images'] = array_values(array_filter($p['images'], function($url) {
+                    if (!is_string($url)) return false;
+                    $url = trim($url);
+                    if (str_starts_with($url, 'data:image') || str_starts_with($url, 'data:')) return false;
+                    return (str_starts_with($url, 'http://') || str_starts_with($url, 'https://') || str_starts_with($url, '/'));
+                }));
+            }
+
+            // Clean single image_url / image
+            if (isset($p['image_url']) && is_string($p['image_url'])) {
+                $url = trim($p['image_url']);
+                if (str_starts_with($url, 'data:image') || str_starts_with($url, 'data:')) {
+                    $p['image_url'] = '';
+                }
+            }
+            if (isset($p['image']) && is_string($p['image'])) {
+                $url = trim($p['image']);
+                if (str_starts_with($url, 'data:image') || str_starts_with($url, 'data:')) {
+                    $p['image'] = '';
+                }
+            }
+        }
+        return $products;
     }
 
     /**
@@ -152,10 +212,13 @@ class AiService
     public function evaluateProducts(array $products, array $params): array
     {
         @set_time_limit(180);
+        $products = $this->sanitizeProductImageUrls($products);
         $config = $this->resolveConfig($params);
         $provider = $config['provider'];
         $apiKey   = $config['api_key'];
         $model    = $config['model'];
+        $allowFallback = $config['allow_internal_fallback'] ?? true;
+        $lastError = '';
 
         if ($this->isValidApiKey($apiKey) && $provider !== 'internal') {
             $this->provider = $provider;
@@ -163,22 +226,7 @@ class AiService
             $this->model    = $model;
 
             try {
-                // If user wants Gemini but direct GEMINI_API_KEY is missing/placeholder, route via APIyi or OpenRouter if available
-                if ($this->provider === 'gemini' && !$this->isValidApiKey(env('GEMINI_API_KEY'))) {
-                    if ($this->isValidApiKey(env('APIYI_API_KEY'))) {
-                        $this->apiKey = trim(env('APIYI_API_KEY'));
-                        $this->provider = 'apiyi';
-                        $this->model = 'deepseek-v4-flash';
-                        $result = $this->callOpenAiCompatibleApi('https://api.apiyi.com/v1/chat/completions', $products, $params);
-                    } elseif ($this->isValidApiKey(env('OPENROUTER_API_KEY'))) {
-                        $this->apiKey = trim(env('OPENROUTER_API_KEY'));
-                        $this->provider = 'openrouter';
-                        $this->model = 'openai/gpt-4o-mini';
-                        $result = $this->callOpenAiCompatibleApi('https://openrouter.ai/api/v1/chat/completions', $products, $params);
-                    } else {
-                        $result = $this->callGeminiApi($products, $params);
-                    }
-                } elseif ($this->provider === 'gemini') {
+                if ($this->provider === 'gemini') {
                     $result = $this->callGeminiApi($products, $params);
                 } elseif ($this->provider === 'deepseek') {
                     $result = $this->callOpenAiCompatibleApi('https://api.deepseek.com/chat/completions', $products, $params);
@@ -203,15 +251,37 @@ class AiService
                     $adBudget = floatval($params['ad_budget'] ?? $params['total_ad_budget'] ?? 1000);
                     $this->normalizeBudgetFitFlags($result, $adBudget);
                     return $result;
+                } else {
+                    $lastError = $this->lastCallError ?: "لم يرجع المزود نتائج صالحة للمنتجات (evaluations is missing or empty).";
+                    log_message('error', "AI Service [{$this->provider}/{$this->model}]: " . $lastError);
                 }
             } catch (\Throwable $e) {
-                log_message('error', 'AI Service LLM call failed: ' . $e->getMessage());
+                $lastError = $e->getMessage();
+                log_message('error', "AI Service LLM call failed [{$this->provider}/{$this->model}]: " . $lastError);
             }
+        } else {
+            $lastError = "مفتاح API الخاص بالمزود '{$provider}' غير مفعّل أو غير معروف.";
+            log_message('info', "AI Service: " . $lastError);
+        }
+
+        // If internal fallback is disabled, throw Exception
+        if (!$allowFallback && $provider !== 'internal') {
+            throw new \RuntimeException("فشل إجراء التحليل عبر المزود الخارجي (" . strtoupper($provider) . " / " . $model . "). (المحرك المحلي الاحتياطي Internal Market Engine معطل في إعدادات النظام). تفاصيل الخطأ: " . ($lastError ?: "تعذر الوصول للمزود"));
         }
 
         // Fallback to local heuristic engine
         $fallback = $this->runLocalHeuristicEngine($products, $params);
         $fallback['ai_powered_by'] = 'Internal Market Engine (Offline Fallback)';
+        $fallback['raw_input_payload'] = [
+            'provider' => 'internal',
+            'engine' => 'Internal Market Heuristic Engine (Rule-based)',
+            'products_count' => count($products),
+            'params' => $params
+        ];
+        $fallback['raw_output_response'] = [
+            'status' => 'local_fallback_executed',
+            'evaluations_count' => count($fallback['evaluations'] ?? [])
+        ];
         $adBudget = floatval($params['ad_budget'] ?? $params['total_ad_budget'] ?? 1000);
         $this->normalizeBudgetFitFlags($fallback, $adBudget);
         return $fallback;
@@ -266,7 +336,8 @@ class AiService
                     'content' => $prompt
                 ]
             ],
-            'temperature' => 0.4
+            'temperature' => 0.4,
+            'max_tokens' => 3500
         ];
 
         $headers = array_merge([
@@ -280,28 +351,67 @@ class AiService
             CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_POSTFIELDS => json_encode($payload),
-            CURLOPT_TIMEOUT => 45,
-            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_CONNECTTIMEOUT => 15,
             CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            CURLOPT_FOLLOWLOCATION => true
         ]);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
         curl_close($ch);
+
+        $inputPayloadLog = [
+            'endpoint' => $endpoint,
+            'provider' => $this->provider,
+            'model'    => $this->model,
+            'payload'  => $payload
+        ];
+        $this->lastInputPayload = $inputPayloadLog;
 
         if ($httpCode === 200 && $response) {
             $data = json_decode($response, true);
             $content = $data['choices'][0]['message']['content'] ?? '';
             $decoded = $this->cleanAndDecodeJson($content);
+            $this->lastOutputResponse = [
+                'http_code' => $httpCode,
+                'content'   => $data ?? $response
+            ];
             if ($decoded !== null) {
+                $decoded['raw_input_payload'] = $inputPayloadLog;
+                $decoded['raw_output_response'] = $this->lastOutputResponse;
                 return $decoded;
+            } else {
+                $this->lastCallError = "الموديل ({$this->model}) أرجع استجابة لكن يتعذر استخراج هيكل JSON المطلوب منها. (جرّب استخدام موديل آخر أكثر استقراراً مثل gpt-4o-mini أو gemini-2.5-flash).";
             }
         } else {
-            log_message('error', "AI Service LLM [{$endpoint}] HTTP Code {$httpCode}: " . substr((string)$response, 0, 500));
+            $errData = json_decode($response, true);
+            $apiErrMsg = $errData['error']['message'] ?? $errData['message'] ?? (!empty($curlErr) ? "خطأ الاتصال (cURL): {$curlErr}" : (substr((string)$response, 0, 300) ?: "فشل الاتصال الخارجي (HTTP {$httpCode})"));
+            $this->lastCallError = "خطأ من مزود الخدمة [{$this->provider}/{$this->model}] (رمز HTTP {$httpCode}): " . $apiErrMsg;
+            $this->lastOutputResponse = [
+                'http_code' => $httpCode,
+                'error'     => $apiErrMsg,
+                'raw_body'  => $errData ?? $response ?? $curlErr
+            ];
+            log_message('error', "AI Service LLM [{$endpoint}] HTTP Code {$httpCode}: " . ($curlErr ?: substr((string)$response, 0, 500)));
         }
 
         return null;
+    }
+
+    protected function normalizeGeminiModel(string $model): string
+    {
+        $model = trim($model);
+        if (str_starts_with(strtolower($model), 'google/')) {
+            $model = substr($model, 7);
+        }
+        if (empty($model)) {
+            return 'gemini-2.0-flash';
+        }
+        return $model;
     }
 
     /**
@@ -310,7 +420,8 @@ class AiService
     protected function callGeminiApi(array $products, array $params): ?array
     {
         @set_time_limit(180);
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key={$this->apiKey}";
+        $targetModel = $this->normalizeGeminiModel($this->model);
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$targetModel}:generateContent?key={$this->apiKey}";
         $prompt = $this->buildPrompt($products, $params);
 
         $payload = [
@@ -323,7 +434,8 @@ class AiService
             ],
             'generationConfig' => [
                 'response_mime_type' => 'application/json',
-                'temperature' => 0.4
+                'temperature' => 0.4,
+                'maxOutputTokens' => 3500
             ]
         ];
 
@@ -333,25 +445,52 @@ class AiService
             CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode($payload),
-            CURLOPT_TIMEOUT => 45,
-            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_CONNECTTIMEOUT => 15,
             CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            CURLOPT_FOLLOWLOCATION => true
         ]);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
         curl_close($ch);
+
+        $inputPayloadLog = [
+            'endpoint' => "https://generativelanguage.googleapis.com/v1beta/models/{$targetModel}:generateContent",
+            'provider' => 'gemini',
+            'model'    => $targetModel,
+            'payload'  => $payload
+        ];
+        $this->lastInputPayload = $inputPayloadLog;
 
         if ($httpCode === 200 && $response) {
             $data = json_decode($response, true);
             $content = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
             $decoded = $this->cleanAndDecodeJson($content);
+            $this->lastOutputResponse = [
+                'http_code' => $httpCode,
+                'content'   => $data ?? $response
+            ];
             if ($decoded !== null) {
+                $decoded['raw_input_payload'] = $inputPayloadLog;
+                $decoded['raw_output_response'] = $this->lastOutputResponse;
                 return $decoded;
+            } else {
+                $this->lastCallError = "موديل Gemini أرجع نصاً غير متوافق مع صيغة JSON المطلوبة.";
             }
         } else {
-            log_message('error', "Gemini API HTTP Error {$httpCode}: " . substr((string)$response, 0, 500));
+            $errData = json_decode($response, true);
+            $apiErrMsg = $errData['error']['message'] ?? $errData['message'] ?? (!empty($curlErr) ? "خطأ الاتصال (cURL): {$curlErr}" : (substr((string)$response, 0, 300) ?: "فشل الاتصال بـ Gemini (HTTP {$httpCode})"));
+            $this->lastCallError = "خطأ من Google Gemini (رمز HTTP {$httpCode}): " . $apiErrMsg;
+            $this->lastOutputResponse = [
+                'http_code' => $httpCode,
+                'error'     => $apiErrMsg,
+                'raw_body'  => $errData ?? $response ?? $curlErr
+            ];
+            log_message('error', "Gemini API HTTP Error {$httpCode}: " . ($curlErr ?: substr((string)$response, 0, 500)));
         }
 
         return null;
@@ -383,8 +522,7 @@ class AiService
                 'selling_price' => $price,
                 'has_video_creative' => $hasVideo,
                 'estimated_active_ads' => $adsCount,
-                'url' => $url,
-                'image_url' => $img
+                'url' => $url
             ];
         }
 
@@ -741,6 +879,8 @@ class AiService
      */
     public function evaluateSingleProductDeep(array $product, array $params): array
     {
+        $sanitizedArr = $this->sanitizeProductImageUrls([$product]);
+        $product = $sanitizedArr[0] ?? $product;
         $config = $this->resolveConfig($params);
         $provider = $config['provider'];
         $apiKey   = $config['api_key'];
@@ -1009,7 +1149,8 @@ class AiService
                     'content' => $prompt
                 ]
             ],
-            'temperature' => 0.4
+            'temperature' => 0.4,
+            'max_tokens' => 3500
         ];
 
         $headers = array_merge([
@@ -1026,7 +1167,9 @@ class AiService
             CURLOPT_TIMEOUT => 120,
             CURLOPT_CONNECTTIMEOUT => 15,
             CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            CURLOPT_FOLLOWLOCATION => true
         ]);
 
         $response = curl_exec($ch);
@@ -1048,7 +1191,8 @@ class AiService
 
     protected function callGeminiRaw(string $prompt): ?array
     {
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key={$this->apiKey}";
+        $targetModel = $this->normalizeGeminiModel($this->model);
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$targetModel}:generateContent?key={$this->apiKey}";
 
         $payload = [
             'contents' => [
@@ -1060,7 +1204,8 @@ class AiService
             ],
             'generationConfig' => [
                 'response_mime_type' => 'application/json',
-                'temperature' => 0.4
+                'temperature' => 0.4,
+                'maxOutputTokens' => 3500
             ]
         ];
 
@@ -1073,7 +1218,9 @@ class AiService
             CURLOPT_TIMEOUT => 120,
             CURLOPT_CONNECTTIMEOUT => 15,
             CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            CURLOPT_FOLLOWLOCATION => true
         ]);
 
         $response = curl_exec($ch);

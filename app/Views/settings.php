@@ -333,6 +333,14 @@
               </select>
             </div>
 
+            <div class="settings-form-group" style="margin-top: 1rem;">
+              <label style="font-weight: 700;">⚡ المحرك المحلي الاحتياطي (Internal Market Engine / Offline Fallback):</label>
+              <select id="ai-allow-internal-fallback-select" class="form-control" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 700;" onchange="handleFallbackToggleChange(this.value)">
+                <option value="enabled" selected>🟢 مفعل (التراجع إلى المحرك المحلي تلقائياً في حالة فشل الاتصال بالمزود الخارجي)</option>
+                <option value="disabled">🔴 معطل (العمل فقط بالمزود الخارجي وإلغاء التراجع المحلي مع قذف خطأ الفشل)</option>
+              </select>
+            </div>
+
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 1.5rem 0;" />
 
             <h4 style="font-weight: 800; font-size: 1rem; margin-bottom: 1rem; color: var(--color-primary); display: flex; align-items: center; gap: 8px;">
@@ -564,6 +572,7 @@
       // Global AI Providers Config State
       let aiConfigState = {
         active_provider: "openrouter",
+        allow_internal_fallback: true,
         providers: {
           openrouter: {
             name: "🌐 OpenRouter",
@@ -580,8 +589,8 @@
           gemini: {
             name: "💎 Google Gemini",
             api_key: "",
-            active_model: "gemini-1.5-flash",
-            models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"]
+            active_model: "gemini-2.5-flash",
+            models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
           },
           deepseek: {
             name: "🐋 DeepSeek",
@@ -612,18 +621,22 @@
             const data = await res.json();
             if (data.value) {
               const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-              if (parsed && parsed.providers) {
-                // Merge with default to preserve names if any key missing
+              if (parsed) {
+                if (typeof parsed.allow_internal_fallback !== 'undefined') {
+                  aiConfigState.allow_internal_fallback = Boolean(parsed.allow_internal_fallback);
+                }
                 aiConfigState.active_provider = parsed.active_provider || aiConfigState.active_provider;
-                for (const pKey in parsed.providers) {
-                  if (aiConfigState.providers[pKey]) {
-                    aiConfigState.providers[pKey].api_key = parsed.providers[pKey].api_key || '';
-                    aiConfigState.providers[pKey].active_model = parsed.providers[pKey].active_model || aiConfigState.providers[pKey].active_model;
-                    if (Array.isArray(parsed.providers[pKey].models) && parsed.providers[pKey].models.length > 0) {
-                      aiConfigState.providers[pKey].models = parsed.providers[pKey].models;
+                if (parsed.providers) {
+                  for (const pKey in parsed.providers) {
+                    if (aiConfigState.providers[pKey]) {
+                      aiConfigState.providers[pKey].api_key = parsed.providers[pKey].api_key || '';
+                      aiConfigState.providers[pKey].active_model = parsed.providers[pKey].active_model || aiConfigState.providers[pKey].active_model;
+                      if (Array.isArray(parsed.providers[pKey].models) && parsed.providers[pKey].models.length > 0) {
+                        aiConfigState.providers[pKey].models = parsed.providers[pKey].models;
+                      }
+                    } else {
+                      aiConfigState.providers[pKey] = parsed.providers[pKey];
                     }
-                  } else {
-                    aiConfigState.providers[pKey] = parsed.providers[pKey];
                   }
                 }
               }
@@ -642,10 +655,19 @@
         }
       }
 
+      function handleFallbackToggleChange(val) {
+        aiConfigState.allow_internal_fallback = (val === 'enabled');
+      }
+
       function renderAiProvidersUI() {
         const selectGlobal = document.getElementById('ai-global-active-provider');
         if (selectGlobal && aiConfigState.active_provider) {
           selectGlobal.value = aiConfigState.active_provider;
+        }
+
+        const selectFallback = document.getElementById('ai-allow-internal-fallback-select');
+        if (selectFallback) {
+          selectFallback.value = (aiConfigState.allow_internal_fallback !== false) ? 'enabled' : 'disabled';
         }
 
         const container = document.getElementById('ai-providers-accordion');

@@ -865,12 +865,9 @@ class Products extends ResourceController
                 $finalProducts = $versionProducts;
                 if ($requestedCountry !== null && $requestedCountry !== '') {
                     $countries = explode(';', $requestedCountry);
-                    $filtered = array_values(array_filter($versionProducts, function($p) use ($countries) {
+                    $finalProducts = array_values(array_filter($versionProducts, function($p) use ($countries) {
                         return in_array($p['country'], $countries);
                     }));
-                    if (!empty($filtered)) {
-                        $finalProducts = $filtered;
-                    }
                 }
 
                 $formatted = [
@@ -923,6 +920,10 @@ class Products extends ResourceController
             if ($snapshot && !empty($snapshot['raw_json'])) {
                 $decodedData = json_decode($snapshot['raw_json'], true);
                 if (is_array($decodedData) && isset($decodedData[0])) {
+                    if (!empty($requestedCountry)) {
+                        $countries = explode(';', $requestedCountry);
+                        $this->filterSnapshotByCountries($decodedData, $countries);
+                    }
                     $decodedData[0]['source'] = 'database';
                     $decodedData[0]['is_duplicate'] = true;
                     return $this->respond($decodedData);
@@ -935,12 +936,9 @@ class Products extends ResourceController
                 $finalProducts = $originProducts;
                 if ($requestedCountry !== null && $requestedCountry !== '') {
                     $countries = explode(';', $requestedCountry);
-                    $filtered = array_values(array_filter($originProducts, function($p) use ($countries) {
+                    $finalProducts = array_values(array_filter($originProducts, function($p) use ($countries) {
                         return in_array($p['country'], $countries);
                     }));
-                    if (!empty($filtered)) {
-                        $finalProducts = $filtered;
-                    }
                 }
 
                 $formatted = [
@@ -993,6 +991,10 @@ class Products extends ResourceController
                         $entry['api_version'] = $requestedVersion;
                     }
                 }
+            }
+            if (!empty($requestedCountry)) {
+                $countries = explode(';', $requestedCountry);
+                $this->filterSnapshotByCountries($data, $countries);
             }
             return $this->respond($data);
         }
@@ -2055,8 +2057,17 @@ private function generateLiveStrategy($product, $activity)
                 $productsInput = $model->where('origin', 'Winning')->findAll(30);
             }
 
+            $requestedCountry = $json['requested_country'] ?? $json['country'] ?? $this->request->getVar('country');
+            if (!empty($requestedCountry) && $requestedCountry !== 'all') {
+                $countries = explode(';', $requestedCountry);
+                $productsInput = array_values(array_filter($productsInput, function($p) use ($countries) {
+                    $c = is_array($p) ? ($p['country'] ?? '') : ($p->country ?? '');
+                    return in_array($c, $countries, true);
+                }));
+            }
+
             if (empty($productsInput)) {
-                return $this->fail('لا توجد منتجات متاحة للتحليل في الوقت الحالي.');
+                return $this->fail('لا توجد منتجات متاحة للتحليل في الوقت الحالي للدولة المحددة.');
             }
 
             $analysisModel = new \App\Models\AiProductAnalysisModel();
@@ -2116,11 +2127,18 @@ private function generateLiveStrategy($product, $activity)
                 'title' => $analysisTitle,
                 'summary' => $summaryStats,
                 'evaluations' => $evaluations,
-                'ai_powered_by' => $analysisOutput['ai_powered_by'] ?? 'Internal Engine'
+                'ai_powered_by' => $analysisOutput['ai_powered_by'] ?? 'Internal Engine',
+                'raw_input_payload' => $analysisOutput['raw_input_payload'] ?? null,
+                'raw_output_response' => $analysisOutput['raw_output_response'] ?? null
             ]);
         } catch (\Throwable $e) {
             log_message('error', 'AI Analyze Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
-            return $this->fail('حدث خطأ في النظام أثناء إجراء التحليل: ' . $e->getMessage(), 500);
+            return $this->respond([
+                'success' => false,
+                'error' => 'فشل إجراء التحليل بالذكاء الاصطناعي: ' . $e->getMessage(),
+                'raw_input_payload' => $aiService->getLastInputPayload() ?? null,
+                'raw_output_response' => $aiService->getLastOutputResponse() ?? null
+            ], 400);
         }
     }
 
@@ -2416,5 +2434,110 @@ private function generateLiveStrategy($product, $activity)
                 'error'   => $e->getMessage()
             ], 500);
         }
+    }
+
+    private function filterSnapshotByCountries(&$decodedData, array $countries)
+    {
+        if (empty($decodedData) || empty($countries)) return;
+
+        $filterItem = function(&$item) use ($countries) {
+            if (!is_array($item)) return;
+
+            if (isset($item['result']['data']['json']['productsEntries']) && is_array($item['result']['data']['json']['productsEntries'])) {
+                $entries = $item['result']['data']['json']['productsEntries'];
+                $filtered = array_values(array_filter($entries, function($p) use ($countries) {
+                    $c = $p['country'] ?? '';
+                    return in_array($c, $countries, true);
+                }));
+                $item['result']['data']['json']['productsEntries'] = $filtered;
+            } elseif (isset($item['data']['json']['productsEntries']) && is_array($item['data']['json']['productsEntries'])) {
+                $entries = $item['data']['json']['productsEntries'];
+                $filtered = array_values(array_filter($entries, function($p) use ($countries) {
+                    $c = $p['country'] ?? '';
+                    return in_array($c, $countries, true);
+                }));
+                $item['data']['json']['productsEntries'] = $filtered;
+            } elseif (isset($item['json']['productsEntries']) && is_array($item['json']['productsEntries'])) {
+                $entries = $item['json']['productsEntries'];
+                $filtered = array_values(array_filter($entries, function($p) use ($countries) {
+                    $c = $p['country'] ?? '';
+                    return in_array($c, $countries, true);
+                }));
+                $item['json']['productsEntries'] = $filtered;
+            } elseif (isset($item['productsEntries']) && is_array($item['productsEntries'])) {
+                $entries = $item['productsEntries'];
+                $filtered = array_values(array_filter($entries, function($p) use ($countries) {
+                    $c = $p['country'] ?? '';
+                    return in_array($c, $countries, true);
+                }));
+                $item['productsEntries'] = $filtered;
+            }
+        };
+
+        if (is_array($decodedData)) {
+            if (isset($decodedData[0])) {
+                foreach ($decodedData as &$item) {
+                    $filterItem($item);
+                }
+            } else {
+                $filterItem($decodedData);
+            }
+        }
+    }
+
+    public function availableCountries()
+    {
+        $origin = $this->request->getVar('origin') ?? 'Winning';
+        $date = $this->request->getVar('date');
+
+        $countryCounts = [];
+        $snapshotModel = new SnapshotModel();
+
+        $snapshot = null;
+        if (!empty($date)) {
+            $snapshot = $snapshotModel->where('origin', $origin)
+                                      ->groupStart()
+                                        ->like('created_at', $date, 'after')
+                                        ->orLike('api_version', $date)
+                                      ->groupEnd()
+                                      ->orderBy('id', 'DESC')
+                                      ->first();
+        }
+
+        if (!$snapshot) {
+            $snapshot = $snapshotModel->where('origin', $origin)->orderBy('id', 'DESC')->first();
+        }
+
+        if ($snapshot && !empty($snapshot['raw_json'])) {
+            $decoded = json_decode($snapshot['raw_json'], true);
+            $target = $decoded[0] ?? $decoded;
+            $jsonTarget = $target['result']['data']['json'] ?? $target['data']['json'] ?? $target['json'] ?? $target;
+            $entries = $jsonTarget['productsEntries'] ?? $jsonTarget['results'] ?? (is_array($jsonTarget) ? $jsonTarget : []);
+
+            foreach ($entries as $p) {
+                $c = is_array($p) ? ($p['country'] ?? '') : ($p->country ?? '');
+                if (!empty($c)) {
+                    $countryCounts[$c] = ($countryCounts[$c] ?? 0) + 1;
+                }
+            }
+        } else {
+            $productModel = new ProductModel();
+            $builder = $productModel->where('origin', $origin);
+            if (!empty($date)) {
+                $builder->where('ad_start_date', $date);
+            }
+            $products = $builder->findAll();
+            foreach ($products as $p) {
+                if (!empty($p['country'])) {
+                    $countryCounts[$p['country']] = ($countryCounts[$p['country']] ?? 0) + 1;
+                }
+            }
+        }
+
+        return $this->respond([
+            'success'       => true,
+            'date'          => $date,
+            'countryCounts' => $countryCounts
+        ]);
     }
 }

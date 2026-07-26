@@ -10,6 +10,20 @@ const generatingThumbnails = new Set();
 function updateProductMemoryImage(productId, productUrl, imageUrl) {
   if (!imageUrl) return;
 
+  const cleanMemoryImage = (p) => {
+    let existing = (p.ad_image_urls || "").split(";").filter(Boolean);
+    // Strip out base64 data URIs
+    existing = existing.filter((url) => !url.startsWith("data:image/") && !url.startsWith("data:"));
+
+    // Add only clean URLs (http, https, or relative path)
+    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://") || imageUrl.startsWith("/")) {
+      if (!existing.includes(imageUrl)) {
+        existing.unshift(imageUrl);
+      }
+    }
+    p.ad_image_urls = existing.join(";");
+  };
+
   // Update in allProducts (index.js)
   if (typeof allProducts !== "undefined" && Array.isArray(allProducts)) {
     const p = allProducts.find(
@@ -17,13 +31,7 @@ function updateProductMemoryImage(productId, productUrl, imageUrl) {
         (productId && String(item.id) === String(productId)) ||
         (productUrl && item.productUrl === productUrl)
     );
-    if (p) {
-      const existing = (p.ad_image_urls || "").split(";").filter(Boolean);
-      if (!existing.includes(imageUrl)) {
-        existing.unshift(imageUrl);
-        p.ad_image_urls = existing.join(";");
-      }
-    }
+    if (p) cleanMemoryImage(p);
   }
 
   // Update in savedProducts (saved-ads.js)
@@ -33,13 +41,7 @@ function updateProductMemoryImage(productId, productUrl, imageUrl) {
         (productId && String(item.id) === String(productId)) ||
         (productUrl && item.productUrl === productUrl)
     );
-    if (p) {
-      const existing = (p.ad_image_urls || "").split(";").filter(Boolean);
-      if (!existing.includes(imageUrl)) {
-        existing.unshift(imageUrl);
-        p.ad_image_urls = existing.join(";");
-      }
-    }
+    if (p) cleanMemoryImage(p);
   }
 }
 
