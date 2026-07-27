@@ -95,6 +95,7 @@ $routes->post('/api/products/clear-database-data', 'Products::clearDatabaseData'
 // AI Winning Product Analysis Endpoints
 $routes->post('/api/ai/analyze', 'Products::aiAnalyze');
 $routes->post('/api/ai/analyze-deep', 'Products::aiDeepAnalyze');
+$routes->post('/api/products/ai_deep_analyze', 'Products::aiDeepAnalyze');
 $routes->get('/api/ai/history', 'Products::aiHistory');
 $routes->get('/api/ai/history/(:num)', 'Products::aiHistoryDetail/$1');
 $routes->post('/api/ai/history/(:num)/delete', 'Products::aiDeleteHistory/$1');

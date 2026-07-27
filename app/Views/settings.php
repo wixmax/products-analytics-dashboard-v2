@@ -334,6 +334,14 @@
             </div>
 
             <div class="settings-form-group" style="margin-top: 1rem;">
+              <label style="font-weight: 700;">🔄 التبديل التلقائي بين المزودين الخارجيين (External Provider Failover):</label>
+              <select id="ai-allow-provider-failover-select" class="form-control" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 700;" onchange="handleProviderFailoverToggleChange(this.value)">
+                <option value="disabled" selected>🔴 معطل (الالتزام حصراً بالمزود المختار وإظهار الخطأ عند الفشل دون التبديل لمزود آخر)</option>
+                <option value="enabled">🟢 مفعل (التبديل التلقائي إلى OpenRouter / APIyi عند فشل المزود الرئيسي)</option>
+              </select>
+            </div>
+
+            <div class="settings-form-group" style="margin-top: 1rem;">
               <label style="font-weight: 700;">⚡ المحرك المحلي الاحتياطي (Internal Market Engine / Offline Fallback):</label>
               <select id="ai-allow-internal-fallback-select" class="form-control" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 700;" onchange="handleFallbackToggleChange(this.value)">
                 <option value="enabled" selected>🟢 مفعل (التراجع إلى المحرك المحلي تلقائياً في حالة فشل الاتصال بالمزود الخارجي)</option>
@@ -572,6 +580,7 @@
       // Global AI Providers Config State
       let aiConfigState = {
         active_provider: "openrouter",
+        allow_provider_failover: false,
         allow_internal_fallback: true,
         providers: {
           openrouter: {
@@ -625,6 +634,9 @@
                 if (typeof parsed.allow_internal_fallback !== 'undefined') {
                   aiConfigState.allow_internal_fallback = Boolean(parsed.allow_internal_fallback);
                 }
+                if (typeof parsed.allow_provider_failover !== 'undefined') {
+                  aiConfigState.allow_provider_failover = Boolean(parsed.allow_provider_failover);
+                }
                 aiConfigState.active_provider = parsed.active_provider || aiConfigState.active_provider;
                 if (parsed.providers) {
                   for (const pKey in parsed.providers) {
@@ -655,6 +667,10 @@
         }
       }
 
+      function handleProviderFailoverToggleChange(val) {
+        aiConfigState.allow_provider_failover = (val === 'enabled');
+      }
+
       function handleFallbackToggleChange(val) {
         aiConfigState.allow_internal_fallback = (val === 'enabled');
       }
@@ -663,6 +679,11 @@
         const selectGlobal = document.getElementById('ai-global-active-provider');
         if (selectGlobal && aiConfigState.active_provider) {
           selectGlobal.value = aiConfigState.active_provider;
+        }
+
+        const selectFailover = document.getElementById('ai-allow-provider-failover-select');
+        if (selectFailover) {
+          selectFailover.value = (aiConfigState.allow_provider_failover === true) ? 'enabled' : 'disabled';
         }
 
         const selectFallback = document.getElementById('ai-allow-internal-fallback-select');

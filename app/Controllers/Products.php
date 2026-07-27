@@ -2253,12 +2253,28 @@ private function generateLiveStrategy($product, $activity)
             $json = $this->request->getJSON(true) ?? $this->request->getPost() ?? [];
 
             $product = $json['product'] ?? [];
-            if (empty($product) && isset($json['product_id'])) {
-                $productsData = $this->getProductsData();
-                foreach ($productsData['products'] as $p) {
-                    if (($p['id'] ?? null) == $json['product_id']) {
-                        $product = $p;
-                        break;
+            if (empty($product) && !empty($json['product_id'])) {
+                $productModel = new ProductModel();
+                $foundProduct = $productModel->find($json['product_id']);
+                if ($foundProduct) {
+                    $product = is_array($foundProduct) ? $foundProduct : (array)$foundProduct;
+                }
+            }
+
+            if (empty($product) && (!empty($json['product_title']) || !empty($json['title']))) {
+                $titleToSearch = trim($json['product_title'] ?? $json['title'] ?? '');
+                if ($titleToSearch !== '') {
+                    $productModel = new ProductModel();
+                    $foundProduct = $productModel->where('title', $titleToSearch)->orWhere('name', $titleToSearch)->first();
+                    if ($foundProduct) {
+                        $product = is_array($foundProduct) ? $foundProduct : (array)$foundProduct;
+                    } else {
+                        $product = [
+                            'id' => $json['product_id'] ?? 0,
+                            'title' => $titleToSearch,
+                            'name' => $titleToSearch,
+                            'price' => floatval($json['price_selling'] ?? 0),
+                        ];
                     }
                 }
             }

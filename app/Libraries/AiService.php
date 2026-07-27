@@ -48,7 +48,8 @@ class AiService
     }
 
     /**
-     * Resolve provider, API Key, and model from request params or specific ENV variables
+     * Resolve provider, API Key, and model from request params or specific ENV variables.
+     * Note: API keys are strictly mapped per provider to prevent cross-provider key leakage.
      */
     public function resolveConfig(array $params = []): array
     {
@@ -77,7 +78,7 @@ class AiService
 
         $providerDbConfig = $dbConfig['providers'][$provider] ?? [];
 
-        // Get API Key based on provider
+        // Get API Key based strictly on requested provider
         $apiKey = trim($params['api_key'] ?? '');
         if (!$this->isValidApiKey($apiKey)) {
             if ($this->isValidApiKey($providerDbConfig['api_key'] ?? '')) {
@@ -135,20 +136,15 @@ class AiService
             }
         }
 
-        // Normalize invalid/outdated model names to currently active ones
-        $deprecatedGeminiModels = [
-            'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-1.5-flash',
-            'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.0-pro',
-            'gemini-pro', 'gemini-2.0-flash-lite'
-        ];
-        if ($provider === 'gemini' && in_array($model, $deprecatedGeminiModels, true)) {
-            $model = 'gemini-2.5-flash';
-        }
+        $allowProviderFailover = isset($params['allow_provider_failover'])
+            ? (bool)$params['allow_provider_failover']
+            : (isset($dbConfig['allow_provider_failover']) ? (bool)$dbConfig['allow_provider_failover'] : false);
 
         return [
             'provider' => $provider,
             'api_key'  => $apiKey,
             'model'    => $model,
+            'allow_provider_failover' => $allowProviderFailover,
             'allow_internal_fallback' => isset($dbConfig['allow_internal_fallback']) ? (bool)$dbConfig['allow_internal_fallback'] : true
         ];
     }
@@ -207,84 +203,384 @@ class AiService
     }
 
     /**
-     * Main entry point to evaluate products via LLM API or Fallback Heuristic Engine
+     * Main entry point to evaluate products via LLM API (Phase 1 Batch Screening) or Fallback Heuristic Engine
      */
     public function evaluateProducts(array $products, array $params): array
     {
-        @set_time_limit(180);
+        @set_time_limit(300);
         $products = $this->sanitizeProductImageUrls($products);
+        $totalInputCount = count($products);
+
+        if ($totalInputCount === 0) {
+            return $this->buildEmptyResponse($params);
+        }
+
         $config = $this->resolveConfig($params);
         $provider = $config['provider'];
         $apiKey   = $config['api_key'];
         $model    = $config['model'];
-        $allowFallback = $config['allow_internal_fallback'] ?? true;
-        $lastError = '';
+        $allowProviderFailover = $config['allow_provider_failover'] ?? false;
+        $allowFallback         = $config['allow_internal_fallback'] ?? true;
+        $adBudget              = floatval($params['ad_budget'] ?? $params['ad_budget_total'] ?? 5000);
+
+        // 1) Configure batch size safely between 3 and 15 (default 10)
+        $batchSize = intval($params['ai_batch_size'] ?? 10);
+        $batchSize = max(3, min(15, $batchSize));
+
+        // Assign explicit 1-based index to each product if not present
+        foreach ($products as $idx => &$p) {
+            if (is_array($p) && !isset($p['index'])) {
+                $p['index'] = $idx + 1;
+            }
+        }
+        unset($p);
+
+        $batches = array_chunk($products, $batchSize);
+
+        $allEvaluations = [];
+        $providersUsed  = [];
+        $overallErrors  = [];
 
         if ($this->isValidApiKey($apiKey) && $provider !== 'internal') {
             $this->provider = $provider;
             $this->apiKey   = $apiKey;
             $this->model    = $model;
 
-            try {
-                if ($this->provider === 'gemini') {
-                    $result = $this->callGeminiApi($products, $params);
-                } elseif ($this->provider === 'deepseek') {
-                    $result = $this->callOpenAiCompatibleApi('https://api.deepseek.com/chat/completions', $products, $params);
-                } elseif ($this->provider === 'apiyi') {
-                    $result = $this->callOpenAiCompatibleApi('https://api.apiyi.com/v1/chat/completions', $products, $params);
-                } elseif ($this->provider === 'openrouter') {
-                    $result = $this->callOpenAiCompatibleApi(
-                        'https://openrouter.ai/api/v1/chat/completions',
-                        $products,
-                        $params,
-                        [
-                            'HTTP-Referer: ' . (env('app.baseURL', 'http://localhost:9090')),
-                            'X-Title: Product Analytics Dashboard'
-                        ]
-                    );
-                } else {
-                    $result = $this->callOpenAiCompatibleApi('https://api.openai.com/v1/chat/completions', $products, $params);
-                }
+            foreach ($batches as $bIdx => $batch) {
+                $batchResult = $this->executeSingleBatchWithRetryAndFailover($batch, $params, $provider, $apiKey, $model, $allowProviderFailover);
 
-                if ($result && isset($result['evaluations']) && is_array($result['evaluations'])) {
-                    $result['ai_powered_by'] = strtoupper($this->provider) . ' (' . $this->model . ')';
-                    $adBudget = floatval($params['ad_budget'] ?? $params['total_ad_budget'] ?? 1000);
-                    $this->normalizeBudgetFitFlags($result, $adBudget);
-                    return $result;
+                if ($batchResult && !empty($batchResult['evaluations'])) {
+                    foreach ($batchResult['evaluations'] as $eval) {
+                        $allEvaluations[] = $eval;
+                    }
+                    if (!empty($batchResult['provider_used'])) {
+                        $providersUsed[] = $batchResult['provider_used'];
+                    }
                 } else {
-                    $lastError = $this->lastCallError ?: "لم يرجع المزود نتائج صالحة للمنتجات (evaluations is missing or empty).";
-                    log_message('error', "AI Service [{$this->provider}/{$this->model}]: " . $lastError);
+                    if (!empty($this->lastCallError)) {
+                        $overallErrors[] = "دفعة #" . ($bIdx + 1) . ": " . $this->lastCallError;
+                    }
                 }
-            } catch (\Throwable $e) {
-                $lastError = $e->getMessage();
-                log_message('error', "AI Service LLM call failed [{$this->provider}/{$this->model}]: " . $lastError);
             }
         } else {
-            $lastError = "مفتاح API الخاص بالمزود '{$provider}' غير مفعّل أو غير معروف.";
-            log_message('info', "AI Service: " . $lastError);
+            $overallErrors[] = "مفتاح API الخاص بالمزود '{$provider}' غير مفعّل أو غائب.";
         }
 
-        // If internal fallback is disabled, throw Exception
+        // If we collected evaluations for products via LLMs
+        if (!empty($allEvaluations)) {
+            $effectiveProvider = !empty($providersUsed) ? implode(' / ', array_unique($providersUsed)) : strtoupper($provider) . " ({$model})";
+            return $this->aggregateBatchResults($allEvaluations, $products, $params, $adBudget, $effectiveProvider);
+        }
+
+        // If no LLM evaluations were produced, handle errors & fallback
+        $lastError = !empty($overallErrors) ? implode(' | ', array_unique($overallErrors)) : ($this->lastCallError ?: "تعذر تحليل الدفعات عبر المزود المختار.");
+
         if (!$allowFallback && $provider !== 'internal') {
-            throw new \RuntimeException("فشل إجراء التحليل عبر المزود الخارجي (" . strtoupper($provider) . " / " . $model . "). (المحرك المحلي الاحتياطي Internal Market Engine معطل في إعدادات النظام). تفاصيل الخطأ: " . ($lastError ?: "تعذر الوصول للمزود"));
+            throw new \RuntimeException("فشل إجراء التحليل عبر المزود الخارجي (" . strtoupper($provider) . " / " . $model . "). (المحرك المحلي الاحتياطي Internal Market Engine معطل في إعدادات النظام). تفاصيل الخطأ: " . $lastError);
         }
 
         // Fallback to local heuristic engine
+        log_message('warning', "AI Service: Falling back to Internal Market Engine due to: " . $lastError);
         $fallback = $this->runLocalHeuristicEngine($products, $params);
         $fallback['ai_powered_by'] = 'Internal Market Engine (Offline Fallback)';
         $fallback['raw_input_payload'] = [
             'provider' => 'internal',
             'engine' => 'Internal Market Heuristic Engine (Rule-based)',
-            'products_count' => count($products),
+            'products_count' => $totalInputCount,
             'params' => $params
         ];
         $fallback['raw_output_response'] = [
             'status' => 'local_fallback_executed',
-            'evaluations_count' => count($fallback['evaluations'] ?? [])
+            'evaluations_count' => count($fallback['evaluations'] ?? []),
+            'last_error' => $lastError
         ];
-        $adBudget = floatval($params['ad_budget'] ?? $params['total_ad_budget'] ?? 1000);
         $this->normalizeBudgetFitFlags($fallback, $adBudget);
         return $fallback;
+    }
+
+    /**
+     * Execute a single batch with single compact retry and optional provider failover
+     */
+    protected function executeSingleBatchWithRetryAndFailover(
+        array $batch,
+        array $params,
+        string $primaryProvider,
+        string $primaryKey,
+        string $primaryModel,
+        bool $allowProviderFailover
+    ): ?array {
+        // Step 1: Call Primary Provider
+        $result = $this->callProviderForBatch($primaryProvider, $primaryKey, $primaryModel, $batch, $params, 'screening');
+
+        // Step 2: Single Compact Retry if primary provider failed due to MAX_TOKENS or JSON parse error
+        if (!$result) {
+            log_message('info', "AI Service: Retrying batch with compact prompt for provider [{$primaryProvider}]. Reason: " . $this->lastCallError);
+            $result = $this->callProviderForBatch($primaryProvider, $primaryKey, $primaryModel, $batch, $params, 'compact_retry');
+        }
+
+        if ($result && !empty($result['evaluations'])) {
+            $result['provider_used'] = strtoupper($primaryProvider) . ' (' . $primaryModel . ')';
+            return $result;
+        }
+
+        // Step 3: External Provider Failover ONLY IF explicitly enabled in system settings
+        if ($allowProviderFailover) {
+            $openrouterKey = trim(env('OPENROUTER_API_KEY', ''));
+            $apiyiKey      = trim(env('APIYI_API_KEY', ''));
+
+            // Failover Option 1: OpenRouter (with model google/gemini-2.5-flash)
+            if ($this->isValidApiKey($openrouterKey)) {
+                log_message('warning', "AI Service: Provider [{$primaryProvider}] call failed ({$this->lastCallError}). Attempting failover to OpenRouter...");
+                $this->apiKey   = $openrouterKey;
+                $this->provider = 'openrouter';
+                $this->model    = 'google/gemini-2.5-flash';
+
+                $failoverResult = $this->callOpenAiCompatibleApi(
+                    'https://openrouter.ai/api/v1/chat/completions',
+                    $batch,
+                    $params,
+                    [
+                        'HTTP-Referer: ' . (env('app.baseURL', 'http://localhost:9090')),
+                        'X-Title: Product Analytics Dashboard'
+                    ],
+                    'compact_retry'
+                );
+
+                if ($failoverResult && !empty($failoverResult['evaluations'])) {
+                    $failoverResult['provider_used'] = 'OPENROUTER (google/gemini-2.5-flash)';
+                    return $failoverResult;
+                }
+            }
+
+            // Failover Option 2: APIyi
+            if ($this->isValidApiKey($apiyiKey)) {
+                log_message('warning', "AI Service: OpenRouter failover failed/unavailable. Attempting failover to APIyi...");
+                $this->apiKey   = $apiyiKey;
+                $this->provider = 'apiyi';
+                $this->model    = 'deepseek-v4-flash';
+
+                $failoverResult = $this->callOpenAiCompatibleApi(
+                    'https://api.apiyi.com/v1/chat/completions',
+                    $batch,
+                    $params,
+                    [],
+                    'compact_retry'
+                );
+
+                if ($failoverResult && !empty($failoverResult['evaluations'])) {
+                    $failoverResult['provider_used'] = 'APIYI (deepseek-v4-flash)';
+                    return $failoverResult;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Dispatcher to call specific provider for a batch
+     */
+    protected function callProviderForBatch(
+        string $provider,
+        string $apiKey,
+        string $model,
+        array $batch,
+        array $params,
+        string $promptMode = 'screening'
+    ): ?array {
+        $this->provider = $provider;
+        $this->apiKey   = $apiKey;
+        $this->model    = $model;
+
+        if ($provider === 'gemini') {
+            return $this->callGeminiApi($batch, $params, $promptMode);
+        } elseif ($provider === 'deepseek') {
+            return $this->callOpenAiCompatibleApi('https://api.deepseek.com/chat/completions', $batch, $params, [], $promptMode);
+        } elseif ($provider === 'apiyi') {
+            return $this->callOpenAiCompatibleApi('https://api.apiyi.com/v1/chat/completions', $batch, $params, [], $promptMode);
+        } elseif ($provider === 'openrouter') {
+            return $this->callOpenAiCompatibleApi(
+                'https://openrouter.ai/api/v1/chat/completions',
+                $batch,
+                $params,
+                [
+                    'HTTP-Referer: ' . (env('app.baseURL', 'http://localhost:9090')),
+                    'X-Title: Product Analytics Dashboard'
+                ],
+                $promptMode
+            );
+        } elseif ($provider === 'custom') {
+            $endpoint = env('CUSTOM_AI_ENDPOINT', 'http://localhost:11434/v1/chat/completions');
+            return $this->callOpenAiCompatibleApi($endpoint, $batch, $params, [], $promptMode);
+        } else { // default to openai
+            return $this->callOpenAiCompatibleApi('https://api.openai.com/v1/chat/completions', $batch, $params, [], $promptMode);
+        }
+    }
+
+    /**
+     * Merge evaluations from all batches, deduplicate, sort by score descending,
+     * compute accurate local summary, and apply budget fit flags.
+     */
+    protected function aggregateBatchResults(
+        array $allEvaluations,
+        array $originalProducts,
+        array $params,
+        float $adBudgetTotal,
+        string $effectiveProvider
+    ): array {
+        $totalInputCount = count($originalProducts);
+
+        // 1) Deduplicate evaluations based on id, then index, then title
+        $uniqueEvaluations = [];
+        $seenKeys = [];
+
+        foreach ($allEvaluations as $eval) {
+            if (!is_array($eval)) continue;
+
+            $id    = trim(strval($eval['id'] ?? ''));
+            $index = intval($eval['index'] ?? 0);
+            $title = trim(strval($eval['title'] ?? ''));
+
+            if (!empty($id)) {
+                $dedupKey = "id_" . $id;
+            } elseif ($index > 0) {
+                $dedupKey = "idx_" . $index;
+            } else {
+                $dedupKey = "title_" . mb_strtolower($title);
+            }
+
+            if (isset($seenKeys[$dedupKey])) {
+                continue;
+            }
+            $seenKeys[$dedupKey] = true;
+
+            // Ensure basic schema fields
+            $eval['score'] = min(100, max(0, intval($eval['score'] ?? 50)));
+            $eval['verdict'] = in_array($eval['verdict'] ?? '', ['winning', 'promising', 'risk'], true) 
+                ? $eval['verdict'] 
+                : ($eval['score'] >= 75 ? 'winning' : ($eval['score'] >= 50 ? 'promising' : 'risk'));
+            
+            if (empty($eval['verdict_label'])) {
+                $eval['verdict_label'] = $eval['verdict'] === 'winning' 
+                    ? '🟢 منتج رابح ممتاز' 
+                    : ($eval['verdict'] === 'promising' ? '🟡 منتج واعد قابل للاختبار' : '🔴 خطر مرتفع / غير منصوح');
+            }
+
+            if (empty($eval['reason'])) {
+                $eval['reason'] = 'تم تقييم المنتج بناءً على معايير الطلب والموسمية والتنافسية.';
+            }
+            if (empty($eval['recommendation'])) {
+                $eval['recommendation'] = $eval['score'] >= 75 ? 'ينصح باختباره فوراً بميزانية تجريبية.' : 'يرجى مراجعة مؤشرات المنتج قبل الإطلاق.';
+            }
+
+            $uniqueEvaluations[] = $eval;
+        }
+
+        // 2) Sort evaluations descending by score
+        usort($uniqueEvaluations, function ($a, $b) {
+            return floatval($b['score'] ?? 0) <=> floatval($a['score'] ?? 0);
+        });
+
+        // 3) Calculate local summary statistics
+        $winnersCount   = 0;
+        $promisingCount = 0;
+        $riskCount      = 0;
+        $sumScore       = 0;
+
+        foreach ($uniqueEvaluations as $e) {
+            $verdict = $e['verdict'] ?? '';
+            if ($verdict === 'winning') {
+                $winnersCount++;
+            } elseif ($verdict === 'promising') {
+                $promisingCount++;
+            } else {
+                $riskCount++;
+            }
+            $sumScore += floatval($e['score'] ?? 0);
+        }
+
+        $evalCount = count($uniqueEvaluations);
+        $avgScore = $evalCount > 0 ? round($sumScore / $evalCount, 1) : 0;
+
+        // Season detection
+        $seasonInput = trim($params['season'] ?? 'auto');
+        $detectedSeason = $seasonInput;
+        if ($seasonInput === 'auto' || empty($seasonInput)) {
+            $currentMonth = intval(date('n'));
+            if ($currentMonth >= 6 && $currentMonth <= 8) {
+                $detectedSeason = 'الصيف (Summer)';
+            } elseif ($currentMonth >= 9 && $currentMonth <= 10) {
+                $detectedSeason = 'الدخول المدرسي (Back to School)';
+            } elseif ($currentMonth == 3 || $currentMonth == 4) {
+                $detectedSeason = 'رمضان والعيد (Ramadan & Eid)';
+            } elseif ($currentMonth >= 11 || $currentMonth <= 2) {
+                $detectedSeason = 'الشتاء والبرد (Winter)';
+            } else {
+                $detectedSeason = 'مواسم عامة (General Season)';
+            }
+        }
+
+        // Budget recommended count logic
+        if ($adBudgetTotal >= 7000) {
+            $recommendedCount = 3;
+        } elseif ($adBudgetTotal >= 3500) {
+            $recommendedCount = 2;
+        } else {
+            $recommendedCount = 1;
+        }
+        $recommendedCount = min($recommendedCount, max(1, $totalInputCount));
+
+        $topWinner = !empty($uniqueEvaluations) ? $uniqueEvaluations[0] : null;
+
+        $budgetSummary = "بناءً على الميزانية الإجمالية المحددة ({$adBudgetTotal} DH)، يوصي الذكاء الاصطناعي باختبار أفضل " . ($recommendedCount == 1 ? "منتج 1 رابح فقط" : "{$recommendedCount} منتجات رابحة") . " لعدم تشتيت رأس المال.";
+
+        $result = [
+            'title' => 'تقييم المنتجات بالذكاء الاصطناعي',
+            'summary' => [
+                'total_analyzed' => $totalInputCount, // Real input products count!
+                'winners_count' => $winnersCount,
+                'promising_count' => $promisingCount,
+                'risk_count' => $riskCount,
+                'avg_score' => $avgScore,
+                'detected_season' => $detectedSeason,
+                'budget_recommended_count' => $recommendedCount,
+                'budget_allocation_summary' => $budgetSummary,
+                'top_winner' => $topWinner
+            ],
+            'evaluations' => $uniqueEvaluations,
+            'ai_powered_by' => $effectiveProvider,
+            'raw_input_payload' => $this->lastInputPayload,
+            'raw_output_response' => $this->lastOutputResponse
+        ];
+
+        // 4) Apply budget fit flags across all merged evaluations globally
+        $this->normalizeBudgetFitFlags($result, $adBudgetTotal);
+
+        return $result;
+    }
+
+    /**
+     * Build empty response structure for empty product list
+     */
+    protected function buildEmptyResponse(array $params): array
+    {
+        $adBudget = floatval($params['ad_budget'] ?? $params['ad_budget_total'] ?? 5000);
+        return [
+            'title' => 'تقييم المنتجات بالذكاء الاصطناعي',
+            'summary' => [
+                'total_analyzed' => 0,
+                'winners_count' => 0,
+                'promising_count' => 0,
+                'risk_count' => 0,
+                'avg_score' => 0,
+                'detected_season' => $params['season'] ?? 'auto',
+                'budget_recommended_count' => 1,
+                'budget_allocation_summary' => "لم يتم تقديم منتجات للتحليل.",
+                'top_winner' => null
+            ],
+            'evaluations' => [],
+            'ai_powered_by' => 'System'
+        ];
     }
 
     /**
@@ -319,24 +615,29 @@ class AiService
     /**
      * Call OpenAI, DeepSeek, APIyi, or OpenRouter API (OpenAI Chat Completions Compatible)
      */
-    protected function callOpenAiCompatibleApi(string $endpoint, array $products, array $params, array $extraHeaders = []): ?array
-    {
+    protected function callOpenAiCompatibleApi(
+        string $endpoint,
+        array $products,
+        array $params,
+        array $extraHeaders = [],
+        string $promptMode = 'screening'
+    ): ?array {
         @set_time_limit(180);
-        $prompt = $this->buildPrompt($products, $params);
+        $prompt = $this->buildPrompt($products, $params, $promptMode);
 
         $payload = [
             'model' => $this->model,
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => 'أنت خبير واستشاري متقدم في التجارة الإلكترونية بنظام الدفع عند الاستلام (COD) في المغرب والوطن العربي. مهمتك تحليل قائمة المنتجات وتحديد المنتجات الرابحة وإرجاع النتائج فقط بصيغة JSON نظيفة تلتزم بالهيكل المطلوب تماماً.'
+                    'content' => 'أنت خبير واستشاري متقدم في التجارة الإلكترونية بنظام الدفع عند الاستلام (COD) في المغرب والوطن العربي. مهمتك تحليل قائمة المنتجات وتحديد المنتجات الرابحة وإرجاع النتائج فقط بصيغة JSON نظيفة تلتزم بالهيكل المطلوب تماماً دون أي Markdown.'
                 ],
                 [
                     'role' => 'user',
                     'content' => $prompt
                 ]
             ],
-            'temperature' => 0.4,
+            'temperature' => 0.2,
             'max_tokens' => 3500
         ];
 
@@ -344,6 +645,8 @@ class AiService
             'Content-Type: application/json',
             'Authorization: Bearer ' . $this->apiKey
         ], $extraHeaders);
+
+        $isProd = defined('ENVIRONMENT') && ENVIRONMENT === 'production';
 
         $ch = curl_init($endpoint);
         curl_setopt_array($ch, [
@@ -353,14 +656,16 @@ class AiService
             CURLOPT_POSTFIELDS => json_encode($payload),
             CURLOPT_TIMEOUT => 60,
             CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => $isProd,
+            CURLOPT_SSL_VERIFYHOST => $isProd ? 2 : 0,
             CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
-            CURLOPT_FOLLOWLOCATION => true
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3
         ]);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErrNo = curl_errno($ch);
         $curlErr  = curl_error($ch);
         curl_close($ch);
 
@@ -375,28 +680,46 @@ class AiService
         if ($httpCode === 200 && $response) {
             $data = json_decode($response, true);
             $content = $data['choices'][0]['message']['content'] ?? '';
+            $finishReason = $data['choices'][0]['finish_reason'] ?? null;
+
+            if ($finishReason === 'length' || $finishReason === 'max_tokens') {
+                $this->lastCallError = "Response truncated because max_tokens reached";
+                $this->lastOutputResponse = [
+                    'http_code' => $httpCode,
+                    'finish_reason' => $finishReason,
+                    'curl_errno' => $curlErrNo,
+                    'curl_error' => $curlErr,
+                    'error' => 'Response truncated because max_tokens reached'
+                ];
+                log_message('warning', "AI Service [{$this->provider}/{$this->model}]: Response truncated due to max_tokens.");
+                return null;
+            }
+
             $decoded = $this->cleanAndDecodeJson($content);
             $this->lastOutputResponse = [
                 'http_code' => $httpCode,
+                'finish_reason' => $finishReason,
                 'content'   => $data ?? $response
             ];
-            if ($decoded !== null) {
+            if ($decoded !== null && isset($decoded['evaluations']) && is_array($decoded['evaluations'])) {
                 $decoded['raw_input_payload'] = $inputPayloadLog;
                 $decoded['raw_output_response'] = $this->lastOutputResponse;
                 return $decoded;
             } else {
-                $this->lastCallError = "الموديل ({$this->model}) أرجع استجابة لكن يتعذر استخراج هيكل JSON المطلوب منها. (جرّب استخدام موديل آخر أكثر استقراراً مثل gpt-4o-mini أو gemini-2.5-flash).";
+                $this->lastCallError = "الموديل ({$this->model}) أرجع استجابة لكن يتعذر استخراج هيكل JSON المطلوب (مصفوفة evaluations).";
             }
         } else {
             $errData = json_decode($response, true);
-            $apiErrMsg = $errData['error']['message'] ?? $errData['message'] ?? (!empty($curlErr) ? "خطأ الاتصال (cURL): {$curlErr}" : (substr((string)$response, 0, 300) ?: "فشل الاتصال الخارجي (HTTP {$httpCode})"));
+            $apiErrMsg = $errData['error']['message'] ?? $errData['message'] ?? (!empty($curlErr) ? "خطأ الاتصال (cURL {$curlErrNo}): {$curlErr}" : (substr((string)$response, 0, 300) ?: "فشل الاتصال الخارجي (HTTP {$httpCode})"));
             $this->lastCallError = "خطأ من مزود الخدمة [{$this->provider}/{$this->model}] (رمز HTTP {$httpCode}): " . $apiErrMsg;
             $this->lastOutputResponse = [
                 'http_code' => $httpCode,
+                'curl_errno' => $curlErrNo,
+                'curl_error' => $curlErr,
                 'error'     => $apiErrMsg,
-                'raw_body'  => $errData ?? $response ?? $curlErr
+                'raw_body'  => $errData ?? (is_string($response) ? substr($response, 0, 500) : $curlErr)
             ];
-            log_message('error', "AI Service LLM [{$endpoint}] HTTP Code {$httpCode}: " . ($curlErr ?: substr((string)$response, 0, 500)));
+            log_message('error', "AI Service LLM [{$endpoint}] HTTP Code {$httpCode} [cURL {$curlErrNo}]: " . ($curlErr ?: substr((string)$response, 0, 500)));
         }
 
         return null;
@@ -417,27 +740,29 @@ class AiService
     /**
      * Call Google Gemini REST API
      */
-    protected function callGeminiApi(array $products, array $params): ?array
+    protected function callGeminiApi(array $products, array $params, string $promptMode = 'screening'): ?array
     {
         @set_time_limit(180);
         $targetModel = $this->normalizeGeminiModel($this->model);
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$targetModel}:generateContent?key={$this->apiKey}";
-        $prompt = $this->buildPrompt($products, $params);
+        $prompt = $this->buildPrompt($products, $params, $promptMode);
 
         $payload = [
             'contents' => [
                 [
                     'parts' => [
-                        ['text' => "أنت خبير واستشاري التجارة الإلكترونية في المغرب (COD). قم بتحليل المنتجات التالية وأرجع النتائج حصراً بصيغة JSON تلتزم بالهيكل المطلوب دون أي نص خارجي.\n\n" . $prompt]
+                        ['text' => "أنت خبير واستشاري التجارة الإلكترونية بنظام الدفع عند الاستلام (COD) بالمغرب. قم بتحليل المنتجات التالية وأرجع النتائج حصراً بصيغة JSON بدون أي نص خارجي.\n\n" . $prompt]
                     ]
                 ]
             ],
             'generationConfig' => [
-                'response_mime_type' => 'application/json',
-                'temperature' => 0.4,
-                'maxOutputTokens' => 3500
+                'responseMimeType' => 'application/json',
+                'temperature' => 0.2,
+                'maxOutputTokens' => 4096
             ]
         ];
+
+        $isProd = defined('ENVIRONMENT') && ENVIRONMENT === 'production';
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -447,14 +772,16 @@ class AiService
             CURLOPT_POSTFIELDS => json_encode($payload),
             CURLOPT_TIMEOUT => 60,
             CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => $isProd,
+            CURLOPT_SSL_VERIFYHOST => $isProd ? 2 : 0,
             CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
-            CURLOPT_FOLLOWLOCATION => true
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3
         ]);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErrNo = curl_errno($ch);
         $curlErr  = curl_error($ch);
         curl_close($ch);
 
@@ -468,29 +795,48 @@ class AiService
 
         if ($httpCode === 200 && $response) {
             $data = json_decode($response, true);
+            $finishReason = $data['candidates'][0]['finishReason'] ?? null;
+
+            if ($finishReason === 'MAX_TOKENS') {
+                $this->lastCallError = "Gemini response truncated because MAX_TOKENS";
+                $this->lastOutputResponse = [
+                    'http_code' => $httpCode,
+                    'finish_reason' => 'MAX_TOKENS',
+                    'curl_errno' => $curlErrNo,
+                    'curl_error' => $curlErr,
+                    'error' => 'Gemini response truncated because MAX_TOKENS'
+                ];
+                log_message('warning', "AI Service Gemini: Response truncated due to MAX_TOKENS on batch call.");
+                return null;
+            }
+
             $content = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
             $decoded = $this->cleanAndDecodeJson($content);
             $this->lastOutputResponse = [
                 'http_code' => $httpCode,
+                'finish_reason' => $finishReason,
                 'content'   => $data ?? $response
             ];
-            if ($decoded !== null) {
+
+            if ($decoded !== null && isset($decoded['evaluations']) && is_array($decoded['evaluations'])) {
                 $decoded['raw_input_payload'] = $inputPayloadLog;
                 $decoded['raw_output_response'] = $this->lastOutputResponse;
                 return $decoded;
             } else {
-                $this->lastCallError = "موديل Gemini أرجع نصاً غير متوافق مع صيغة JSON المطلوبة.";
+                $this->lastCallError = "موديل Gemini أرجع نصاً غير متوافق مع صيغة JSON المطلوبة أو تفتقر لمصفوفة evaluations.";
             }
         } else {
             $errData = json_decode($response, true);
-            $apiErrMsg = $errData['error']['message'] ?? $errData['message'] ?? (!empty($curlErr) ? "خطأ الاتصال (cURL): {$curlErr}" : (substr((string)$response, 0, 300) ?: "فشل الاتصال بـ Gemini (HTTP {$httpCode})"));
+            $apiErrMsg = $errData['error']['message'] ?? $errData['message'] ?? (!empty($curlErr) ? "خطأ الاتصال (cURL {$curlErrNo}): {$curlErr}" : (substr((string)$response, 0, 300) ?: "فشل الاتصال بـ Gemini (HTTP {$httpCode})"));
             $this->lastCallError = "خطأ من Google Gemini (رمز HTTP {$httpCode}): " . $apiErrMsg;
             $this->lastOutputResponse = [
                 'http_code' => $httpCode,
+                'curl_errno' => $curlErrNo,
+                'curl_error' => $curlErr,
                 'error'     => $apiErrMsg,
-                'raw_body'  => $errData ?? $response ?? $curlErr
+                'raw_body'  => $errData ?? (is_string($response) ? substr($response, 0, 500) : $curlErr)
             ];
-            log_message('error', "Gemini API HTTP Error {$httpCode}: " . ($curlErr ?: substr((string)$response, 0, 500)));
+            log_message('error', "Gemini API HTTP Error {$httpCode} [cURL {$curlErrNo}]: " . ($curlErr ?: substr((string)$response, 0, 500)));
         }
 
         return null;
@@ -498,97 +844,119 @@ class AiService
 
 
     /**
-     * Build Prompt for LLMs
+     * Build Prompt for LLMs (Screening Phase 1 or Compact Retry)
      */
-    protected function buildPrompt(array $products, array $params): string
+    protected function buildPrompt(array $products, array $params, string $mode = 'screening'): string
     {
-        $mode = $params['analysis_mode'] ?? 'comprehensive';
-        $budget = $params['ad_budget_total'] ?? 5000;
-        $season = $params['season'] ?? 'auto';
-        $cShipping = $params['c_shipping_default'] ?? 35;
+        $adBudget = floatval($params['ad_budget_total'] ?? $params['ad_budget'] ?? 5000);
+        $season   = trim($params['season'] ?? 'auto');
+        $cShipping = floatval($params['c_shipping_default'] ?? 35);
 
         $productsSummary = [];
         foreach ($products as $idx => $prod) {
-            $title = $prod['title'] ?? $prod['name'] ?? ("منتج #" . ($idx + 1));
-            $price = floatval($prod['price'] ?? $prod['selling_price'] ?? 250);
-            $hasVideo = !empty($prod['video_path']) || !empty($prod['video']) || !empty($prod['video_url']);
-            $adsCount = intval($prod['ads_count'] ?? $prod['active_ads'] ?? 12);
-            $url = $prod['url'] ?? $prod['link'] ?? '';
-            $img = $prod['image_url'] ?? $prod['image'] ?? '';
+            if (!is_array($prod)) continue;
 
-            $productsSummary[] = [
-                'index' => $idx + 1,
+            $index = isset($prod['index']) ? intval($prod['index']) : ($idx + 1);
+            $id    = $prod['id'] ?? $prod['product_id'] ?? null;
+            $rawTitle = trim(strval($prod['title'] ?? $prod['name'] ?? ("منتج #" . $index)));
+            $title = mb_substr($rawTitle, 0, 180);
+
+            $rawPrice = floatval($prod['price'] ?? $prod['selling_price'] ?? 0);
+            $sellingPrice = $rawPrice > 0 ? $rawPrice : null;
+
+            $hasVideo = !empty($prod['video_path']) || !empty($prod['video']) || !empty($prod['video_url']) || !empty($prod['has_video_creative']);
+            $adsCount = intval($prod['ads_count'] ?? $prod['active_ads'] ?? $prod['estimated_active_ads'] ?? 10);
+            $country  = $prod['country'] ?? $prod['country_code'] ?? null;
+
+            $url = '';
+            if (isset($prod['url']) && is_string($prod['url'])) {
+                $rawUrl = trim($prod['url']);
+                if (str_starts_with($rawUrl, 'http://') || str_starts_with($rawUrl, 'https://')) {
+                    $url = $rawUrl;
+                }
+            } elseif (isset($prod['link']) && is_string($prod['link'])) {
+                $rawUrl = trim($prod['link']);
+                if (str_starts_with($rawUrl, 'http://') || str_starts_with($rawUrl, 'https://')) {
+                    $url = $rawUrl;
+                }
+            }
+
+            $imgUrl = '';
+            if (isset($prod['image_url']) && is_string($prod['image_url'])) {
+                $rawImg = trim($prod['image_url']);
+                if (str_starts_with($rawImg, 'http://') || str_starts_with($rawImg, 'https://')) {
+                    $imgUrl = $rawImg;
+                }
+            } elseif (isset($prod['image']) && is_string($prod['image'])) {
+                $rawImg = trim($prod['image']);
+                if (str_starts_with($rawImg, 'http://') || str_starts_with($rawImg, 'https://')) {
+                    $imgUrl = $rawImg;
+                }
+            }
+
+            $item = [
+                'index' => $index,
                 'title' => $title,
-                'selling_price' => $price,
-                'has_video_creative' => $hasVideo,
-                'estimated_active_ads' => $adsCount,
-                'url' => $url
+                'selling_price' => $sellingPrice,
+                'has_video_creative' => (bool)$hasVideo,
+                'estimated_active_ads' => $adsCount
             ];
+            if ($id !== null && $id !== '') {
+                $item['id'] = $id;
+            }
+            if ($country !== null && $country !== '') {
+                $item['country'] = $country;
+            }
+            if (!empty($url)) {
+                $item['url'] = $url;
+            }
+            if (!empty($imgUrl)) {
+                $item['image_url'] = $imgUrl;
+            }
+
+            $productsSummary[] = $item;
         }
 
-        $prompt = "قم بتحليل قائمة المنتجات المرشحة التالية لتشغيلها في السوق المغربي بنظام الدفع عند الاستلام (COD):\n";
-        $prompt .= "المعايير المحددة:\n";
-        $prompt .= "- نمط التحليل: {$mode}\n";
-        $prompt .= "- الميزانية الإعلانية الإجمالية: {$budget} DH\n";
+        $jsonProducts = json_encode($productsSummary, JSON_UNESCAPED_UNICODE);
+
+        if ($mode === 'compact_retry') {
+            $prompt = "قيم بسرعة هذه الدفعة من المنتجات للسوق المغربي COD:\n";
+            $prompt .= "الميزانية: {$adBudget} DH | الموسم: {$season}\n";
+            $prompt .= "المنتجات:\n{$jsonProducts}\n\n";
+            $prompt .= "أرجع JSON فقط بصيغة {\"evaluations\":[...]} بدون markdown. لكل منتج ضع:\n";
+            $prompt .= '{"index":1,"id":"إن وجد","title":"عنوان","url":"","image_url":"","score":80,"verdict":"winning|promising|risk","verdict_label":"🟢 منتج رابح ممتاز","is_budget_fit":false,"reason":"سبب مختصر جداً أقل من 100 حرف","recommendation":"توصية قصيرة جداً"}' . "\n";
+            $prompt .= "قواعد: لا تضف narrative_analysis أو breakdown أو financials. لا تكرر المنتجات.";
+            return $prompt;
+        }
+
+        $prompt = "قم بإجراء تقييم أولي خفيف (Screening) لقائمة المنتجات التالية المرشحة للتسويق بنظام الدفع عند الاستلام (COD) في المغرب:\n";
+        $prompt .= "- الميزانية الإعلانية الإجمالية: {$adBudget} DH\n";
         $prompt .= "- الموسم المستهدف: {$season}\n";
-        $prompt .= "- تكلفة التوصيل الأساسية: {$cShipping} DH\n\n";
-        $prompt .= "قائمة المنتجات المرشحة:\n" . json_encode($productsSummary, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n";
-        $prompt .= "المطلوب إرجاع JSON بالهيكل التالي بدقة دون أي تغليف محيطي:\n";
-        $prompt .= '{
-  "title": "تقييم المنتجات بالذكاء الاصطناعي",
-  "summary": {
-    "total_analyzed": 10,
-    "winners_count": 3,
-    "promising_count": 5,
-    "risk_count": 2,
-    "avg_score": 78,
-    "detected_season": "' . $season . '",
-    "budget_recommended_count": 2,
-    "budget_allocation_summary": "بناءً على الميزانية الإجمالية المحددة (' . $budget . ' DH) يوصي الذكاء الاصطناعي باختبار أفضل 2 منتجات فقط لعدم تشتيت رأس المال.",
-    "top_winner": {
-      "title": "اسم المنتج الأول الرابح",
-      "score": 90,
-      "target_price": 299,
-      "net_margin_pct": 38.5,
-      "image_url": "..."
-    }
-  },
-  "evaluations": [
-    {
-      "title": "عنوان المنتج",
-      "url": "رابط المنتج",
-      "image_url": "رابط الصورة",
-      "score": 85,
-      "verdict": "winning",
-      "verdict_label": "🟢 منتج رابح ممتاز",
-      "is_budget_fit": true,
-      "budget_allocation_note": "موصى باختباره مباشرة ضمن الميزانية الإجمالية المحددة",
-      "breakdown": {
-        "demand_score": 35,
-        "season_score": 25,
-        "logistics_score": 17,
-        "budget_score": 8
-      },
-      "financials": {
-        "c_wholesale": 60,
-        "c_shipping": 35,
-        "real_shipping_with_returns": 43.75,
-        "estimated_cpa": 70,
-        "target_price": 249,
-        "net_profit": 75.25,
-        "net_margin_pct": 30.2
-      },
-      "reasons": ["حجم إعلانات قوي", "متوافق مع الموسم الحالي"],
-      "recommendation": "ينصح باختباره فوراً بميزانية 200 درهم يومياً",
-      "narrative_analysis": {
-        "summary": "نص التقييم والتشخيص التجاري للمنتج...",
-        "market_fit": "نص ملاءمة الموسم والسوق المغربي...",
-        "logistics_advice": "نص نصائح اللوجستيك والتوصيل بـ 20% مرجوعات...",
-        "launch_strategy": "نص خطة الإطلاق والتسويق المقترحة..."
-      }
-    }
-  ]
-}';
+        $prompt .= "- تكلفة التوصيل الافتراضية: {$cShipping} DH\n\n";
+        $prompt .= "قائمة المنتجات (Batch Payload):\n" . $jsonProducts . "\n\n";
+        $prompt .= "تعليمات حاسمة وقواعد الهيكل المطلوبة:\n";
+        $prompt .= "1. أرجع النتيجة حصراً بصيغة JSON نظيفة وصالحة بالهيكل المحدد أدناه، بدون أي تغليف Markdown (لا تستخدم ```json) وبدون أي نص خارجي.\n";
+        $prompt .= "2. يجب أن تحتوي استجابتك على مصفوفة \"evaluations\" فقط، مع عنصر evaluation واحد لكل منتج في الدفعة.\n";
+        $prompt .= "3. حافظ على القيم المدخلة لـ (index) و (id) كما وردت لربط النتائج بالمنتج الأصلي.\n";
+        $prompt .= "4. يمنع منعاً باتاً إضافة حقول narrative_analysis أو breakdown أو financials أو target_price أو net_profit أو estimated_cpa في هذه المرحلة.\n";
+        $prompt .= "5. لا تخترع أسعاراً أو روابط أو صوراً أو تكاليف غير موجودة في البيانات المدخلة.\n";
+        $prompt .= "6. النص في \"reason\" يجب ألا يتجاوز 120 حرفاً. النص في \"recommendation\" يجب ألا يتجاوز 140 حرفاً.\n\n";
+        $prompt .= "الهيكل المطلوب لكل منتج داخل مصفوفة evaluations:\n";
+        $prompt .= '{"evaluations": [
+  {
+    "index": 1,
+    "id": "إن وجد في البيانات",
+    "title": "عنوان المنتج",
+    "url": "الرابط إن وجد وإلا string فارغة",
+    "image_url": "الصورة إن وجدت وإلا string فارغة",
+    "score": 85,
+    "verdict": "winning",
+    "verdict_label": "🟢 منتج رابح ممتاز",
+    "is_budget_fit": false,
+    "reason": "سبب مختصر ومباشر لا يتجاوز 120 حرفاً",
+    "recommendation": "توصية مختصرة لا تتجاوز 140 حرفاً"
+  }
+]}';
 
         return $prompt;
     }
@@ -739,35 +1107,10 @@ class AiService
                 'score' => $score,
                 'verdict' => $verdict,
                 'verdict_label' => $verdictLabel,
-                'breakdown' => [
-                    'demand_score' => $demandScore,
-                    'season_score' => $seasonScore,
-                    'logistics_score' => $logisticsScore,
-                    'budget_score' => $budgetScore,
-                ],
-                'financials' => [
-                    'c_wholesale' => $cWholesale,
-                    'c_shipping' => $cShipping,
-                    'real_shipping_with_returns' => round($realShipping, 2),
-                    'estimated_cpa' => $estimatedCpa,
-                    'target_price' => $targetPrice,
-                    'net_profit' => $netProfit,
-                    'net_margin_pct' => $netMarginPct,
-                ],
-                'reasons' => [
-                    $hasVideo ? "يتوفر على محتوى إعلاني فيديو جاهز" : "يحتاج إنشاء إبداعات إعلانية فيديو",
-                    $seasonScore >= 20 ? "يتوافق مع موسم {$detectedSeason}" : "خارج الذروة الموسمية الحالية",
-                    "معدل الربحية الصافي المتوقع: +{$netMarginPct}%"
-                ],
+                'reason' => $hasVideo ? "يتوفر على محتوى إعلاني فيديو جاهز ومناسب لموسم {$detectedSeason}" : "خارج الذروة الموسمية الحالية أو يحتاج إبداعات فيديو جديدة",
                 'recommendation' => $score >= 75 
                     ? "ينصح بالبدء في اختبار هذا المنتج فوراً بميزانية 200 DH يومياً عبر TikTok / Facebook Ads."
-                    : ($score >= 50 ? "منتج واعد، يفضل تحسين زاوية التسويق وإنشاء فيديو إعلاني احترافي قبل إطلاقه." : "غير منصوح باختباره حالياً لارتفاع مخاطر التوصيل أو ضعف الطلب."),
-                'narrative_analysis' => [
-                    'summary' => "أظهر هذا المنتج مؤشرات تنافسية قوية بمعدل نقاط {$score}/100. " . ($hasVideo ? "وجود الفيديو الإعلاني يعزز من سرعة الإطلاق." : "ينصح بإنشاء إعلانات فيديو لتسريع المبيعات."),
-                    'market_fit' => "يتماشى المنتج مع متطلبات السوق المغربي لموسم {$detectedSeason}. يوصى باستهداف الفئة العمرية بين 22 و 45 سنة.",
-                    'logistics_advice' => "تكلفة التوصيل الأساسية احتسبت بـ {$cShipping} DH. مع احتساب 20% مرجوعات ملغاة تصبح تكلفة التوصيل الفعلية " . round($realShipping, 2) . " DH للطلب الناجح.",
-                    'launch_strategy' => "خطة الإطلاق: البدء بميزانية إعلانية تجريبية بقيمة 150-200 DH/يوم لمدة 3 أيام، والتركيز على العرض الافتتاحي بالسعر المستهدف " . $targetPrice . " DH."
-                ]
+                    : ($score >= 50 ? "منتج واعد، يفضل تحسين زاوية التسويق وإنشاء فيديو إعلاني احترافي قبل إطلاقه." : "غير منصوح باختباره حالياً لارتفاع مخاطر التوصيل أو ضعف الطلب.")
             ];
 
             if ($score > $maxScore) {
@@ -871,7 +1214,7 @@ class AiService
             $result['summary'] = [];
         }
         $result['summary']['budget_recommended_count'] = $recommendedCount;
-        $result['summary']['budget_allocation_summary'] = "بناءً على الميزانية الإجمالية المحنطة ({$adBudgetTotal} DH) يوصي الذكاء الاصطناعي باختبار أفضل {$recommendedCount} منتجات فقط لعدم تشتيت رأس المال.";
+        $result['summary']['budget_allocation_summary'] = "بناءً على الميزانية الإجمالية المحددة ({$adBudgetTotal} DH) يوصي الذكاء الاصطناعي باختبار أفضل {$recommendedCount} منتجات فقط لعدم تشتيت رأس المال.";
     }
 
     /**
@@ -885,6 +1228,11 @@ class AiService
         $provider = $config['provider'];
         $apiKey   = $config['api_key'];
         $model    = $config['model'];
+
+        $this->apiKey = $apiKey;
+        $this->model  = $model;
+        $allowFallback = (bool)($config['allow_internal_fallback'] ?? true);
+        $lastError = '';
 
         $title            = trim($product['title'] ?? $product['name'] ?? 'منتج بدون عنوان');
         $competitorPrice  = floatval($params['price_selling'] ?? $product['price'] ?? 0);
@@ -978,10 +1326,19 @@ class AiService
                     $res['financial_model'] = $this->calculateExactFinancialModel($params, $product, $res['financial_model']);
                     $res['ai_powered_by'] = strtoupper($provider) . ' (' . $model . ')';
                     return $res;
+                } else {
+                    $lastError = "تعذر الحصول على استجابة هيكلية صالحة من المزود الخارجي ({$provider} / {$model})";
                 }
             } catch (\Throwable $e) {
+                $lastError = $e->getMessage();
                 log_message('error', 'Phase 2 Deep Analyze LLM call failed: ' . $e->getMessage());
             }
+        } else {
+            $lastError = "مفتاح API الخاص بالمزود ({$provider}) غير متوفر أو غير صالح.";
+        }
+
+        if (!$allowFallback && $provider !== 'internal') {
+            throw new \RuntimeException("فشل إجراء التحليل التفصيلي (Phase 2): فشل إجراء التحليل عبر المزود الخارجي (" . strtoupper($provider) . " / " . $model . "). (المحرك المحلي الاحتياطي Internal Market Engine معطل في إعدادات النظام). تفاصيل الخطأ: " . $lastError);
         }
 
         // Fallback to local heuristic engine for Phase 2
@@ -1158,6 +1515,8 @@ class AiService
             'Authorization: Bearer ' . $this->apiKey
         ], $extraHeaders);
 
+        $isProd = defined('ENVIRONMENT') && ENVIRONMENT === 'production';
+
         $ch = curl_init($endpoint);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -1166,10 +1525,11 @@ class AiService
             CURLOPT_POSTFIELDS => json_encode($payload),
             CURLOPT_TIMEOUT => 120,
             CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => $isProd,
+            CURLOPT_SSL_VERIFYHOST => $isProd ? 2 : 0,
             CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
-            CURLOPT_FOLLOWLOCATION => true
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3
         ]);
 
         $response = curl_exec($ch);
@@ -1203,11 +1563,13 @@ class AiService
                 ]
             ],
             'generationConfig' => [
-                'response_mime_type' => 'application/json',
+                'responseMimeType' => 'application/json',
                 'temperature' => 0.4,
                 'maxOutputTokens' => 3500
             ]
         ];
+
+        $isProd = defined('ENVIRONMENT') && ENVIRONMENT === 'production';
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -1217,10 +1579,11 @@ class AiService
             CURLOPT_POSTFIELDS => json_encode($payload),
             CURLOPT_TIMEOUT => 120,
             CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => $isProd,
+            CURLOPT_SSL_VERIFYHOST => $isProd ? 2 : 0,
             CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
-            CURLOPT_FOLLOWLOCATION => true
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3
         ]);
 
         $response = curl_exec($ch);
