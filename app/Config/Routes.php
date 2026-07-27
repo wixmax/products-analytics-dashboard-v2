@@ -99,7 +99,9 @@ $routes->post('/api/products/ai_deep_analyze', 'Products::aiDeepAnalyze');
 $routes->get('/api/ai/history', 'Products::aiHistory');
 $routes->get('/api/ai/history/(:num)', 'Products::aiHistoryDetail/$1');
 $routes->post('/api/ai/history/(:num)/delete', 'Products::aiDeleteHistory/$1');
-$routes->get('/api/ai/phase2-history', 'Products::aiPhase2History');
+// Model Context Protocol (MCP) Endpoints
+$routes->match(['get', 'post'], '/api/mcp', 'McpController::handleMcp');
+$routes->match(['get', 'post'], '/api/mcp/(:segment)', 'McpController::handleMcp/$1');
 
 // Update Database Schema Route (non-destructive migrations update)
 $routes->get('update-db', '\App\Controllers\InstallController::updateDatabaseSchema');
