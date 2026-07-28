@@ -91,6 +91,7 @@ $routes->post('/api/products/activity', 'Products::activity');
 $routes->get('/api/settings/(:segment)', 'Products::getSetting/$1');
 $routes->post('/api/settings', 'Products::saveSetting');
 $routes->post('/api/products/clear-database-data', 'Products::clearDatabaseData');
+$routes->post('/api/products/delete-by-date', 'Products::deleteByDate');
 
 // AI Winning Product Analysis Endpoints
 $routes->post('/api/ai/analyze', 'Products::aiAnalyze');

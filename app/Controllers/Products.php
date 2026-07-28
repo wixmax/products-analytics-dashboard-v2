@@ -762,11 +762,20 @@ class Products extends ResourceController
             return $this->failNotFound('Snapshot not found');
         }
 
+        // Delete associated products that are not saved by users
+        $productModel = new ProductModel();
+        $productModel->where('snapshot_id', $id)
+                     ->groupStart()
+                         ->where('is_saved', false)
+                         ->orWhere('is_saved IS NULL')
+                     ->groupEnd()
+                     ->delete();
+
         $snapshotModel->delete($id);
 
         return $this->respond([
             'success' => true,
-            'message' => "Snapshot #{$id} deleted"
+            'message' => "Snapshot #{$id} and its associated products deleted"
         ]);
     }
 
@@ -1780,6 +1789,62 @@ class Products extends ResourceController
         }
 
         return $this->respond(['success' => true]);
+    }
+
+    public function deleteByDate()
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return $this->failForbidden('عذراً، هذه الخاصية مخصصة للمشرفين والمسؤولين فقط.');
+        }
+
+        $json = $this->request->getJSON(true);
+        $targetDate = $json['date'] ?? $this->request->getVar('date');
+
+        if (empty($targetDate)) {
+            return $this->fail('يرجى تحديد التاريخ بشكل صحيح.');
+        }
+
+        $db = \Config\Database::connect();
+        $snapshotModel = new SnapshotModel();
+
+        // 1. Get snapshots created on this date
+        $snapshots = $db->table('data_snapshots')
+            ->where("CAST(created_at AS DATE) =", $targetDate)
+            ->get()
+            ->getResultArray();
+
+        $snapshotIds = array_column($snapshots, 'id');
+
+        // 2. Delete non-saved products created on this date OR with ad_start_date = targetDate OR snapshot_id in snapshotIds
+        $builder = $db->table('products');
+        $builder->groupStart()
+                    ->where('is_saved', false)
+                    ->orWhere('is_saved IS NULL')
+                ->groupEnd()
+                ->groupStart()
+                    ->where('ad_start_date', $targetDate)
+                    ->orWhere("CAST(created_at AS DATE) =", $targetDate);
+
+        if (!empty($snapshotIds)) {
+            $builder->orWhereIn('snapshot_id', $snapshotIds);
+        }
+        $builder->groupEnd();
+
+        $deletedProducts = $builder->delete();
+
+        // 3. Delete snapshots created on this date
+        $deletedSnapshots = 0;
+        if (!empty($snapshotIds)) {
+            $snapshotModel->whereIn('id', $snapshotIds)->delete();
+            $deletedSnapshots = count($snapshotIds);
+        }
+
+        return $this->respond([
+            'success' => true,
+            'message' => "تم حذف {$deletedProducts} منتج و {$deletedSnapshots} لقطة بيانات لتاريخ {$targetDate} بنجاح.",
+            'deleted_products' => $deletedProducts,
+            'deleted_snapshots' => $deletedSnapshots
+        ]);
     }
 
     // داخل كلاس Products في app/Controllers/Products.php

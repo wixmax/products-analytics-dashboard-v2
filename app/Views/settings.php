@@ -23,6 +23,9 @@
     />
 
     <link rel="stylesheet" href="<?= base_url('index.css') ?>?v=1.6" />
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" />
     <style>
       .settings-container {
         max-width: 800px;
@@ -485,6 +488,18 @@
                 </div>
                 <button class="btn btn-secondary" onclick="clearData('watchlist')">تفريغ قائمة المراقبة</button>
               </div>
+
+              <!-- Item 5: Delete Data By Specific Date (Admin Only) -->
+              <div class="action-item" style="grid-column: 1 / -1; background: var(--bg-card); border: 1px solid var(--border-color); padding: 1.25rem;">
+                <div class="action-item-info">
+                  <span class="action-item-title" style="font-size: 1rem; color: #ef4444;">📅 حذف البيانات واللقطات حسب التاريخ</span>
+                  <span class="action-item-desc">حدد التاريخ المراد حذف كافة المنتجات المجلوبة ولقطات البيانات (Snapshots) الخاصة به دون حذف المنتجات المفضلة.</span>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
+                  <input type="text" id="delete-by-date-picker" class="form-control flatpickr-date" style="padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-weight: 700; min-width: 180px;" placeholder="اختر تاريخاً" />
+                  <button class="btn btn-secondary" style="border-color: #ef4444; color: #ef4444; font-weight: 700; padding: 8px 16px;" onclick="deleteDataBySelectedDate()">🗑️ حذف بيانات هذا التاريخ</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -513,9 +528,21 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/ar.js"></script>
+
     <script>
       // Load current settings on mount
       document.addEventListener("DOMContentLoaded", async () => {
+        if (typeof flatpickr !== "undefined" && document.getElementById("delete-by-date-picker")) {
+          flatpickr("#delete-by-date-picker", {
+            locale: "ar",
+            dateFormat: "Y-m-d",
+            defaultDate: "today",
+            disableMobile: "true"
+          });
+        }
         await setupTheme();
         await loadSettings();
       });
@@ -958,6 +985,38 @@
         } catch (err) {
           console.error("Error clearing data:", err);
           showToast("خطأ في الاتصال بالسيرفر أثناء محاولة الحذف.", "error");
+        }
+      }
+
+      // Delete Data by Selected Date
+      async function deleteDataBySelectedDate() {
+        const dateInput = document.getElementById('delete-by-date-picker');
+        if (!dateInput || !dateInput.value) {
+          showToast("يرجى تحديد التاريخ أولاً ⚠️", "warning");
+          return;
+        }
+        const selectedDate = dateInput.value;
+
+        if (!confirm(`⚠️ هل أنت متأكد تماماً من رغبتك في حذف كافة المنتجات ولقطات البيانات غير المحفوظة لتاريخ (${selectedDate})؟`)) {
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/products/delete-by-date', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: selectedDate })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            showToast(data.message || `تم حذف بيانات تاريخ ${selectedDate} بنجاح! 🗑️`, "success");
+          } else {
+            showToast(data.message || "فشلت عملية حذف بيانات التاريخ المحدد.", "error");
+          }
+        } catch (err) {
+          console.error("Error deleting date data:", err);
+          showToast("خطأ في الاتصال بالسيرفر أثناء عملية الحذف.", "error");
         }
       }
 
