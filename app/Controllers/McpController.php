@@ -59,6 +59,21 @@ class McpController extends ResourceController
         if ($method === 'options') {
             return $response->setStatusCode(204);
         }
+
+        $db = \Config\Database::connect();
+        $globalEnabledRow = $db->table('settings')->where('key', 'mcp_global_enabled')->get()->getRowArray();
+        $globalEnabled = $globalEnabledRow ? ($globalEnabledRow['value'] === '1') : true;
+
+        if (!$globalEnabled) {
+            return $this->respond([
+                'jsonrpc' => '2.0',
+                'id'      => null,
+                'error'   => [
+                    'code'    => -32603,
+                    'message' => 'MCP server is currently disabled by administrator.'
+                ]
+            ], 503);
+        }
         
         if ($method === 'get') {
             // GET Discovery / Information Response
@@ -201,7 +216,16 @@ class McpController extends ResourceController
      */
     private function getToolsManifest()
     {
-        return [
+        $db = \Config\Database::connect();
+        $toolSettings = $db->table('settings')->like('key', 'mcp_tool_')->get()->getResultArray();
+        $disabledTools = [];
+        foreach ($toolSettings as $settingRow) {
+            if ($settingRow['value'] === '0') {
+                $disabledTools[] = str_replace('mcp_tool_', '', $settingRow['key']);
+            }
+        }
+
+        $allTools = [
             [
                 'name'        => 'get_saved_products',
                 'description' => 'Retrieve products saved specifically by the authenticated user/tenant, with options for collection, country, search, and sorting.',
@@ -293,6 +317,10 @@ class McpController extends ResourceController
                 ]
             ]
         ];
+
+        return array_values(array_filter($allTools, function($t) use ($disabledTools) {
+            return !in_array($t['name'], $disabledTools, true);
+        }));
     }
 
     /**
@@ -300,6 +328,12 @@ class McpController extends ResourceController
      */
     private function executeTool($name, $args)
     {
+        $db = \Config\Database::connect();
+        $toolCheck = $db->table('settings')->where('key', 'mcp_tool_' . $name)->get()->getRowArray();
+        if ($toolCheck && $toolCheck['value'] === '0') {
+            return ['error' => "Tool '{$name}' is currently disabled by administrator."];
+        }
+
         $snapshotModel = new SnapshotModel();
         $productModel  = new ProductModel();
 

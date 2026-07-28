@@ -37,6 +37,9 @@
       <a href="<?= base_url('admin/users') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'admin/users') !== false ? 'active' : '' ?>">
         🛡️ إدارة الأعضاء
       </a>
+      <a href="<?= base_url('admin/mcp') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'admin/mcp') !== false ? 'active' : '' ?>">
+        🔌 إدارة الـ MCP
+      </a>
     <?php endif; ?>
   </nav>
 

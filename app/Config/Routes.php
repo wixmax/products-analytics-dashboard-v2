@@ -28,13 +28,20 @@ $routes->post('workspace/invite', '\App\Controllers\Auth\WorkspaceController::in
 $routes->post('workspace/remove-member/(:num)', '\App\Controllers\Auth\WorkspaceController::removeMember/$1');
 $routes->post('workspace/switch', '\App\Controllers\Auth\WorkspaceController::switchWorkspace');
 
-// Admin Panel User Management
+// Admin Panel Management
 $routes->group('admin', ['filter' => 'group:superadmin,admin'], function($routes) {
     $routes->get('users', '\App\Controllers\Admin\UsersController::index');
     $routes->post('users/update-role', '\App\Controllers\Admin\UsersController::updateRole');
     $routes->post('users/toggle-status', '\App\Controllers\Admin\UsersController::toggleStatus');
     $routes->post('users/impersonate', '\App\Controllers\Admin\UsersController::impersonate');
     $routes->post('users/change-password', '\App\Controllers\Admin\UsersController::changePassword');
+
+    // MCP Admin Control Panel Routes
+    $routes->get('mcp', '\App\Controllers\Admin\McpAdminController::index');
+    $routes->post('mcp/toggle-global', '\App\Controllers\Admin\McpAdminController::toggleGlobalStatus');
+    $routes->post('mcp/toggle-tool', '\App\Controllers\Admin\McpAdminController::toggleTool');
+    $routes->post('mcp/generate-token/(:num)', '\App\Controllers\Admin\McpAdminController::generateUserToken/$1');
+    $routes->post('mcp/revoke-token/(:num)', '\App\Controllers\Admin\McpAdminController::revokeUserToken/$1');
 });
 $routes->get('admin/users/stop-impersonating', '\App\Controllers\Admin\UsersController::stopImpersonating');
 
