@@ -76,6 +76,26 @@ class McpController extends ResourceController
         }
         
         if ($method === 'get') {
+            $acceptHeader = strtolower($this->request->getHeaderLine('Accept'));
+            if (str_contains($acceptHeader, 'text/event-stream') || $this->request->getGet('transport') === 'sse') {
+                $token = $this->request->getGet('token');
+                $postUrl = site_url('api/mcp') . ($token ? '?token=' . urlencode($token) : '');
+
+                header('Content-Type: text/event-stream');
+                header('Cache-Control: no-cache');
+                header('Connection: keep-alive');
+                header('Access-Control-Allow-Origin: *');
+                header('Access-Control-Allow-Headers: *');
+
+                echo "event: endpoint\r\n";
+                echo "data: " . $postUrl . "\r\n\r\n";
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+                exit;
+            }
+
             // GET Discovery / Information Response
             return $this->respond([
                 'mcp_server' => 'products-analytics-mcp-php',
@@ -83,7 +103,8 @@ class McpController extends ResourceController
                 'status'     => 'running',
                 'endpoint'   => site_url('api/mcp'),
                 'capabilities' => [
-                    'tools' => true,
+                    'tools'   => true,
+                    'prompts' => true,
                     'jsonrpc' => '2.0'
                 ],
                 'tools' => $this->getToolsManifest()
@@ -106,6 +127,15 @@ class McpController extends ResourceController
         $jsonrpcId = $input['id'] ?? null;
         $mcpMethod = $input['method'];
         $params    = $input['params'] ?? [];
+
+        // Handle notifications (e.g. notifications/initialized, notifications/cancelled)
+        if (str_starts_with($mcpMethod, 'notifications/')) {
+            return $this->respond([
+                'jsonrpc' => '2.0',
+                'id'      => $jsonrpcId,
+                'result'  => (object)[]
+            ], 200);
+        }
 
         switch ($mcpMethod) {
             case 'initialize':
