@@ -300,6 +300,14 @@ class McpController extends ResourceController
 
         $allTools = [
             [
+                'name'        => 'get_ai_skill_instructions',
+                'description' => 'CRITICAL AI INSTRUCTION: Call this tool at start of conversation to retrieve official system skill rules for 2-Stage E-Commerce Product Evaluation, Moroccan COD Pricing, Ad Specs, and UGC Creatives.',
+                'inputSchema' => [
+                    'type'       => 'object',
+                    'properties' => (object)[]
+                ]
+            ],
+            [
                 'name'        => 'get_saved_products',
                 'description' => 'Retrieve products saved specifically by the authenticated user/tenant, with options for collection, country, search, and sorting.',
                 'inputSchema' => [
@@ -409,6 +417,14 @@ class McpController extends ResourceController
 
         $snapshotModel = new SnapshotModel();
         $productModel  = new ProductModel();
+
+        if ($name === 'get_ai_skill_instructions') {
+            return [
+                'status'             => 'success',
+                'skill_name'         => 'Morocco COD & 2-Stage Winning Product Research Skill',
+                'skill_instructions' => $this->getSystemPrompt()
+            ];
+        }
 
         if ($name === 'get_saved_products') {
             $authUser = $this->resolveAuthenticatedUser();

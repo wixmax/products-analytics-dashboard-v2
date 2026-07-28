@@ -85,6 +85,12 @@ class McpAdminController extends BaseController
         $systemPrompt  = $this->getSetting('mcp_system_prompt', $this->getDefaultSystemPrompt());
 
         $allTools = [
+            'get_ai_skill_instructions' => [
+                'name'        => 'get_ai_skill_instructions',
+                'title'       => 'جلب مهارة وتوجيهات التحليل (AI Skill Instructions)',
+                'description' => 'أداة تُتيح للنماذج قراءة توجيهات ومهارات نظام التحليل بالسوق المغربي بنظام COD تلقائياً عند طلب الاستكشاف.',
+                'badge'       => 'Skill أداة المهارة',
+            ],
             'get_saved_products' => [
                 'name'        => 'get_saved_products',
                 'title'       => 'جلب المحفوظات الخاصة بالحساب',
