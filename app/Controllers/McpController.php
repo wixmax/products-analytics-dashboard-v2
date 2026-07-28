@@ -72,7 +72,7 @@ class McpController extends ResourceController
                     'code'    => -32603,
                     'message' => 'MCP server is currently disabled by administrator.'
                 ]
-            ], 503);
+            ], 200);
         }
         
         if ($method === 'get') {
@@ -108,38 +108,75 @@ class McpController extends ResourceController
                     'jsonrpc' => '2.0'
                 ],
                 'tools' => $this->getToolsManifest()
-            ]);
+            ], 200);
         }
 
-        $input = $this->request->getJSON(true) ?: json_decode($this->request->getBody(), true);
-        
-        if (!$input || !isset($input['method'])) {
+        $rawBody = $this->request->getBody();
+        $input   = json_decode($rawBody, true) ?: $this->request->getJSON(true);
+
+        if (!$input) {
             return $this->respond([
+                'jsonrpc' => '2.0',
+                'id'      => null,
+                'error'   => [
+                    'code'    => -32600,
+                    'message' => 'Invalid Request. Empty or malformed JSON.'
+                ]
+            ], 200);
+        }
+
+        // Handle JSON-RPC Batch Request (array of requests)
+        if (is_array($input) && isset($input[0]) && is_array($input[0])) {
+            $batchResponses = [];
+            foreach ($input as $singleRequest) {
+                $res = $this->processSingleJsonRpcRequest($singleRequest);
+                if ($res !== null) {
+                    $batchResponses[] = $res;
+                }
+            }
+            if (empty($batchResponses)) {
+                return $this->response->setStatusCode(202);
+            }
+            return $this->respond($batchResponses, 200);
+        }
+
+        // Single Request
+        $singleResponse = $this->processSingleJsonRpcRequest($input);
+        if ($singleResponse === null) {
+            return $this->response->setStatusCode(202);
+        }
+
+        return $this->respond($singleResponse, 200);
+    }
+
+    /**
+     * Process a single JSON-RPC 2.0 request or notification
+     */
+    private function processSingleJsonRpcRequest($input)
+    {
+        if (!is_array($input) || !isset($input['method'])) {
+            return [
                 'jsonrpc' => '2.0',
                 'id'      => $input['id'] ?? null,
                 'error'   => [
                     'code'    => -32600,
                     'message' => 'Invalid Request. Missing method.'
                 ]
-            ], 400);
+            ];
         }
 
         $jsonrpcId = $input['id'] ?? null;
         $mcpMethod = $input['method'];
         $params    = $input['params'] ?? [];
 
-        // Handle notifications (e.g. notifications/initialized, notifications/cancelled)
-        if (str_starts_with($mcpMethod, 'notifications/')) {
-            return $this->respond([
-                'jsonrpc' => '2.0',
-                'id'      => $jsonrpcId,
-                'result'  => (object)[]
-            ], 200);
+        // Handle notifications (no JSON response body expected per JSON-RPC 2.0 spec)
+        if (str_starts_with($mcpMethod, 'notifications/') || !array_key_exists('id', $input)) {
+            return null;
         }
 
         switch ($mcpMethod) {
             case 'initialize':
-                return $this->respond([
+                return [
                     'jsonrpc' => '2.0',
                     'id'      => $jsonrpcId,
                     'result'  => [
@@ -153,10 +190,10 @@ class McpController extends ResourceController
                             'version' => '1.0.0'
                         ]
                     ]
-                ]);
+                ];
 
             case 'prompts/list':
-                return $this->respond([
+                return [
                     'jsonrpc' => '2.0',
                     'id'      => $jsonrpcId,
                     'result'  => [
@@ -168,10 +205,10 @@ class McpController extends ResourceController
                             ]
                         ]
                     ]
-                ]);
+                ];
 
             case 'prompts/get':
-                return $this->respond([
+                return [
                     'jsonrpc' => '2.0',
                     'id'      => $jsonrpcId,
                     'result'  => [
@@ -186,16 +223,16 @@ class McpController extends ResourceController
                             ]
                         ]
                     ]
-                ]);
+                ];
 
             case 'tools/list':
-                return $this->respond([
+                return [
                     'jsonrpc' => '2.0',
                     'id'      => $jsonrpcId,
                     'result'  => [
                         'tools' => $this->getToolsManifest()
                     ]
-                ]);
+                ];
 
             case 'tools/call':
                 $toolName = $params['name'] ?? '';
@@ -203,7 +240,7 @@ class McpController extends ResourceController
                 
                 try {
                     $resultText = $this->executeTool($toolName, $toolArgs);
-                    return $this->respond([
+                    return [
                         'jsonrpc' => '2.0',
                         'id'      => $jsonrpcId,
                         'result'  => [
@@ -214,27 +251,52 @@ class McpController extends ResourceController
                                 ]
                             ]
                         ]
-                    ]);
+                    ];
                 } catch (\Throwable $e) {
-                    return $this->respond([
+                    return [
                         'jsonrpc' => '2.0',
                         'id'      => $jsonrpcId,
                         'error'   => [
                             'code'    => -32603,
                             'message' => 'Internal error: ' . $e->getMessage()
                         ]
-                    ]);
+                    ];
                 }
 
+            case 'resources/list':
+                return [
+                    'jsonrpc' => '2.0',
+                    'id'      => $jsonrpcId,
+                    'result'  => [
+                        'resources' => []
+                    ]
+                ];
+
+            case 'roots/list':
+                return [
+                    'jsonrpc' => '2.0',
+                    'id'      => $jsonrpcId,
+                    'result'  => [
+                        'roots' => []
+                    ]
+                ];
+
+            case 'ping':
+                return [
+                    'jsonrpc' => '2.0',
+                    'id'      => $jsonrpcId,
+                    'result'  => (object)[]
+                ];
+
             default:
-                return $this->respond([
+                return [
                     'jsonrpc' => '2.0',
                     'id'      => $jsonrpcId,
                     'error'   => [
                         'code'    => -32601,
                         'message' => 'Method not found: ' . $mcpMethod
                     ]
-                ], 404);
+                ];
         }
     }
 
