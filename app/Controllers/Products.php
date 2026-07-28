@@ -571,11 +571,14 @@ class Products extends ResourceController
                     $productCount = count($rawList);
                 }
 
+                $dataHash = $item['data_hash'] ?? $item['hash_md5'] ?? (!empty($rawJson) ? md5($rawJson) : null);
+
                 $dataToSave = [
                     'origin' => $origin,
                     'api_version' => $apiVersion,
                     'raw_json' => $rawJson,
                     'product_count' => $productCount,
+                    'data_hash' => $dataHash,
                 ];
 
                 $snapshotModel->insert($dataToSave);
@@ -638,11 +641,14 @@ class Products extends ResourceController
         }
         $productCount = count($rawList);
 
+        $dataHash = $json['data_hash'] ?? $json['hash_md5'] ?? (!empty($rawJson) ? md5($rawJson) : null);
+
         $dataToSave = [
             'origin' => $origin,
             'api_version' => $apiVersion,
             'raw_json' => $rawJson,
             'product_count' => $productCount,
+            'data_hash' => $dataHash,
         ];
 
         $snapshotModel->insert($dataToSave);
@@ -1798,7 +1804,7 @@ class Products extends ResourceController
         }
 
         $json = $this->request->getJSON(true);
-        $targetDate = $json['date'] ?? $this->request->getVar('date');
+        $targetDate = trim($json['date'] ?? $this->request->getVar('date') ?? '');
 
         if (empty($targetDate)) {
             return $this->fail('يرجى تحديد التاريخ بشكل صحيح.');
@@ -1807,23 +1813,26 @@ class Products extends ResourceController
         $db = \Config\Database::connect();
         $snapshotModel = new SnapshotModel();
 
-        // 1. Get snapshots created on this date
+        // 1. Get snapshots where api_version contains or equals targetDate
         $snapshots = $db->table('data_snapshots')
-            ->where("CAST(created_at AS DATE) =", $targetDate)
+            ->groupStart()
+                ->where('api_version', $targetDate)
+                ->orLike('api_version', $targetDate)
+            ->groupEnd()
             ->get()
             ->getResultArray();
 
         $snapshotIds = array_column($snapshots, 'id');
 
-        // 2. Delete non-saved products created on this date OR with ad_start_date = targetDate OR snapshot_id in snapshotIds
+        // 2. Delete non-saved products where api_version matches OR snapshot_id is in snapshotIds
         $builder = $db->table('products');
         $builder->groupStart()
                     ->where('is_saved', false)
                     ->orWhere('is_saved IS NULL')
                 ->groupEnd()
                 ->groupStart()
-                    ->where('ad_start_date', $targetDate)
-                    ->orWhere("CAST(created_at AS DATE) =", $targetDate);
+                    ->where('api_version', $targetDate)
+                    ->orLike('api_version', $targetDate);
 
         if (!empty($snapshotIds)) {
             $builder->orWhereIn('snapshot_id', $snapshotIds);
@@ -1832,7 +1841,7 @@ class Products extends ResourceController
 
         $deletedProducts = $builder->delete();
 
-        // 3. Delete snapshots created on this date
+        // 3. Delete matching snapshots
         $deletedSnapshots = 0;
         if (!empty($snapshotIds)) {
             $snapshotModel->whereIn('id', $snapshotIds)->delete();
@@ -1841,7 +1850,7 @@ class Products extends ResourceController
 
         return $this->respond([
             'success' => true,
-            'message' => "تم حذف {$deletedProducts} منتج و {$deletedSnapshots} لقطة بيانات لتاريخ {$targetDate} بنجاح.",
+            'message' => "تم حذف {$deletedProducts} منتج و {$deletedSnapshots} لقطة بيانات المرتبطة بالإصدار/التاريخ ({$targetDate}) بنجاح.",
             'deleted_products' => $deletedProducts,
             'deleted_snapshots' => $deletedSnapshots
         ]);
