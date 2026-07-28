@@ -76,8 +76,8 @@ class McpController extends ResourceController
         }
         
         if ($method === 'get') {
-            $acceptHeader = strtolower($this->request->getHeaderLine('Accept'));
-            if (str_contains($acceptHeader, 'text/event-stream') || $this->request->getGet('transport') === 'sse') {
+            $acceptHeader = strtolower(trim($this->request->getHeaderLine('Accept')));
+            if ($acceptHeader === 'text/event-stream' || $this->request->getGet('transport') === 'sse') {
                 $token = $this->request->getGet('token');
                 $postUrl = site_url('api/mcp') . ($token ? '?token=' . urlencode($token) : '');
 
