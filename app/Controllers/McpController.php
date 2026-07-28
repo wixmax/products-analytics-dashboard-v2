@@ -114,10 +114,46 @@ class McpController extends ResourceController
                     'id'      => $jsonrpcId,
                     'result'  => [
                         'protocolVersion' => '2024-11-05',
-                        'capabilities'    => ['tools' => (object)[]],
+                        'capabilities'    => [
+                            'tools'   => (object)[],
+                            'prompts' => (object)[]
+                        ],
                         'serverInfo'      => [
                             'name'    => 'products-analytics-mcp',
                             'version' => '1.0.0'
+                        ]
+                    ]
+                ]);
+
+            case 'prompts/list':
+                return $this->respond([
+                    'jsonrpc' => '2.0',
+                    'id'      => $jsonrpcId,
+                    'result'  => [
+                        'prompts' => [
+                            [
+                                'name'        => 'ecommerce_analytics_assistant',
+                                'description' => 'System prompt and skill instructions for e-commerce product analysis and winning ads discovery.',
+                                'arguments'   => []
+                            ]
+                        ]
+                    ]
+                ]);
+
+            case 'prompts/get':
+                return $this->respond([
+                    'jsonrpc' => '2.0',
+                    'id'      => $jsonrpcId,
+                    'result'  => [
+                        'description' => 'System prompt and skill instructions for e-commerce product analysis.',
+                        'messages'    => [
+                            [
+                                'role'    => 'user',
+                                'content' => [
+                                    'type' => 'text',
+                                    'text' => $this->getSystemPrompt()
+                                ]
+                            ]
                         ]
                     ]
                 ]);
@@ -170,6 +206,43 @@ class McpController extends ResourceController
                     ]
                 ], 404);
         }
+    }
+
+    /**
+     * Retrieve global MCP system prompt / skill instructions
+     */
+    private function getSystemPrompt(): string
+    {
+        $db = \Config\Database::connect();
+        $row = $db->table('settings')->where('key', 'mcp_system_prompt')->get()->getRowArray();
+        if ($row && !empty($row['value'])) {
+            return $row['value'];
+        }
+        return "تنبيه مهم: آلية العمل ومراحل التنفيذ\n"
+             . "سيتم تنفيذ المهام على مراحل متتالية، ولا يتم الانتقال إلى أي مرحلة قبل إتمام المرحلة السابقة واعتماد نتائجها.\n\n"
+             . "المرحلة الأولى: اختيار واستكشاف المنتجات المرشحة والرابحة\n"
+             . "- عند طلب الاستكشاف أو التحليل، استخدم أدوات MCP المتاحة مثل `filter_winning_products` (مع تحديد country='MA' للسوق المغربي)، أو `list_snapshots` / `get_snapshot_by_date` للتواريخ المتاحة، أو `get_saved_products` للاستعلام عن المحفوظات الخاصة بالحساب.\n"
+             . "- تحليل المنتجات المرشحة وتقييمها بناءً على معايير الجدوى والطلب المتاح بالبيانات.\n"
+             . "- تطبيق نظام تقييم المنتجات (Score من 100): قوة الطلب في الإعلانات (40 نقطة)، ملاءمة السوق والموسم في المغرب (30 نقطة)، سهولة اللوجستيك (20 نقطة)، والتوافق مع قيود الميزانية والميول (10 نقاط).\n"
+             . "- تصنيف المنتجات إلى: 🟢 رابحة (>= 75)، 🟡 واعدة (50-74)، 🔴 ضعيفة/عالية المخاطر (< 50).\n"
+             . "- عرض قائمة التقييم والجداول بوضوح، وانتظار اختيار وموافقة المستخدم على المنتج الرابح قبل الانتقال للمرحلة التالية.\n\n"
+             . "المرحلة الثانية: إدخال بيانات المنتج والتحليل التفصيلي الشامل\n"
+             . "بعد اعتماد المنتج الرابح، استخدم أداة `get_product_full_json` لجلب البيانات الخام الكاملة للمنتج (أو طلب البيانات النواقص مثل C_wholesale و C_shipping من المستخدم)، ثم ابدأ تنفيذ جميع العمليات التالية:\n"
+             . "1. التحليل المالي والتسعير ونموذج COD للسوق المغربي:\n"
+             . "   - حساب التكلفة الفعلية للتوصيل مع الرجوع: C_shipping / (1 - R).\n"
+             . "   - مقارنة سعر البيع المقترح مع سعر المنافس وتوضيح الفارق التنافسي بالنسبة المئوية.\n"
+             . "   - تقديم جداول تسعير مفصلة تشمل هامش الربح الصافي النهائي (M_final).\n"
+             . "2. خطة الإعلانات وتصريف المخزون:\n"
+             . "   - تحديد مدة تصريف المخزون بناءً على حجم الوحدات (مثلاً Micro-Batch للمخزون < 20 قطعة).\n"
+             . "   - تقسيم الميزانية الإعلانية عبر ثلاث مراحل: اختبار، توسيع، وحرق المخزون.\n"
+             . "3. صناعة المحتوى الإعلاني والـ Creatives:\n"
+             . "   - إنشاء سكربتات إعلانية مبنية على هيكل (Hook -> Problem -> Solution -> Offer -> CTA).\n"
+             . "   - تقديم برومبتات AI دقيقة لتوليد فيديوهات UGC وعناوين ووصف إعلاني لكل منتج رابح.\n"
+             . "   - توليد 4 برومبتات AI لصور إعلانية (احترافية، Lifestyle، زاوية تحويلية).\n"
+             . "   - كتابة 3 نسخ إعلانية لفيسبوك (Primary Text) ومحتوى مخصص لتيك توك (Hooks, Hashtags).\n\n"
+             . "اللغة والأسلوب:\n"
+             . "- استخدام اللغة العربية الفصحى أو الدارجة المغربية مع قبول المصطلحات التقنية (ROAS, CPA, COD).\n"
+             . "- الاعتماد المكثف على الجداول والأرقام الواضحة والعملية.";
     }
 
     /**

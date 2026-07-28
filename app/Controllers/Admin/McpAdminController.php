@@ -40,6 +40,35 @@ class McpAdminController extends BaseController
         }
     }
 
+    private function getDefaultSystemPrompt(): string
+    {
+        return "تنبيه مهم: آلية العمل ومراحل التنفيذ\n"
+             . "سيتم تنفيذ المهام على مراحل متتالية، ولا يتم الانتقال إلى أي مرحلة قبل إتمام المرحلة السابقة واعتماد نتائجها.\n\n"
+             . "المرحلة الأولى: اختيار واستكشاف المنتجات المرشحة والرابحة\n"
+             . "- عند طلب الاستكشاف أو التحليل، استخدم أدوات MCP المتاحة مثل `filter_winning_products` (مع تحديد country='MA' للسوق المغربي)، أو `list_snapshots` / `get_snapshot_by_date` للتواريخ المتاحة، أو `get_saved_products` للاستعلام عن المحفوظات الخاصة بالحساب.\n"
+             . "- تحليل المنتجات المرشحة وتقييمها بناءً على معايير الجدوى والطلب المتاح بالبيانات.\n"
+             . "- تطبيق نظام تقييم المنتجات (Score من 100): قوة الطلب في الإعلانات (40 نقطة)، ملاءمة السوق والموسم في المغرب (30 نقطة)، سهولة اللوجستيك (20 نقطة)، والتوافق مع قيود الميزانية والميول (10 نقاط).\n"
+             . "- تصنيف المنتجات إلى: 🟢 رابحة (>= 75)، 🟡 واعدة (50-74)، 🔴 ضعيفة/عالية المخاطر (< 50).\n"
+             . "- عرض قائمة التقييم والجداول بوضوح، وانتظار اختيار وموافقة المستخدم على المنتج الرابح قبل الانتقال للمرحلة التالية.\n\n"
+             . "المرحلة الثانية: إدخال بيانات المنتج والتحليل التفصيلي الشامل\n"
+             . "بعد اعتماد المنتج الرابح، استخدم أداة `get_product_full_json` لجلب البيانات الخام الكاملة للمنتج (أو طلب البيانات النواقص مثل C_wholesale و C_shipping من المستخدم)، ثم ابدأ تنفيذ جميع العمليات التالية:\n"
+             . "1. التحليل المالي والتسعير ونموذج COD للسوق المغربي:\n"
+             . "   - حساب التكلفة الفعلية للتوصيل مع الرجوع: C_shipping / (1 - R).\n"
+             . "   - مقارنة سعر البيع المقترح مع سعر المنافس وتوضيح الفارق التنافسي بالنسبة المئوية.\n"
+             . "   - تقديم جداول تسعير مفصلة تشمل هامش الربح الصافي النهائي (M_final).\n"
+             . "2. خطة الإعلانات وتصريف المخزون:\n"
+             . "   - تحديد مدة تصريف المخزون بناءً على حجم الوحدات (مثلاً Micro-Batch للمخزون < 20 قطعة).\n"
+             . "   - تقسيم الميزانية الإعلانية عبر ثلاث مراحل: اختبار، توسيع، وحرق المخزون.\n"
+             . "3. صناعة المحتوى الإعلاني والـ Creatives:\n"
+             . "   - إنشاء سكربتات إعلانية مبنية على هيكل (Hook -> Problem -> Solution -> Offer -> CTA).\n"
+             . "   - تقديم برومبتات AI دقيقة لتوليد فيديوهات UGC وعناوين ووصف إعلاني لكل منتج رابح.\n"
+             . "   - توليد 4 برومبتات AI لصور إعلانية (احترافية، Lifestyle، زاوية تحويلية).\n"
+             . "   - كتابة 3 نسخ إعلانية لفيسبوك (Primary Text) ومحتوى مخصص لتيك توك (Hooks, Hashtags).\n\n"
+             . "اللغة والأسلوب:\n"
+             . "- استخدام اللغة العربية الفصحى أو الدارجة المغربية مع قبول المصطلحات التقنية (ROAS, CPA, COD).\n"
+             . "- الاعتماد المكثف على الجداول والأرقام الواضحة والعملية.";
+    }
+
     /**
      * Display the Admin MCP Control Panel.
      */
@@ -53,6 +82,7 @@ class McpAdminController extends BaseController
 
         // 1. Get MCP global status & tool settings
         $globalEnabled = $this->getSetting('mcp_global_enabled', '1') === '1';
+        $systemPrompt  = $this->getSetting('mcp_system_prompt', $this->getDefaultSystemPrompt());
 
         $allTools = [
             'get_saved_products' => [
@@ -125,6 +155,8 @@ class McpAdminController extends BaseController
 
         return view('admin/mcp', [
             'globalEnabled'       => $globalEnabled,
+            'systemPrompt'        => $systemPrompt,
+            'defaultSystemPrompt' => $this->getDefaultSystemPrompt(),
             'tools'               => $allTools,
             'users'               => $users,
             'totalUsers'          => $totalUsers,
@@ -212,5 +244,31 @@ class McpAdminController extends BaseController
         $db->table('users')->where('id', $userId)->update(['api_token' => null]);
 
         return redirect()->back()->with('message', "تم إلغاء مفتاح API للمستخدم '{$targetUser['username']}' بنجاح. 🚫");
+    }
+
+    /**
+     * Update system prompt & AI skill instructions.
+     */
+    public function updateSystemPrompt(): RedirectResponse
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return redirect()->to('/')->with('error', 'غير مسموح لك بالوصول.');
+        }
+
+        $prompt = $this->request->getPost('system_prompt');
+        $reset  = $this->request->getPost('reset');
+
+        if ($reset === '1') {
+            $prompt = $this->getDefaultSystemPrompt();
+            $this->setSetting('mcp_system_prompt', $prompt);
+            return redirect()->back()->with('message', 'تم استعادة توجيهات النظام والمهارات الافتراضية بنجاح! 🔄');
+        }
+
+        if (is_string($prompt)) {
+            $this->setSetting('mcp_system_prompt', trim($prompt));
+            return redirect()->back()->with('message', 'تم حفظ توجيهات النظام ومهارات الذكاء الاصطناعي (MCP Skill Prompt) بنجاح! 📜✨');
+        }
+
+        return redirect()->back()->with('error', 'التوجيه المدخل غير صالح.');
     }
 }

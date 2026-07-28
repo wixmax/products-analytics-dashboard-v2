@@ -42,6 +42,7 @@ $routes->group('admin', ['filter' => 'group:superadmin,admin'], function($routes
     $routes->post('mcp/toggle-tool', '\App\Controllers\Admin\McpAdminController::toggleTool');
     $routes->post('mcp/generate-token/(:num)', '\App\Controllers\Admin\McpAdminController::generateUserToken/$1');
     $routes->post('mcp/revoke-token/(:num)', '\App\Controllers\Admin\McpAdminController::revokeUserToken/$1');
+    $routes->post('mcp/update-prompt', '\App\Controllers\Admin\McpAdminController::updateSystemPrompt');
 });
 $routes->get('admin/users/stop-impersonating', '\App\Controllers\Admin\UsersController::stopImpersonating');
 

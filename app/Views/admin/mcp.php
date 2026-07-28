@@ -383,7 +383,41 @@
             </div>
           </div>
 
-          <!-- Section 2: Member API Tokens Table -->
+          <!-- Section 2: MCP System Prompt & Skill Instructions -->
+          <div class="admin-card">
+            <div class="admin-card-title">
+              📜 تعليمات وتوجيهات الذكاء الاصطناعي (MCP System Prompt & Skill)
+            </div>
+            <p class="admin-card-desc">
+              تحديد التوجيهات العامة ومهارات النظام التي يتم إرسالها لتطبيقات الذكاء الاصطناعي (مثل Perplexity أو Claude) عبر استعلامات <code>prompts/list</code> و <code>prompts/get</code> لتحديد طريقة التفكير وتنسيق الإجابات والتسلسل الصحيح لاستدعاء الأدوات.
+            </p>
+
+            <form action="<?= base_url('admin/mcp/update-prompt') ?>" method="POST">
+              <?= csrf_field() ?>
+              <div style="margin-bottom: 1rem;">
+                <label for="system_prompt" style="font-weight: 700; font-size: 0.9rem; color: var(--color-text-main); display: block; margin-bottom: 6px;">
+                  نص التوجيهات ومهارات الذكاء الاصطناعي (MCP Skill Instructions Prompt):
+                </label>
+                <textarea
+                  name="system_prompt"
+                  id="system_prompt"
+                  rows="7"
+                  style="width: 100%; font-family: 'Cairo', sans-serif; font-size: 0.9rem; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); line-height: 1.6; resize: vertical;"
+                ><?= esc($systemPrompt) ?></textarea>
+              </div>
+
+              <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
+                <button type="submit" name="reset" value="1" class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 12px;" onclick="return confirm('هل أنت تأكد من استعادة التوجيه الافتراضي؟');">
+                  🔄 استعادة التوجيه الافتراضي
+                </button>
+                <button type="submit" class="btn btn-primary" style="font-size: 0.85rem; padding: 6px 16px;">
+                  💾 حفظ التوجيه والمهارات
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Section 3: Member API Tokens Table -->
           <div class="admin-card">
             <div class="admin-card-title">
               👥 مفاتيح API الخاصة بالأعضاء (Member API Tokens)
