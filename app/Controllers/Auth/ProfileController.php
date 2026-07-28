@@ -93,4 +93,39 @@ class ProfileController extends BaseController
 
         return redirect()->back()->withInput()->with('error', 'حدث خطأ أثناء تحديث كلمة المرور.');
     }
+
+    /**
+     * Generate or regenerate user API token for MCP.
+     */
+    public function generateApiToken(): RedirectResponse
+    {
+        if (!auth()->loggedIn()) {
+            return redirect()->route('login');
+        }
+
+        $user = auth()->user();
+        $newToken = 'mcp_' . bin2hex(random_bytes(24));
+
+        $db = \Config\Database::connect();
+        $db->table('users')->where('id', $user->id)->update(['api_token' => $newToken]);
+
+        return redirect()->back()->with('message', 'تم توليد مفتاح MCP API الجديد بنجاح! 🔑');
+    }
+
+    /**
+     * Revoke user API token.
+     */
+    public function revokeApiToken(): RedirectResponse
+    {
+        if (!auth()->loggedIn()) {
+            return redirect()->route('login');
+        }
+
+        $user = auth()->user();
+
+        $db = \Config\Database::connect();
+        $db->table('users')->where('id', $user->id)->update(['api_token' => null]);
+
+        return redirect()->back()->with('message', 'تم إلغاء مفتاح MCP API بنجاح! 🚫');
+    }
 }

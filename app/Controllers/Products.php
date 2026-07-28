@@ -573,6 +573,18 @@ class Products extends ResourceController
 
                 $dataHash = $item['data_hash'] ?? $item['hash_md5'] ?? (!empty($rawJson) ? md5($rawJson) : null);
 
+                // Prevent inserting duplicate snapshot
+                $existing = null;
+                if (!empty($dataHash)) {
+                    $existing = $snapshotModel->where('origin', $origin)->where('data_hash', $dataHash)->first();
+                }
+                if (!$existing && !empty($apiVersion)) {
+                    $existing = $snapshotModel->where('origin', $origin)->where('api_version', $apiVersion)->first();
+                }
+                if ($existing) {
+                    continue; // Skip duplicate snapshot import
+                }
+
                 $dataToSave = [
                     'origin' => $origin,
                     'api_version' => $apiVersion,
@@ -642,6 +654,23 @@ class Products extends ResourceController
         $productCount = count($rawList);
 
         $dataHash = $json['data_hash'] ?? $json['hash_md5'] ?? (!empty($rawJson) ? md5($rawJson) : null);
+
+        // Prevent inserting duplicate snapshot
+        $existing = null;
+        if (!empty($dataHash)) {
+            $existing = $snapshotModel->where('origin', $origin)->where('data_hash', $dataHash)->first();
+        }
+        if (!$existing && !empty($apiVersion)) {
+            $existing = $snapshotModel->where('origin', $origin)->where('api_version', $apiVersion)->first();
+        }
+        if ($existing) {
+            return $this->respond([
+                'success' => true,
+                'is_duplicate' => true,
+                'message' => 'هذه اللقطة موجودة مسبقاً وتعتبر مكررة، لم يتم إضافة أي بيانات.',
+                'id' => $existing['id']
+            ]);
+        }
 
         $dataToSave = [
             'origin' => $origin,

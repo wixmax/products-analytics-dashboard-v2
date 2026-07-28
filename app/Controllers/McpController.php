@@ -158,11 +158,67 @@ class McpController extends ResourceController
     }
 
     /**
+     * Resolve user & tenant_id from API Token or active session
+     */
+    private function resolveAuthenticatedUser()
+    {
+        $token = $this->request->getGet('token');
+
+        if (empty($token)) {
+            $authHeader = $this->request->getHeaderLine('Authorization');
+            if (!empty($authHeader) && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+                $token = trim($matches[1]);
+            }
+        }
+
+        if (empty($token)) {
+            $token = $this->request->getHeaderLine('X-API-Key');
+        }
+
+        if (!empty($token)) {
+            $db = \Config\Database::connect();
+            $userRow = $db->table('users')->where('api_token', $token)->get()->getRowArray();
+            if ($userRow) {
+                return $userRow;
+            }
+        }
+
+        // Fallback to active logged in session
+        if (auth()->loggedIn()) {
+            $user = auth()->user();
+            return [
+                'id'        => $user->id,
+                'username'  => $user->username,
+                'tenant_id' => $user->tenant_id ?? 1
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * Get array of registered MCP tools and JSON schemas
      */
     private function getToolsManifest()
     {
         return [
+            [
+                'name'        => 'get_saved_products',
+                'description' => 'Retrieve products saved specifically by the authenticated user/tenant, with options for collection, country, search, and sorting.',
+                'inputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'collection'   => ['type' => 'string', 'description' => 'Filter by collection name (e.g. عامة, ملابس, إلكترونيات)'],
+                        'country'      => ['type' => 'string', 'description' => '2-letter country code (e.g. MA, SA)'],
+                        'saved_status' => ['type' => 'string', 'description' => 'Status: active or inactive'],
+                        'search_query' => ['type' => 'string', 'description' => 'Search term in title, body, or notes'],
+                        'sort_by'      => ['type' => 'string', 'enum' => ['saved_at', 'rating', 'created_at', 'title']],
+                        'sort_order'   => ['type' => 'string', 'enum' => ['ASC', 'DESC']],
+                        'limit'        => ['type' => 'number', 'description' => 'Max products to return (default 50)'],
+                        'offset'       => ['type' => 'number', 'description' => 'Offset for pagination (default 0)']
+                    ]
+                ]
+            ],
             [
                 'name'        => 'list_snapshots',
                 'description' => 'List available data snapshots stored in the system, with optional origin filtering and pagination.',
@@ -246,6 +302,69 @@ class McpController extends ResourceController
     {
         $snapshotModel = new SnapshotModel();
         $productModel  = new ProductModel();
+
+        if ($name === 'get_saved_products') {
+            $authUser = $this->resolveAuthenticatedUser();
+            if (!$authUser) {
+                return ['error' => 'Unauthorized: Invalid or missing API token. Please generate a token in your profile settings.'];
+            }
+
+            $tenantId      = $authUser['tenant_id'] ?? 1;
+            $collection    = $args['collection'] ?? null;
+            $status        = $args['saved_status'] ?? null;
+            $countryFilter = isset($args['country']) ? strtoupper($args['country']) : null;
+            $searchQuery   = isset($args['search_query']) ? strtolower($args['search_query']) : null;
+            $sortBy        = $args['sort_by'] ?? 'saved_at';
+            $sortOrder     = strtoupper($args['sort_order'] ?? 'DESC');
+            $limit         = intval($args['limit'] ?? 50);
+            $offset        = intval($args['offset'] ?? 0);
+
+            $builder = $productModel->where('tenant_id', $tenantId)
+                                   ->where('is_saved', true);
+
+            if (!empty($collection)) {
+                $builder->where('collection', $collection);
+            }
+            if (!empty($status)) {
+                $builder->where('saved_status', $status);
+            }
+            if (!empty($countryFilter)) {
+                $builder->where('country', $countryFilter);
+            }
+            if (!empty($searchQuery)) {
+                $builder->groupStart()
+                        ->like('title', $searchQuery)
+                        ->orLike('ad_title', $searchQuery)
+                        ->orLike('ad_body', $searchQuery)
+                        ->orLike('notes', $searchQuery)
+                        ->groupEnd();
+            }
+
+            if (in_array($sortBy, ['saved_at', 'rating', 'created_at', 'title'])) {
+                $builder->orderBy($sortBy, $sortOrder);
+            } else {
+                $builder->orderBy('saved_at', 'DESC');
+            }
+
+            $savedProducts = $builder->findAll($limit, $offset);
+
+            return [
+                'user'            => [
+                    'username'  => $authUser['username'] ?? 'User',
+                    'tenant_id' => $tenantId
+                ],
+                'total_returned'  => count($savedProducts),
+                'filters_applied' => [
+                    'collection'   => $collection,
+                    'saved_status' => $status,
+                    'country'      => $countryFilter,
+                    'search_query' => $searchQuery,
+                    'sort_by'      => $sortBy,
+                    'sort_order'   => $sortOrder,
+                ],
+                'products' => $savedProducts
+            ];
+        }
 
         if ($name === 'list_snapshots') {
             $origin = $args['origin'] ?? null;

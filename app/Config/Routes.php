@@ -18,6 +18,8 @@ $routes->get('auth/google/callback', '\App\Controllers\Auth\OAuthController::goo
 $routes->get('profile', '\App\Controllers\Auth\ProfileController::index');
 $routes->post('profile/update', '\App\Controllers\Auth\ProfileController::update');
 $routes->post('profile/change-password', '\App\Controllers\Auth\ProfileController::changePassword');
+$routes->post('profile/generate-api-token', '\App\Controllers\Auth\ProfileController::generateApiToken');
+$routes->post('profile/revoke-api-token', '\App\Controllers\Auth\ProfileController::revokeApiToken');
 
 // Tenant/Workspace Settings
 $routes->get('workspace', '\App\Controllers\Auth\WorkspaceController::index');

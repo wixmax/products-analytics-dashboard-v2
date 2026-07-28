@@ -81,7 +81,11 @@ class SyncService
                     $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
 
                     // Save snapshot before upserting products
-                    $snapshotId = $this->saveSnapshot('Local', $apiVersion, $rawBody, count($rawList));
+                    $snapInfo = $this->saveSnapshot('Local', $apiVersion, $rawBody, count($rawList));
+                    if (!empty($snapInfo['is_duplicate'])) {
+                        return $stats; // Skip products table inserts and updates if duplicate
+                    }
+                    $snapshotId = $snapInfo['id'] ?? null;
 
                     foreach ($rawList as $p) {
                         $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
@@ -179,7 +183,11 @@ class SyncService
                     }
 
                     // Save snapshot before upserting products
-                    $snapshotId = $this->saveSnapshot('Winning', $apiVersion, $rawBody, count($rawList));
+                    $snapInfo = $this->saveSnapshot('Winning', $apiVersion, $rawBody, count($rawList));
+                    if (!empty($snapInfo['is_duplicate'])) {
+                        return $stats; // Skip products table inserts and updates if duplicate
+                    }
+                    $snapshotId = $snapInfo['id'] ?? null;
 
                     foreach ($rawList as $p) {
                         $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
@@ -262,7 +270,11 @@ class SyncService
 
                 if (is_array($rawList)) {
                     // Save snapshot before upserting products
-                    $snapshotId = $this->saveSnapshot($origin, $apiVersion, $rawBody, count($rawList));
+                    $snapInfo = $this->saveSnapshot($origin, $apiVersion, $rawBody, count($rawList));
+                    if (!empty($snapInfo['is_duplicate'])) {
+                        return $stats; // Skip products table inserts and updates if duplicate
+                    }
+                    $snapshotId = $snapInfo['id'] ?? null;
 
                     foreach ($rawList as $p) {
                         $productUrl = $p['product_url'] ?? $p['projectUrl'] ?? $p['productUrl'] ?? $p['url'] ?? '';

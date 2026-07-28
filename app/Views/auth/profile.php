@@ -267,11 +267,81 @@
               </div>
             </form>
           </div>
+
+          <!-- Card: MCP API Token Management -->
+          <div class="profile-card">
+            <div class="profile-card-title">
+              🔑 رمز الوصول الخاص بالذكاء الاصطناعي (MCP & API Token)
+            </div>
+            <p class="profile-card-desc">
+              استخدم هذا المفتاح السري لربط حسابك والمحفوظات الخاصة بك مباشرة مع تطبيقات الذكاء الاصطناعي مثل Perplexity Connectors أو Claude Desktop.
+            </p>
+
+            <?php if (!empty($user->api_token)): ?>
+              <div class="profile-form-group">
+                <label>رمز الـ API الخاص بك:</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="text" id="mcp-api-token-input" value="<?= esc($user->api_token) ?>" readonly style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; letter-spacing: 0.5px; background: var(--bg-card-hover);" />
+                  <button type="button" class="btn btn-secondary" onclick="copyMcpToken()" style="white-space: nowrap;">📋 نسخ الرمز</button>
+                </div>
+              </div>
+
+              <div class="profile-form-group" style="margin-top: 1rem; background: rgba(99, 102, 241, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.2);">
+                <label style="color: var(--color-primary); font-size: 0.85rem; font-weight: 700;">📡 رابط السيرفر المباشر (MCP Server URL) للربط مع Perplexity:</label>
+                <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+                  <input type="text" id="mcp-server-url-input" value="<?= base_url('api/mcp?token=' . esc($user->api_token)) ?>" readonly style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; background: var(--bg-input);" />
+                  <button type="button" class="btn btn-secondary" onclick="copyMcpServerUrl()" style="white-space: nowrap;">📋 نسخ الرابط</button>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 6px;">
+                  💡 <strong>طريقة الربط:</strong> يمكنك وضع هذا الرابط المباشر في خانة <strong>MCP Server URL</strong> في Perplexity Custom Connectors.
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem;">
+                <form action="<?= base_url('profile/revoke-api-token') ?>" method="POST" onsubmit="return confirm('هل أنت تأكد من إلغاء هذا المفتاح؟ سيتوقف أي اتصال خارجي يعتمد عليه.');">
+                  <?= csrf_field() ?>
+                  <button type="submit" class="btn btn-error" style="font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); color: var(--color-error); border: 1px solid rgba(239, 68, 68, 0.2);">🚫 إلغاء المفتاح</button>
+                </form>
+
+                <form action="<?= base_url('profile/generate-api-token') ?>" method="POST" onsubmit="return confirm('توليد مفتاح جديد سيؤدي لإبطال المفتاح الحالي. هل تريد المتابعة؟');">
+                  <?= csrf_field() ?>
+                  <button type="submit" class="btn btn-secondary" style="font-size: 0.8rem;">🔄 إعادة توليد مفتاح جديد</button>
+                </form>
+              </div>
+            <?php else: ?>
+              <div style="text-align: center; padding: 1.5rem; background: var(--bg-input); border-radius: 8px; border: 1px dashed var(--border-color);">
+                <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+                  لم يتم إنشاء رمز API لحسابك بعد. أنشئ رمزا الآن لتمكين الذكاء الاصطناعي من قراءة محفوظاتك وتنسيق إعلاناتك.
+                </p>
+                <form action="<?= base_url('profile/generate-api-token') ?>" method="POST">
+                  <?= csrf_field() ?>
+                  <button type="submit" class="btn btn-primary">
+                    ✨ إنشاء رمز API للمحفوظات (MCP Token)
+                  </button>
+                </form>
+              </div>
+            <?php endif; ?>
+          </div>
         </div>
       </main>
     </div>
 
     <script>
+      function copyMcpToken() {
+        const input = document.getElementById("mcp-api-token-input");
+        if (!input) return;
+        navigator.clipboard.writeText(input.value).then(() => {
+          alert("تم نسخ رمز الـ API بنجاح! 📋");
+        });
+      }
+      function copyMcpServerUrl() {
+        const input = document.getElementById("mcp-server-url-input");
+        if (!input) return;
+        navigator.clipboard.writeText(input.value).then(() => {
+          alert("تم نسخ رابط MCP Server بنجاح! 📋");
+        });
+      }
+
       document.addEventListener("DOMContentLoaded", async () => {
         await setupTheme();
       });

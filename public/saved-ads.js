@@ -225,6 +225,22 @@ function setupSavedScrollObserver() {
   }
 }
 
+function formatSavedDate(dateStr) {
+  if (!dateStr) return "غير محدد";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+  } catch (e) {
+    return dateStr;
+  }
+}
+
 function buildSavedCardHtml(p) {
   const safeId = p.productUrl
     ? btoa(unescape(encodeURIComponent(p.productUrl))).replace(/[/+=]/g, "")
@@ -251,6 +267,7 @@ function buildSavedCardHtml(p) {
   }
 
   const escapedUrlForDelete = (p.productUrl || "").replace(/'/g, "\\'");
+  const savedDateFormatted = formatSavedDate(p.saved_at || p.created_at);
 
   return `
         <article class="product-card saved-product-card card-lazy-load" id="card-${safeId}">
@@ -278,11 +295,16 @@ function buildSavedCardHtml(p) {
                     <span class="alg-badge" style="font-size: 0.65rem;">${p.algorithm || "new"}</span>
                     ${p.api_version ? `<span class="snapshot-badge" style="background:rgba(99,102,241,0.1);color:#6366f1;padding:2px 8px;border-radius:var(--radius-full);font-size:0.65rem;">🔖 ${p.api_version}</span>` : ''}
                 </div>
-                <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 0.75rem; color: var(--color-text-muted);">المجموعة:</span>
-                    <select onchange="updateCollection('${escapedUrlForDelete}', this.value)" style="padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; background: var(--bg-card); color: var(--color-text-main); border: 1px solid var(--border-color);">
-                        ${collections.map((c) => `<option value="${c}" ${p.collection === c ? "selected" : ""}>${c}</option>`).join("")}
-                    </select>
+                <div style="margin-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="font-size: 0.75rem; color: var(--color-text-muted);">المجموعة:</span>
+                        <select onchange="updateProductCollection('${escapedUrlForDelete}', this.value)" style="padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; background: var(--bg-card); color: var(--color-text-main); border: 1px solid var(--border-color);">
+                            ${collections.map((c) => `<option value="${c}" ${p.collection === c ? "selected" : ""}>${c}</option>`).join("")}
+                        </select>
+                    </div>
+                    <div style="font-size: 0.72rem; color: #6366f1; background: rgba(99, 102, 241, 0.08); padding: 2px 8px; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="تاريخ الحفظ في المفضلة">
+                        📅 <span>تاريخ الحفظ: ${savedDateFormatted}</span>
+                    </div>
                 </div>
                 <div class="rating-stars" style="margin-top: 6px;">
                     ${starsHtml}
@@ -474,6 +496,7 @@ async function updateProductCollection(url, collectionName) {
     }
   }
 }
+const updateCollection = updateProductCollection;
 
 async function importSavedAdsFile(event) {
   const file = event.target.files[0];
