@@ -140,7 +140,7 @@ body {
     var(--color-primary),
     var(--color-secondary)
   );
-  -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -855,7 +855,7 @@ textarea:focus {
   font-weight: 700;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: 2.8em;
@@ -922,7 +922,7 @@ textarea:focus {
 .ad-copy-text {
   color: var(--color-text-main);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   opacity: 0.9;
@@ -1844,7 +1844,9 @@ textarea:focus {
   background: var(--color-primary, #6366f1);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 8px 25px rgba(99, 102, 241, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1855,11 +1857,12 @@ textarea:focus {
   visibility: hidden;
   pointer-events: none;
   transform: translateY(20px) scale(0.85);
-  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              background 0.2s ease,
-              box-shadow 0.2s ease;
+  transition:
+    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .back-to-top-btn.visible {
@@ -1872,7 +1875,9 @@ textarea:focus {
 .back-to-top-btn:hover {
   background: var(--color-primary-hover, #4f46e5);
   transform: translateY(-4px) scale(1.1);
-  box-shadow: 0 12px 30px rgba(99, 102, 241, 0.6), 0 5px 15px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 12px 30px rgba(99, 102, 241, 0.6),
+    0 5px 15px rgba(0, 0, 0, 0.35);
 }
 
 .back-to-top-btn:active {
@@ -2005,7 +2010,9 @@ textarea:focus {
    ──────────────────────────────────────────────────────── */
 #filter-date.flatpickr-input {
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 /* When the input has a value (date selected), give it a colored accent */
@@ -2032,35 +2039,45 @@ textarea:focus {
   align-items: center;
   gap: 5px;
   backdrop-filter: blur(8px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   animation: fadeInBadge 0.3s ease;
 }
 
 .ai-product-badge.badge-winning {
   background: rgba(16, 185, 129, 0.9);
   color: #ffffff;
-  border: 1px solid rgba(255,255,255,0.3);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .ai-product-badge.badge-promising {
   background: rgba(245, 158, 11, 0.9);
   color: #ffffff;
-  border: 1px solid rgba(255,255,255,0.3);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .ai-product-badge.badge-risk {
   background: rgba(239, 68, 68, 0.9);
   color: #ffffff;
-  border: 1px solid rgba(255,255,255,0.3);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 @keyframes fadeInBadge {
-  from { opacity: 0; transform: translateY(-5px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .ai-winner-spotlight-box {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.15));
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.1),
+    rgba(139, 92, 246, 0.15)
+  );
   border: 1px solid rgba(99, 102, 241, 0.3);
   border-radius: var(--radius-md);
   padding: 1.25rem;
@@ -2125,5 +2142,3 @@ textarea:focus {
   color: var(--color-text-muted);
   font-weight: 700;
 }
-
-

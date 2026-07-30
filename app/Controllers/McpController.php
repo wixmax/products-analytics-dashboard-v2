@@ -393,10 +393,24 @@ class McpController extends ResourceController
         $allTools = [
             [
                 'name'        => 'get_ai_skill_instructions',
-                'description' => 'CRITICAL AI INSTRUCTION: Call this tool at start of conversation to retrieve official system skill rules for 2-Stage E-Commerce Product Evaluation, Moroccan COD Pricing, Ad Specs, and UGC Creatives.',
+                'description' => 'Retrieve official system skill rules for 2-Stage E-Commerce Product Evaluation, Moroccan COD Pricing, Ad Specs, and UGC Creatives.',
                 'inputSchema' => [
                     'type'       => 'object',
-                    'properties' => (object)[]
+                    'properties' => [
+                        'category' => [
+                            'type'        => 'string',
+                            'description' => 'Optional filter for specific instructions category (all, pricing, evaluation, ads)',
+                            'enum'        => ['all', 'pricing', 'evaluation', 'ads']
+                        ]
+                    ]
+                ],
+                'outputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'status'             => ['type' => 'string'],
+                        'skill_name'         => ['type' => 'string'],
+                        'skill_instructions' => ['type' => 'string']
+                    ]
                 ]
             ],
             [
@@ -414,6 +428,14 @@ class McpController extends ResourceController
                         'limit'        => ['type' => 'number', 'description' => 'Max products to return (default 50)'],
                         'offset'       => ['type' => 'number', 'description' => 'Offset for pagination (default 0)']
                     ]
+                ],
+                'outputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'status'   => ['type' => 'string'],
+                        'total'    => ['type' => 'number'],
+                        'products' => ['type' => 'array', 'items' => ['type' => 'object']]
+                    ]
                 ]
             ],
             [
@@ -425,6 +447,14 @@ class McpController extends ResourceController
                         'origin' => ['type' => 'string', 'description' => 'Filter by origin (Winning, China, Japan, Competitor, Local)'],
                         'limit'  => ['type' => 'number', 'description' => 'Limit results (default 20)'],
                         'offset' => ['type' => 'number', 'description' => 'Offset results (default 0)']
+                    ]
+                ],
+                'outputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'status'    => ['type' => 'string'],
+                        'total'     => ['type' => 'number'],
+                        'snapshots' => ['type' => 'array', 'items' => ['type' => 'object']]
                     ]
                 ]
             ],
@@ -439,6 +469,14 @@ class McpController extends ResourceController
                         'origin'      => ['type' => 'string', 'description' => 'Origin category (default Winning)'],
                         'country'     => ['type' => 'string', 'description' => 'Country code (e.g. MA, SA)'],
                         'limit'       => ['type' => 'number', 'description' => 'Max items to return (default 100)']
+                    ]
+                ],
+                'outputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'status' => ['type' => 'string'],
+                        'total'  => ['type' => 'number'],
+                        'items'  => ['type' => 'array', 'items' => ['type' => 'object']]
                     ]
                 ]
             ],
@@ -462,6 +500,14 @@ class McpController extends ResourceController
                         'limit'           => ['type' => 'number'],
                         'offset'          => ['type' => 'number']
                     ]
+                ],
+                'outputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'status'   => ['type' => 'string'],
+                        'total'    => ['type' => 'number'],
+                        'products' => ['type' => 'array', 'items' => ['type' => 'object']]
+                    ]
                 ]
             ],
             [
@@ -476,6 +522,14 @@ class McpController extends ResourceController
                         'country' => ['type' => 'string'],
                         'limit'   => ['type' => 'number']
                     ]
+                ],
+                'outputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'status'   => ['type' => 'string'],
+                        'total'    => ['type' => 'number'],
+                        'products' => ['type' => 'array', 'items' => ['type' => 'object']]
+                    ]
                 ]
             ],
             [
@@ -486,6 +540,13 @@ class McpController extends ResourceController
                     'properties' => [
                         'product_id' => ['type' => 'number'],
                         'title'      => ['type' => 'string']
+                    ]
+                ],
+                'outputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'status'  => ['type' => 'string'],
+                        'product' => ['type' => 'object']
                     ]
                 ]
             ]
