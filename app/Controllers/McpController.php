@@ -672,11 +672,12 @@ class McpController extends ResourceController
             $limit  = intval($args['limit'] ?? 20);
             $offset = intval($args['offset'] ?? 0);
 
-            $builder = $snapshotModel->select('id, origin, api_version, product_count, created_at, updated_at');
+            $builder = $db->table('data_snapshots')
+                          ->select('id, origin, api_version, product_count, created_at, updated_at');
             if (!empty($origin)) {
                 $builder->where('origin', $origin);
             }
-            $snapshots = $builder->orderBy('id', 'DESC')->findAll($limit, $offset);
+            $snapshots = $builder->orderBy('id', 'DESC')->limit($limit, $offset)->get()->getResultArray();
 
             return [
                 'count'     => count($snapshots),
@@ -693,17 +694,19 @@ class McpController extends ResourceController
 
             $snapshotRow = null;
             if ($snapshotId) {
-                $snapshotRow = $snapshotModel->find($snapshotId);
+                $snapshotRow = $db->table('data_snapshots')->where('id', $snapshotId)->get()->getRowArray();
             } elseif (!empty($dateStr)) {
-                $snapshotRow = $snapshotModel->groupStart()
-                                             ->like('api_version', $dateStr)
-                                             ->orLike('created_at', $dateStr)
-                                           ->groupEnd()
-                                           ->where('origin', $origin)
-                                           ->orderBy('id', 'DESC')
-                                           ->first();
+                $snapshotRow = $db->table('data_snapshots')
+                                  ->groupStart()
+                                      ->like('api_version', $dateStr)
+                                      ->orLike('created_at', $dateStr)
+                                  ->groupEnd()
+                                  ->where('origin', $origin)
+                                  ->orderBy('id', 'DESC')
+                                  ->get()
+                                  ->getRowArray();
             } else {
-                $snapshotRow = $snapshotModel->where('origin', $origin)->orderBy('id', 'DESC')->first();
+                $snapshotRow = $db->table('data_snapshots')->where('origin', $origin)->orderBy('id', 'DESC')->get()->getRowArray();
             }
 
             if (!$snapshotRow) {
@@ -751,24 +754,26 @@ class McpController extends ResourceController
 
             $snapshotRow = null;
             if ($snapshotId) {
-                $snapshotRow = $snapshotModel->where('id', $snapshotId)->where('origin', 'Winning')->first();
+                $snapshotRow = $db->table('data_snapshots')->where('id', $snapshotId)->where('origin', 'Winning')->get()->getRowArray();
             } elseif (!empty($dateStr)) {
-                $snapshotRow = $snapshotModel->where('origin', 'Winning')
-                                             ->groupStart()
-                                                 ->like('api_version', $dateStr)
-                                                 ->orLike('created_at', $dateStr)
-                                             ->groupEnd()
-                                             ->orderBy('id', 'DESC')
-                                             ->first();
+                $snapshotRow = $db->table('data_snapshots')
+                                  ->where('origin', 'Winning')
+                                  ->groupStart()
+                                      ->like('api_version', $dateStr)
+                                      ->orLike('created_at', $dateStr)
+                                  ->groupEnd()
+                                  ->orderBy('id', 'DESC')
+                                  ->get()
+                                  ->getRowArray();
             } else {
-                $snapshotRow = $snapshotModel->where('origin', 'Winning')->orderBy('id', 'DESC')->first();
+                $snapshotRow = $db->table('data_snapshots')->where('origin', 'Winning')->orderBy('id', 'DESC')->get()->getRowArray();
             }
 
             $entries = [];
             if ($snapshotRow) {
                 $entries = $this->parseSnapshotEntries($snapshotRow['raw_json'] ?? '');
             } else {
-                $entries = $productModel->where('origin', 'Winning')->findAll();
+                $entries = $db->table('products')->where('origin', 'Winning')->get()->getResultArray();
             }
 
             // Filter entries
@@ -858,24 +863,24 @@ class McpController extends ResourceController
             $country   = $args['country'] ?? null;
             $limit     = intval($args['limit'] ?? 20);
 
-            $builder = $productModel;
+            $builder = $db->table('products');
             if (!empty($ids) && is_array($ids)) {
-                $builder = $builder->whereIn('id', $ids);
+                $builder->whereIn('id', $ids);
             }
             if (!empty($nameQuery)) {
-                $builder = $builder->groupStart()
-                                   ->like('title', $nameQuery)
-                                   ->orLike('ad_title', $nameQuery)
-                                 ->groupEnd();
+                $builder->groupStart()
+                        ->like('title', $nameQuery)
+                        ->orLike('ad_title', $nameQuery)
+                        ->groupEnd();
             }
             if (!empty($origin)) {
-                $builder = $builder->where('origin', $origin);
+                $builder->where('origin', $origin);
             }
             if (!empty($country)) {
-                $builder = $builder->where('country', strtoupper($country));
+                $builder->where('country', strtoupper($country));
             }
 
-            $products = $builder->orderBy('id', 'DESC')->findAll($limit);
+            $products = $builder->orderBy('id', 'DESC')->limit($limit)->get()->getResultArray();
             return [
                 'returned_count' => count($products),
                 'products'       => $products
@@ -892,14 +897,14 @@ class McpController extends ResourceController
 
             $productRow = null;
             if ($productId) {
-                $productRow = $productModel->find($productId);
+                $productRow = $db->table('products')->where('id', $productId)->get()->getRowArray();
             } else {
-                $productRow = $productModel->like('title', $titleQuery)->orderBy('id', 'DESC')->first();
+                $productRow = $db->table('products')->like('title', $titleQuery)->orderBy('id', 'DESC')->get()->getRowArray();
             }
 
             // Raw tRPC JSON search from snapshot
             $rawTrpcObject = null;
-            $recentSnapshots = $snapshotModel->orderBy('id', 'DESC')->findAll(10);
+            $recentSnapshots = $db->table('data_snapshots')->orderBy('id', 'DESC')->limit(10)->get()->getResultArray();
             foreach ($recentSnapshots as $snap) {
                 $entries = $this->parseSnapshotEntries($snap['raw_json'] ?? '');
                 foreach ($entries as $entry) {
