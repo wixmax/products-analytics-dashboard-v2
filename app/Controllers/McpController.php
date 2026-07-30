@@ -13,30 +13,55 @@ class McpController extends ResourceController
     /**
      * Helper to parse raw_json string from data_snapshots table
      */
-    private function parseSnapshotEntries($rawJsonStr)
+    private function parseSnapshotEntries($rawJsonStr): array
     {
         if (empty($rawJsonStr)) {
             return [];
         }
         try {
-            $parsed = is_string($rawJsonStr) ? json_decode($rawJsonStr, true) : $rawJsonStr;
-            if (is_array($parsed) && isset($parsed[0])) {
-                $jsonObj = $parsed[0]['result']['data']['json'] ?? null;
-                if ($jsonObj) {
-                    if (isset($jsonObj['results']) && is_array($jsonObj['results'])) {
-                        return $jsonObj['results'];
-                    }
-                    if (isset($jsonObj['productsEntries']) && is_array($jsonObj['productsEntries'])) {
-                        return $jsonObj['productsEntries'];
-                    }
-                    if (isset($jsonObj['products']) && is_array($jsonObj['products'])) {
-                        return $jsonObj['products'];
-                    }
+            $decoded = is_string($rawJsonStr) ? json_decode($rawJsonStr, true) : $rawJsonStr;
+            if (!$decoded || !is_array($decoded)) {
+                return [];
+            }
+
+            // If it's a tRPC batch structure: [0 => ['result' => ['data' => ['json' => ...]]]]
+            $base = isset($decoded[0]) ? $decoded[0] : $decoded;
+
+            if (isset($base['result']['data']['json']) && is_array($base['result']['data']['json'])) {
+                $json = $base['result']['data']['json'];
+                if (isset($json['productsEntries']) && is_array($json['productsEntries'])) {
+                    return $json['productsEntries'];
+                }
+                if (isset($json['results']) && is_array($json['results'])) {
+                    return $json['results'];
+                }
+                if (isset($json['products']) && is_array($json['products'])) {
+                    return $json['products'];
+                }
+                if (isset($json['data']) && is_array($json['data'])) {
+                    return $json['data'];
                 }
             }
-            if (is_array($parsed)) {
-                return $parsed;
+
+            // Direct array structures
+            if (isset($decoded['productsEntries']) && is_array($decoded['productsEntries'])) {
+                return $decoded['productsEntries'];
             }
+            if (isset($decoded['results']) && is_array($decoded['results'])) {
+                return $decoded['results'];
+            }
+            if (isset($decoded['products']) && is_array($decoded['products'])) {
+                return $decoded['products'];
+            }
+            if (isset($decoded['data']) && is_array($decoded['data'])) {
+                return $decoded['data'];
+            }
+
+            // If direct list of items
+            if (isset($decoded[0]) && is_array($decoded[0])) {
+                return $decoded;
+            }
+
             return [];
         } catch (\Throwable $e) {
             return [];
@@ -647,7 +672,7 @@ class McpController extends ResourceController
             $limit  = intval($args['limit'] ?? 20);
             $offset = intval($args['offset'] ?? 0);
 
-            $builder = $snapshotModel->select('id, origin, api_version, product_count, data_hash, created_at, updated_at');
+            $builder = $snapshotModel->select('id, origin, api_version, product_count, created_at, updated_at');
             if (!empty($origin)) {
                 $builder->where('origin', $origin);
             }
@@ -757,7 +782,7 @@ class McpController extends ResourceController
 
                 $price = floatval($item['price_1'] ?? $item['actualPrice'] ?? $item['price'] ?? 0);
                 if ($minPrice !== null && $price < $minPrice) return false;
-                if ($maxPrice !== null && $price > maxPrice) return false;
+                if ($maxPrice !== null && $price > $maxPrice) return false;
 
                 if ($activeAdsOnly) {
                     $active = isset($item['active_ads']) ? $item['active_ads'] : true;
