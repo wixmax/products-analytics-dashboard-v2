@@ -630,7 +630,7 @@ class McpController extends ResourceController
                 $builder->where('saved_status', $status);
             }
             if (!empty($countryFilter)) {
-                $builder->where('country', $countryFilter);
+                $builder->like('country', $countryFilter);
             }
             if (!empty($searchQuery)) {
                 $builder->groupStart()
@@ -716,7 +716,8 @@ class McpController extends ResourceController
             $entries = $this->parseSnapshotEntries($snapshotRow['raw_json'] ?? '');
             if ($countryFilter) {
                 $entries = array_values(array_filter($entries, function($e) use ($countryFilter) {
-                    return strtoupper($e['country'] ?? '') === $countryFilter;
+                    $cList = array_map('trim', explode(';', strtoupper($e['country'] ?? '')));
+                    return in_array($countryFilter, $cList, true);
                 }));
             }
 
@@ -778,8 +779,8 @@ class McpController extends ResourceController
 
             // Filter entries
             $filtered = array_filter($entries, function($item) use ($countryFilter, $minAds, $maxAds, $minPrice, $maxPrice, $searchQuery, $activeAdsOnly) {
-                $c = strtoupper($item['country'] ?? '');
-                if ($countryFilter && $c !== $countryFilter) return false;
+                $cList = array_map('trim', explode(';', strtoupper($item['country'] ?? '')));
+                if ($countryFilter && !in_array($countryFilter, $cList, true)) return false;
 
                 $adsCount = intval($item['ads_count'] ?? $item['adsCount'] ?? 0);
                 if ($minAds !== null && $adsCount < $minAds) return false;
