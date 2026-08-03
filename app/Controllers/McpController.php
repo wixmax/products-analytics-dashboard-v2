@@ -731,10 +731,11 @@ class McpController extends ResourceController
             if ($snapshotId) {
                 $snapshotRow = $db->table('data_snapshots')->where('id', $snapshotId)->get()->getRowArray();
             } elseif (!empty($dateStr)) {
+                $escapedDate = $db->escapeLikeString($dateStr);
                 $snapshotRow = $db->table('data_snapshots')
                                   ->groupStart()
                                       ->like('api_version', $dateStr)
-                                      ->orLike('created_at', $dateStr)
+                                      ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
                                   ->groupEnd()
                                   ->where('origin', $origin)
                                   ->orderBy('id', 'DESC')
@@ -801,11 +802,12 @@ class McpController extends ResourceController
             if ($snapshotId) {
                 $snapshotRow = $db->table('data_snapshots')->where('id', $snapshotId)->where('origin', 'Winning')->get()->getRowArray();
             } elseif (!empty($dateStr)) {
+                $escapedDate = $db->escapeLikeString($dateStr);
                 $snapshotRow = $db->table('data_snapshots')
                                   ->where('origin', 'Winning')
                                   ->groupStart()
                                       ->like('api_version', $dateStr)
-                                      ->orLike('created_at', $dateStr)
+                                      ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
                                   ->groupEnd()
                                   ->orderBy('id', 'DESC')
                                   ->get()
