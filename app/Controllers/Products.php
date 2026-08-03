@@ -826,6 +826,94 @@ class Products extends ResourceController
         ]);
     }
 
+    private function isCountryDataAvailableInDbOrSnapshot(string $origin, string $requestedVersion, ?string $requestedCountry, $model, $snapshotModel): bool
+    {
+        if (empty($requestedVersion)) {
+            return false;
+        }
+
+        $requestedCountries = !empty($requestedCountry)
+            ? array_map('strtoupper', array_map('trim', explode(';', $requestedCountry)))
+            : [];
+
+        if (empty($requestedCountries)) {
+            $hasProd = $model->where('origin', $origin)->where('api_version', $requestedVersion)->first();
+            if ($hasProd) return true;
+            
+            $cleanVer = ltrim($requestedVersion, 'v');
+            $hasSnap = $snapshotModel->where('origin', $origin)
+                                     ->groupStart()
+                                       ->where('api_version', $requestedVersion)
+                                       ->orWhere('api_version', 'v' . $cleanVer)
+                                       ->orWhere('api_version', $cleanVer)
+                                     ->groupEnd()
+                                     ->first();
+            return (bool)$hasSnap;
+        }
+
+        // 1. Check products table for requested countries
+        $cleanVer = ltrim($requestedVersion, 'v');
+        $dbProducts = $model->where('origin', $origin)
+                            ->groupStart()
+                              ->where('api_version', $requestedVersion)
+                              ->orWhere('api_version', 'v' . $cleanVer)
+                              ->orWhere('api_version', $cleanVer)
+                            ->groupEnd()
+                            ->findAll();
+
+        $foundCountriesInDb = [];
+        if (!empty($dbProducts)) {
+            foreach ($dbProducts as $p) {
+                $pCountries = array_map('strtoupper', array_map('trim', explode(';', $p['country'] ?? '')));
+                foreach ($requestedCountries as $reqC) {
+                    if (in_array($reqC, $pCountries, true)) {
+                        $foundCountriesInDb[$reqC] = true;
+                    }
+                }
+            }
+            if (count($foundCountriesInDb) === count($requestedCountries)) {
+                return true;
+            }
+        }
+
+        // 2. Check data_snapshots raw_json for requested countries
+        $snapshot = $snapshotModel->where('origin', $origin)
+                                  ->groupStart()
+                                    ->where('api_version', $requestedVersion)
+                                    ->orWhere('api_version', 'v' . $cleanVer)
+                                    ->orWhere('api_version', $cleanVer)
+                                  ->groupEnd()
+                                  ->orderBy('id', 'DESC')
+                                  ->first();
+
+        if ($snapshot && !empty($snapshot['raw_json'])) {
+            $decoded = json_decode($snapshot['raw_json'], true);
+            $base = is_array($decoded) && isset($decoded[0]) ? $decoded[0] : $decoded;
+            $target = $base['result']['data']['json'] ?? $base['data']['json'] ?? $base['json'] ?? $base;
+            $entries = $target['productsEntries'] ?? $target['results'] ?? [];
+
+            if (is_array($entries) && !empty($entries)) {
+                $foundCountriesInSnap = [];
+                foreach ($entries as $entry) {
+                    $entryCountry = strtoupper(trim($entry['country'] ?? ''));
+                    if (!empty($entryCountry)) {
+                        $entryCountries = array_map('trim', explode(';', $entryCountry));
+                        foreach ($requestedCountries as $reqC) {
+                            if (in_array($reqC, $entryCountries, true)) {
+                                $foundCountriesInSnap[$reqC] = true;
+                            }
+                        }
+                    }
+                }
+                if (count($foundCountriesInSnap) === count($requestedCountries)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public function syncTrpc()
     {
         $url = $this->request->getVar('url');
@@ -898,139 +986,102 @@ class Products extends ResourceController
             }
         }
         
-        // 1. Check if the requested version exists in products table or data_snapshots table
+        // 1. Check if the requested version AND requested countries ALREADY exist in local products DB or data_snapshots
         if ($requestedVersion !== null && $requestedVersion !== '') {
-            $versionProducts = $model->where('origin', $origin)
-                                     ->where('api_version', $requestedVersion)
-                                     ->orderBy('ads_count', 'DESC')
-                                     ->findAll();
-            
-            if (!empty($versionProducts)) {
-                $finalProducts = $versionProducts;
-                if ($requestedCountry !== null && $requestedCountry !== '') {
-                    $countries = explode(';', $requestedCountry);
-                    $finalProducts = array_values(array_filter($versionProducts, function($p) use ($countries) {
-                        return in_array($p['country'], $countries);
-                    }));
-                }
+            $hasLocalData = $this->isCountryDataAvailableInDbOrSnapshot($origin, $requestedVersion, $requestedCountry, $model, $snapshotModel);
 
-                if (!empty($finalProducts)) {
-                    $formatted = [
-                        'result' => [
-                            'data' => [
-                                'json' => [
-                                    'productsEntries' => array_map(function($p) {
-                                        return [
-                                            'title' => $p['title'],
-                                            'productUrl' => $p['product_url'],
-                                            'country' => $p['country'],
-                                            'algorithm' => $p['algo'],
-                                            'ad_start_date' => $p['ad_start_date'] ?: '--',
-                                            'ads_count' => intval($p['ads_count']),
-                                            'avg_creatives' => floatval($p['avg_creatives']),
-                                            'ad_title' => $p['ad_title'],
-                                            'ad_body' => $p['ad_body'],
-                                            'ad_image_urls' => $p['ad_image_urls'],
-                                            'ad_video_urls' => $p['ad_video_urls'],
-                                            'actualPrice' => floatval($p['price_1']),
-                                            'active_ads' => (bool)$p['active_ads'],
-                                            'api_version' => $p['api_version'] ?? '',
-                                        ];
-                                    }, $finalProducts)
+            if ($hasLocalData) {
+                $cleanVer = ltrim($requestedVersion, 'v');
+                $versionProducts = $model->where('origin', $origin)
+                                         ->groupStart()
+                                           ->where('api_version', $requestedVersion)
+                                           ->orWhere('api_version', 'v' . $cleanVer)
+                                           ->orWhere('api_version', $cleanVer)
+                                         ->groupEnd()
+                                         ->orderBy('ads_count', 'DESC')
+                                         ->findAll();
+                
+                if (!empty($versionProducts)) {
+                    $finalProducts = $versionProducts;
+                    if ($requestedCountry !== null && $requestedCountry !== '') {
+                        $requestedCountries = array_map('strtoupper', array_map('trim', explode(';', $requestedCountry)));
+                        $finalProducts = array_values(array_filter($versionProducts, function($p) use ($requestedCountries) {
+                            $prodCountries = array_map('strtoupper', array_map('trim', explode(';', $p['country'] ?? '')));
+                            return !empty(array_intersect($prodCountries, $requestedCountries));
+                        }));
+                    }
+
+                    if (!empty($finalProducts)) {
+                        $formatted = [
+                            'result' => [
+                                'data' => [
+                                    'json' => [
+                                        'productsEntries' => array_map(function($p) {
+                                            return [
+                                                'title' => $p['title'],
+                                                'productUrl' => $p['product_url'],
+                                                'country' => $p['country'],
+                                                'algorithm' => $p['algo'],
+                                                'ad_start_date' => $p['ad_start_date'] ?: '--',
+                                                'ads_count' => intval($p['ads_count']),
+                                                'avg_creatives' => floatval($p['avg_creatives']),
+                                                'ad_title' => $p['ad_title'],
+                                                'ad_body' => $p['ad_body'],
+                                                'ad_image_urls' => $p['ad_image_urls'],
+                                                'ad_video_urls' => $p['ad_video_urls'],
+                                                'actualPrice' => floatval($p['price_1']),
+                                                'active_ads' => (bool)$p['active_ads'],
+                                                'api_version' => $p['api_version'] ?? '',
+                                            ];
+                                        }, $finalProducts)
+                                    ]
                                 ]
                             ]
-                        ]
-                    ];
+                        ];
 
-                    $cachePath = WRITEPATH . 'cache/adapted_result.json';
-                    if (file_exists($cachePath)) {
-                        $formatted['result']['data']['json']['adaptedResult'] = json_decode(file_get_contents($cachePath), true);
-                    }
+                        $cachePath = WRITEPATH . 'cache/adapted_result.json';
+                        if (file_exists($cachePath)) {
+                            $formatted['result']['data']['json']['adaptedResult'] = json_decode(file_get_contents($cachePath), true);
+                        }
 
-                    $formatted['source'] = 'database';
-                    return $this->respond([$formatted]);
-                }
-            }
-
-            // 2. Check if a snapshot with this api_version exists in data_snapshots table
-            $cleanVer = ltrim($requestedVersion, 'v');
-            $snapshot = $snapshotModel->where('origin', $origin)
-                                      ->groupStart()
-                                        ->where('api_version', $requestedVersion)
-                                        ->orWhere('api_version', 'v' . $cleanVer)
-                                        ->orWhere('api_version', $cleanVer)
-                                      ->groupEnd()
-                                      ->orderBy('id', 'DESC')
-                                      ->first();
-
-            if ($snapshot && !empty($snapshot['raw_json'])) {
-                $decodedData = json_decode($snapshot['raw_json'], true);
-                if (is_array($decodedData) && isset($decodedData[0])) {
-                    if (!empty($requestedCountry)) {
-                        $countries = explode(';', $requestedCountry);
-                        $this->filterSnapshotByCountries($decodedData, $countries);
-                    }
-
-                    $jsonTarget = $decodedData[0]['result']['data']['json'] ?? $decodedData[0]['data']['json'] ?? $decodedData[0]['json'] ?? $decodedData[0];
-                    $entries = $jsonTarget['productsEntries'] ?? $jsonTarget['results'] ?? [];
-
-                    if (!empty($entries)) {
-                        $decodedData[0]['source'] = 'database';
-                        $decodedData[0]['is_duplicate'] = true;
-                        return $this->respond($decodedData);
+                        $formatted['source'] = 'database';
+                        return $this->respond([$formatted]);
                     }
                 }
-            }
-        } else {
-            // General query (no version specified)
-            $originProducts = $model->where('origin', $origin)->orderBy('ads_count', 'DESC')->findAll();
-            if (!empty($originProducts)) {
-                $finalProducts = $originProducts;
-                if ($requestedCountry !== null && $requestedCountry !== '') {
-                    $countries = explode(';', $requestedCountry);
-                    $finalProducts = array_values(array_filter($originProducts, function($p) use ($countries) {
-                        return in_array($p['country'], $countries);
-                    }));
+
+                // Check if a snapshot with this api_version exists in data_snapshots table
+                $cleanVer = ltrim($requestedVersion, 'v');
+                $snapshot = $snapshotModel->where('origin', $origin)
+                                          ->groupStart()
+                                            ->where('api_version', $requestedVersion)
+                                            ->orWhere('api_version', 'v' . $cleanVer)
+                                            ->orWhere('api_version', $cleanVer)
+                                          ->groupEnd()
+                                          ->orderBy('id', 'DESC')
+                                          ->first();
+
+                if ($snapshot && !empty($snapshot['raw_json'])) {
+                    $decodedData = json_decode($snapshot['raw_json'], true);
+                    if (is_array($decodedData) && isset($decodedData[0])) {
+                        if (!empty($requestedCountry)) {
+                            $countries = explode(';', $requestedCountry);
+                            $this->filterSnapshotByCountries($decodedData, $countries);
+                        }
+
+                        $jsonTarget = $decodedData[0]['result']['data']['json'] ?? $decodedData[0]['data']['json'] ?? $decodedData[0]['json'] ?? $decodedData[0];
+                        $entries = $jsonTarget['productsEntries'] ?? $jsonTarget['results'] ?? [];
+
+                        if (!empty($entries)) {
+                            $decodedData[0]['source'] = 'database';
+                            $decodedData[0]['is_duplicate'] = true;
+                            return $this->respond($decodedData);
+                        }
+                    }
                 }
-
-                $formatted = [
-                    'result' => [
-                        'data' => [
-                            'json' => [
-                                'productsEntries' => array_map(function($p) {
-                                    return [
-                                        'title' => $p['title'],
-                                        'productUrl' => $p['product_url'],
-                                        'country' => $p['country'],
-                                        'algorithm' => $p['algo'],
-                                        'ad_start_date' => $p['ad_start_date'] ?: '--',
-                                        'ads_count' => intval($p['ads_count']),
-                                        'avg_creatives' => floatval($p['avg_creatives']),
-                                        'ad_title' => $p['ad_title'],
-                                        'ad_body' => $p['ad_body'],
-                                        'ad_image_urls' => $p['ad_image_urls'],
-                                        'ad_video_urls' => $p['ad_video_urls'],
-                                        'actualPrice' => floatval($p['price_1']),
-                                        'active_ads' => (bool)$p['active_ads'],
-                                        'api_version' => $p['api_version'] ?? '',
-                                    ];
-                                }, $finalProducts)
-                            ]
-                        ]
-                    ]
-                ];
-
-                $cachePath = WRITEPATH . 'cache/adapted_result.json';
-                if (file_exists($cachePath)) {
-                    $formatted['result']['data']['json']['adaptedResult'] = json_decode(file_get_contents($cachePath), true);
-                }
-
-                $formatted['source'] = 'database';
-                return $this->respond([$formatted]);
             }
         }
 
-        // 3. Option 3: Smart On-Demand Auto Sync (when requested version is missing from DB)
+        // 2. Data for requested country/version is missing locally -> Fetch from External API and MERGE into Snapshot
         $syncService = new SyncService();
         $data = $syncService->fetchAndSaveTrpcUrl($url);
 
@@ -1051,10 +1102,18 @@ class Products extends ResourceController
             return $this->respond($data);
         }
 
-        // 4. Fallback if external API is unreachable or returned error: return available DB products
+        // 3. Fallback if no version match: return available DB products
         $fallbackProducts = $model->where('origin', $origin)->orderBy('ads_count', 'DESC')->findAll();
         if (empty($fallbackProducts)) {
             $fallbackProducts = $model->orderBy('ads_count', 'DESC')->findAll();
+        }
+
+        if (!empty($fallbackProducts) && !empty($requestedCountry)) {
+            $requestedCountries = array_map('strtoupper', array_map('trim', explode(';', $requestedCountry)));
+            $fallbackProducts = array_values(array_filter($fallbackProducts, function($p) use ($requestedCountries) {
+                $prodCountries = array_map('strtoupper', array_map('trim', explode(';', $p['country'] ?? '')));
+                return !empty(array_intersect($prodCountries, $requestedCountries));
+            }));
         }
 
         if (!empty($fallbackProducts)) {
@@ -1084,7 +1143,7 @@ class Products extends ResourceController
                     ]
                 ]
             ];
-            $formatted['source'] = 'database_fallback';
+            $formatted['source'] = 'database';
             return $this->respond([$formatted]);
         }
 
@@ -2567,37 +2626,28 @@ private function generateLiveStrategy($product, $activity)
     {
         if (empty($decodedData) || empty($countries)) return;
 
-        $filterItem = function(&$item) use ($countries) {
+        $targetCountries = array_map('strtoupper', array_map('trim', $countries));
+
+        $filterItem = function(&$item) use ($targetCountries) {
             if (!is_array($item)) return;
 
+            $filterEntries = function(array $entries) use ($targetCountries) {
+                return array_values(array_filter($entries, function($p) use ($targetCountries) {
+                    $c = is_array($p) ? ($p['country'] ?? '') : ($p->country ?? '');
+                    if (empty($c)) return false;
+                    $itemCountries = array_map('strtoupper', array_map('trim', explode(';', $c)));
+                    return !empty(array_intersect($itemCountries, $targetCountries));
+                }));
+            };
+
             if (isset($item['result']['data']['json']['productsEntries']) && is_array($item['result']['data']['json']['productsEntries'])) {
-                $entries = $item['result']['data']['json']['productsEntries'];
-                $filtered = array_values(array_filter($entries, function($p) use ($countries) {
-                    $c = $p['country'] ?? '';
-                    return in_array($c, $countries, true);
-                }));
-                $item['result']['data']['json']['productsEntries'] = $filtered;
+                $item['result']['data']['json']['productsEntries'] = $filterEntries($item['result']['data']['json']['productsEntries']);
             } elseif (isset($item['data']['json']['productsEntries']) && is_array($item['data']['json']['productsEntries'])) {
-                $entries = $item['data']['json']['productsEntries'];
-                $filtered = array_values(array_filter($entries, function($p) use ($countries) {
-                    $c = $p['country'] ?? '';
-                    return in_array($c, $countries, true);
-                }));
-                $item['data']['json']['productsEntries'] = $filtered;
+                $item['data']['json']['productsEntries'] = $filterEntries($item['data']['json']['productsEntries']);
             } elseif (isset($item['json']['productsEntries']) && is_array($item['json']['productsEntries'])) {
-                $entries = $item['json']['productsEntries'];
-                $filtered = array_values(array_filter($entries, function($p) use ($countries) {
-                    $c = $p['country'] ?? '';
-                    return in_array($c, $countries, true);
-                }));
-                $item['json']['productsEntries'] = $filtered;
+                $item['json']['productsEntries'] = $filterEntries($item['json']['productsEntries']);
             } elseif (isset($item['productsEntries']) && is_array($item['productsEntries'])) {
-                $entries = $item['productsEntries'];
-                $filtered = array_values(array_filter($entries, function($p) use ($countries) {
-                    $c = $p['country'] ?? '';
-                    return in_array($c, $countries, true);
-                }));
-                $item['productsEntries'] = $filtered;
+                $item['productsEntries'] = $filterEntries($item['productsEntries']);
             }
         };
 

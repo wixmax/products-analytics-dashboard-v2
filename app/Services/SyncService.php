@@ -357,14 +357,25 @@ class SyncService
                     $origin = 'Winning';
                 }
                 
-                // Try to extract version from the URL query param or data
+                // Try to extract version and country from the URL query param or data
                 $apiVersion = null;
+                $requestedCountry = null;
                 parse_str(parse_url($url, PHP_URL_QUERY) ?? '', $queryParams);
                 if (isset($queryParams['input'])) {
                     $inputDecoded = json_decode($queryParams['input'], true);
                     if (is_array($inputDecoded)) {
                         $apiVersion = $this->extractVersion($inputDecoded);
+                        $firstKey = array_key_first($inputDecoded);
+                        if ($firstKey !== null && isset($inputDecoded[$firstKey]['json']) && is_array($inputDecoded[$firstKey]['json'])) {
+                            $requestedCountry = $inputDecoded[$firstKey]['json']['country'] ?? null;
+                        }
                     }
+                }
+                if (empty($requestedCountry) && isset($queryParams['country'])) {
+                    $requestedCountry = $queryParams['country'];
+                }
+                if (empty($apiVersion) && isset($queryParams['v'])) {
+                    $apiVersion = $queryParams['v'];
                 }
                 
                 $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? $targetData;
@@ -372,11 +383,30 @@ class SyncService
                     $rawList = $targetData['results'];
                 }
                 if (is_array($rawList)) {
+                    // Enrich items with country if missing from individual product objects
+                    if (!empty($requestedCountry)) {
+                        foreach ($rawList as &$item) {
+                            if (is_array($item) && empty($item['country'])) {
+                                $item['country'] = $requestedCountry;
+                            }
+                        }
+                        unset($item);
+
+                        if (is_array($data) && isset($data[0])) {
+                            if (isset($data[0]['result']['data']['json']['productsEntries'])) {
+                                $data[0]['result']['data']['json']['productsEntries'] = $rawList;
+                            } elseif (isset($data[0]['data']['json']['productsEntries'])) {
+                                $data[0]['data']['json']['productsEntries'] = $rawList;
+                            }
+                        }
+                        $rawBody = json_encode($data, JSON_UNESCAPED_UNICODE);
+                    }
+
                     // Save snapshot with content hash deduplication
                     $snapInfo = $this->saveSnapshot($origin, $apiVersion, $rawBody, count($rawList));
                     $snapshotId = $snapInfo['id'];
 
-                    // Only upsert product details if this is a new snapshot/hash or first time
+                    // Only upsert product details if this is a new snapshot/hash or first time / merged
                     if (!$snapInfo['is_duplicate']) {
                         foreach ($rawList as $p) {
                             $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
@@ -386,11 +416,19 @@ class SyncService
                             $existing = $this->model->where('product_url', $productUrl)
                                               ->where('origin', $origin)
                                               ->first();
+
+                            $newCountry = $p['country'] ?? '';
+                            if ($existing && !empty($existing['country']) && !empty($newCountry)) {
+                                $existingCountries = array_map('trim', explode(';', $existing['country']));
+                                if (!in_array($newCountry, $existingCountries, true)) {
+                                    $newCountry = $existing['country'] . ';' . $newCountry;
+                                }
+                            }
                                                
                             $dataToSave = [
                                 'title' => $title,
                                 'product_url' => $productUrl,
-                                'country' => $p['country'] ?? '',
+                                'country' => $newCountry,
                                 'algo' => $p['algorithm'] ?? $p['algo'] ?? ($origin === 'Winning' ? 'winning' : 'new'),
                                 'ad_start_date' => $this->cleanDate($p['ad_start_date'] ?? null),
                                 'ads_count' => intval($p['ads_count'] ?? 0),
@@ -438,14 +476,18 @@ class SyncService
             }
 
             return $data;
-        } catch (\Exception $e) {
-            log_message('error', 'Error in fetchAndSaveTrpcUrl: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            log_message('error', 'Error in fetchAndSaveTrpcUrl: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
             return null;
         }
     }
 
     private function extractVersion(array $input): ?string
     {
+        $firstKey = array_key_first($input);
+        if ($firstKey !== null && isset($input[$firstKey]['json']['v'])) {
+            return $input[$firstKey]['json']['v'];
+        }
         if (isset($input[0]['json']['v'])) {
             return $input[0]['json']['v'];
         }
@@ -456,11 +498,16 @@ class SyncService
     {
         $dataHash = md5($rawJson);
 
-        // 1. Check if a snapshot with exact origin + api_version exists
+        // 1. Check if a snapshot with matching origin + api_version exists (flexible v prefix matching)
         if ($apiVersion !== null && $apiVersion !== '') {
+            $cleanVer = ltrim($apiVersion, 'v');
             $existingVersion = $this->snapshotModel
                 ->where('origin', $origin)
-                ->where('api_version', $apiVersion)
+                ->groupStart()
+                    ->where('api_version', $apiVersion)
+                    ->orWhere('api_version', 'v' . $cleanVer)
+                    ->orWhere('api_version', $cleanVer)
+                ->groupEnd()
                 ->first();
             if ($existingVersion) {
                 // Merge new rawJson into existing raw_json
@@ -540,14 +587,39 @@ class SyncService
 
         $extractEntries = function($decoded) {
             $base = is_array($decoded) && isset($decoded[0]) ? $decoded[0] : $decoded;
-            if (isset($base['result']['data']['json']['productsEntries']) && is_array($base['result']['data']['json']['productsEntries'])) {
-                return ['entries' => $base['result']['data']['json']['productsEntries'], 'path' => 'result.data.json.productsEntries'];
-            } elseif (isset($base['data']['json']['productsEntries']) && is_array($base['data']['json']['productsEntries'])) {
-                return ['entries' => $base['data']['json']['productsEntries'], 'path' => 'data.json.productsEntries'];
-            } elseif (isset($base['json']['productsEntries']) && is_array($base['json']['productsEntries'])) {
-                return ['entries' => $base['json']['productsEntries'], 'path' => 'json.productsEntries'];
-            } elseif (isset($base['productsEntries']) && is_array($base['productsEntries'])) {
+            
+            if (isset($base['result']['data']['json'])) {
+                $target = $base['result']['data']['json'];
+                if (isset($target['productsEntries']) && is_array($target['productsEntries'])) {
+                    return ['entries' => $target['productsEntries'], 'path' => 'result.data.json.productsEntries'];
+                }
+                if (isset($target['results']) && is_array($target['results'])) {
+                    return ['entries' => $target['results'], 'path' => 'result.data.json.results'];
+                }
+            }
+            if (isset($base['data']['json'])) {
+                $target = $base['data']['json'];
+                if (isset($target['productsEntries']) && is_array($target['productsEntries'])) {
+                    return ['entries' => $target['productsEntries'], 'path' => 'data.json.productsEntries'];
+                }
+                if (isset($target['results']) && is_array($target['results'])) {
+                    return ['entries' => $target['results'], 'path' => 'data.json.results'];
+                }
+            }
+            if (isset($base['json'])) {
+                $target = $base['json'];
+                if (isset($target['productsEntries']) && is_array($target['productsEntries'])) {
+                    return ['entries' => $target['productsEntries'], 'path' => 'json.productsEntries'];
+                }
+                if (isset($target['results']) && is_array($target['results'])) {
+                    return ['entries' => $target['results'], 'path' => 'json.results'];
+                }
+            }
+            if (isset($base['productsEntries']) && is_array($base['productsEntries'])) {
                 return ['entries' => $base['productsEntries'], 'path' => 'productsEntries'];
+            }
+            if (isset($base['results']) && is_array($base['results'])) {
+                return ['entries' => $base['results'], 'path' => 'results'];
             }
             return ['entries' => [], 'path' => null];
         };
@@ -575,7 +647,21 @@ class SyncService
 
         foreach ($newEntries as $p) {
             $url = $p['productUrl'] ?? $p['product_url'] ?? null;
-            if ($url) {
+            if ($url && isset($productMap[$url])) {
+                $oldCountry = $productMap[$url]['country'] ?? '';
+                $newCountry = $p['country'] ?? '';
+                if (!empty($oldCountry) && !empty($newCountry)) {
+                    $oldList = array_map('trim', explode(';', $oldCountry));
+                    if (!in_array($newCountry, $oldList, true)) {
+                        $p['country'] = $oldCountry . ';' . $newCountry;
+                    } else {
+                        $p['country'] = $oldCountry;
+                    }
+                } elseif (empty($newCountry) && !empty($oldCountry)) {
+                    $p['country'] = $oldCountry;
+                }
+                $productMap[$url] = array_merge($productMap[$url], $p);
+            } elseif ($url) {
                 $productMap[$url] = $p;
             } else {
                 $productMap[] = $p;
@@ -584,27 +670,19 @@ class SyncService
 
         $mergedEntries = array_values($productMap);
 
+        $parts = explode('.', $path);
         if (is_array($existingDecoded) && isset($existingDecoded[0])) {
-            if ($path === 'result.data.json.productsEntries') {
-                $existingDecoded[0]['result']['data']['json']['productsEntries'] = $mergedEntries;
-            } elseif ($path === 'data.json.productsEntries') {
-                $existingDecoded[0]['data']['json']['productsEntries'] = $mergedEntries;
-            } elseif ($path === 'json.productsEntries') {
-                $existingDecoded[0]['json']['productsEntries'] = $mergedEntries;
-            } elseif ($path === 'productsEntries') {
-                $existingDecoded[0]['productsEntries'] = $mergedEntries;
-            }
+            $curr = &$existingDecoded[0];
         } else {
-            if ($path === 'result.data.json.productsEntries') {
-                $existingDecoded['result']['data']['json']['productsEntries'] = $mergedEntries;
-            } elseif ($path === 'data.json.productsEntries') {
-                $existingDecoded['data']['json']['productsEntries'] = $mergedEntries;
-            } elseif ($path === 'json.productsEntries') {
-                $existingDecoded['json']['productsEntries'] = $mergedEntries;
-            } elseif ($path === 'productsEntries') {
-                $existingDecoded['productsEntries'] = $mergedEntries;
-            }
+            $curr = &$existingDecoded;
         }
+        foreach ($parts as $pKey) {
+            if (!isset($curr[$pKey]) || !is_array($curr[$pKey])) {
+                $curr[$pKey] = [];
+            }
+            $curr = &$curr[$pKey];
+        }
+        $curr = $mergedEntries;
 
         return json_encode($existingDecoded, JSON_UNESCAPED_UNICODE);
     }
