@@ -104,7 +104,7 @@ class McpController extends ResourceController
             $acceptHeader = strtolower(trim($this->request->getHeaderLine('Accept')));
             if ($acceptHeader === 'text/event-stream' || $this->request->getGet('transport') === 'sse') {
                 $token = $this->request->getGet('token');
-                $postUrl = site_url('api/mcp') . ($token ? '?token=' . urlencode($token) : '');
+                $postUrl = base_url('api/mcp') . ($token ? '?token=' . urlencode($token) : '');
 
                 header('Content-Type: text/event-stream');
                 header('Cache-Control: no-cache');
@@ -126,7 +126,7 @@ class McpController extends ResourceController
                 'mcp_server' => 'products-analytics-mcp-php',
                 'version'    => '1.0.0',
                 'status'     => 'running',
-                'endpoint'   => site_url('api/mcp'),
+                'endpoint'   => base_url('api/mcp'),
                 'capabilities' => [
                     'tools'   => true,
                     'prompts' => true,
