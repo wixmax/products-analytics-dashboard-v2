@@ -38,6 +38,7 @@ class Filters extends BaseFilters
         'auth'          => \CodeIgniter\Shield\Filters\SessionAuth::class,
         'role'          => \CodeIgniter\Shield\Filters\GroupFilter::class,
         'install'       => \App\Filters\InstallFilter::class,
+        'mcp_debug'     => \App\Filters\McpDebugFilter::class,
     ];
 
 
@@ -127,5 +128,10 @@ class Filters extends BaseFilters
      *
      * @var array<string, array<string, list<string>>>
      */
-    public array $filters = [];
+    public array $filters = [
+        'mcp_debug' => [
+            'before' => ['api/mcp*'],
+            'after'  => ['api/mcp*'],
+        ],
+    ];
 }
