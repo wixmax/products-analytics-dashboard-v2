@@ -270,9 +270,21 @@ class McpController extends ResourceController
             case 'tools/call':
                 $toolName = $params['name'] ?? '';
                 $toolArgs = $params['arguments'] ?? [];
+
+                if (is_string($toolArgs)) {
+                    $decodedArgs = json_decode($toolArgs, true);
+                    if (is_array($decodedArgs)) {
+                        $toolArgs = $decodedArgs;
+                    }
+                }
+                if (!is_array($toolArgs)) {
+                    $toolArgs = [];
+                }
                 
                 try {
-                    $resultText = $this->executeTool($toolName, $toolArgs);
+                    $resultData = $this->executeTool($toolName, $toolArgs);
+                    $isError    = is_array($resultData) && (isset($resultData['error']) || ($resultData['status'] ?? '') === 'error');
+                    
                     return [
                         'jsonrpc' => '2.0',
                         'id'      => $jsonrpcId,
@@ -280,18 +292,24 @@ class McpController extends ResourceController
                             'content' => [
                                 [
                                     'type' => 'text',
-                                    'text' => is_string($resultText) ? $resultText : json_encode($resultText, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+                                    'text' => is_string($resultData) ? $resultData : json_encode($resultData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
                                 ]
-                            ]
+                            ],
+                            'isError' => $isError
                         ]
                     ];
                 } catch (\Throwable $e) {
                     return [
                         'jsonrpc' => '2.0',
                         'id'      => $jsonrpcId,
-                        'error'   => [
-                            'code'    => -32603,
-                            'message' => 'Internal error: ' . $e->getMessage()
+                        'result'  => [
+                            'content' => [
+                                [
+                                    'type' => 'text',
+                                    'text' => json_encode(['status' => 'error', 'error' => 'Internal error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+                                ]
+                            ],
+                            'isError' => true
                         ]
                     ];
                 }
