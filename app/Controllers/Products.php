@@ -1023,30 +1023,8 @@ class Products extends ResourceController
         }
 
         // 3. Option 3: Smart On-Demand Auto Sync (when requested version is missing from DB)
-        // Construct full URL to fetch ALL countries and ALL categories from external API
-        $fullUrl = $url;
-        $allCountries = "DZ;TN;MA;LY;EG;SA;QA;EA;OM;BH;KW;GB;IE;FR;BE;LU;CH;DE;AT;ES;IT;NL;PT;NG;CI;SN;KE";
-        $allCategories = "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler";
-
-        $parsedFull = parse_url($url);
-        if (isset($parsedFull['query'])) {
-            parse_str($parsedFull['query'], $fullQueryParams);
-            if (isset($fullQueryParams['input'])) {
-                $inputDecoded = json_decode($fullQueryParams['input'], true);
-                if (is_array($inputDecoded)) {
-                    $firstKey = array_key_first($inputDecoded);
-                    if (isset($inputDecoded[$firstKey]['json'])) {
-                        $inputDecoded[$firstKey]['json']['country'] = $allCountries;
-                        $inputDecoded[$firstKey]['json']['category'] = $allCategories;
-                        $baseUrl = strtok($url, '?');
-                        $fullUrl = $baseUrl . '?batch=1&input=' . urlencode(json_encode($inputDecoded, JSON_FORCE_OBJECT));
-                    }
-                }
-            }
-        }
-
         $syncService = new SyncService();
-        $data = $syncService->fetchAndSaveTrpcUrl($fullUrl);
+        $data = $syncService->fetchAndSaveTrpcUrl($url);
 
         if (is_array($data) && isset($data[0])) {
             $data[0]['source'] = 'api';
