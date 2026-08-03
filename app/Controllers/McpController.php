@@ -137,7 +137,15 @@ class McpController extends ResourceController
         }
 
         $rawBody = $this->request->getBody();
-        $input   = json_decode($rawBody, true) ?: $this->request->getJSON(true);
+        $input   = !empty($rawBody) ? json_decode($rawBody, true) : null;
+
+        if (!$input) {
+            try {
+                $input = $this->request->getJSON(true);
+            } catch (\Throwable $e) {
+                $input = null;
+            }
+        }
 
         if (!$input) {
             return $this->respond([
@@ -607,7 +615,12 @@ class McpController extends ResourceController
         if ($name === 'get_saved_products') {
             $authUser = $this->resolveAuthenticatedUser();
             if (!$authUser) {
-                return ['error' => 'Unauthorized: Invalid or missing API token. Please generate a token in your profile settings.'];
+                return [
+                    'status'   => 'error',
+                    'total'    => 0,
+                    'products' => [],
+                    'error'    => 'Unauthorized: Invalid or missing API token. Please generate a token in your profile settings.'
+                ];
             }
 
             $tenantId      = $authUser['tenant_id'] ?? 1;
@@ -650,6 +663,8 @@ class McpController extends ResourceController
             $savedProducts = $builder->findAll($limit, $offset);
 
             return [
+                'status'          => 'success',
+                'total'           => count($savedProducts),
                 'user'            => [
                     'username'  => $authUser['username'] ?? 'User',
                     'tenant_id' => $tenantId
@@ -680,6 +695,8 @@ class McpController extends ResourceController
             $snapshots = $builder->orderBy('id', 'DESC')->limit($limit, $offset)->get()->getResultArray();
 
             return [
+                'status'    => 'success',
+                'total'     => count($snapshots),
                 'count'     => count($snapshots),
                 'snapshots' => $snapshots
             ];
@@ -710,7 +727,13 @@ class McpController extends ResourceController
             }
 
             if (!$snapshotRow) {
-                return ['error' => 'No snapshot found matching criteria'];
+                return [
+                    'status' => 'error',
+                    'total'  => 0,
+                    'items'  => [],
+                    'products' => [],
+                    'error'  => 'No snapshot found matching criteria'
+                ];
             }
 
             $entries = $this->parseSnapshotEntries($snapshotRow['raw_json'] ?? '');
@@ -725,6 +748,10 @@ class McpController extends ResourceController
             $entries = array_slice($entries, 0, $limit);
 
             return [
+                'status'            => 'success',
+                'total'             => $total,
+                'items'             => $entries,
+                'products'          => $entries,
                 'snapshot' => [
                     'id'            => $snapshotRow['id'],
                     'origin'        => $snapshotRow['origin'],
@@ -733,8 +760,7 @@ class McpController extends ResourceController
                     'created_at'    => $snapshotRow['created_at']
                 ],
                 'returned_count'    => count($entries),
-                'total_in_snapshot' => $total,
-                'products'          => $entries
+                'total_in_snapshot' => $total
             ];
         }
 
@@ -834,6 +860,8 @@ class McpController extends ResourceController
             $paginated = array_slice($filtered, $offset, $limit);
 
             return [
+                'status'         => 'success',
+                'total'          => $totalMatching,
                 'snapshot_info' => $snapshotRow ? [
                     'id'          => $snapshotRow['id'],
                     'api_version' => $snapshotRow['api_version'],
@@ -878,11 +906,13 @@ class McpController extends ResourceController
                 $builder->where('origin', $origin);
             }
             if (!empty($country)) {
-                $builder->where('country', strtoupper($country));
+                $builder->like('country', strtoupper($country));
             }
 
             $products = $builder->orderBy('id', 'DESC')->limit($limit)->get()->getResultArray();
             return [
+                'status'         => 'success',
+                'total'          => count($products),
                 'returned_count' => count($products),
                 'products'       => $products
             ];
