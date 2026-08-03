@@ -914,40 +914,42 @@ class Products extends ResourceController
                     }));
                 }
 
-                $formatted = [
-                    'result' => [
-                        'data' => [
-                            'json' => [
-                                'productsEntries' => array_map(function($p) {
-                                    return [
-                                        'title' => $p['title'],
-                                        'productUrl' => $p['product_url'],
-                                        'country' => $p['country'],
-                                        'algorithm' => $p['algo'],
-                                        'ad_start_date' => $p['ad_start_date'] ?: '--',
-                                        'ads_count' => intval($p['ads_count']),
-                                        'avg_creatives' => floatval($p['avg_creatives']),
-                                        'ad_title' => $p['ad_title'],
-                                        'ad_body' => $p['ad_body'],
-                                        'ad_image_urls' => $p['ad_image_urls'],
-                                        'ad_video_urls' => $p['ad_video_urls'],
-                                        'actualPrice' => floatval($p['price_1']),
-                                        'active_ads' => (bool)$p['active_ads'],
-                                        'api_version' => $p['api_version'] ?? '',
-                                    ];
-                                }, $finalProducts)
+                if (!empty($finalProducts)) {
+                    $formatted = [
+                        'result' => [
+                            'data' => [
+                                'json' => [
+                                    'productsEntries' => array_map(function($p) {
+                                        return [
+                                            'title' => $p['title'],
+                                            'productUrl' => $p['product_url'],
+                                            'country' => $p['country'],
+                                            'algorithm' => $p['algo'],
+                                            'ad_start_date' => $p['ad_start_date'] ?: '--',
+                                            'ads_count' => intval($p['ads_count']),
+                                            'avg_creatives' => floatval($p['avg_creatives']),
+                                            'ad_title' => $p['ad_title'],
+                                            'ad_body' => $p['ad_body'],
+                                            'ad_image_urls' => $p['ad_image_urls'],
+                                            'ad_video_urls' => $p['ad_video_urls'],
+                                            'actualPrice' => floatval($p['price_1']),
+                                            'active_ads' => (bool)$p['active_ads'],
+                                            'api_version' => $p['api_version'] ?? '',
+                                        ];
+                                    }, $finalProducts)
+                                ]
                             ]
                         ]
-                    ]
-                ];
+                    ];
 
-                $cachePath = WRITEPATH . 'cache/adapted_result.json';
-                if (file_exists($cachePath)) {
-                    $formatted['result']['data']['json']['adaptedResult'] = json_decode(file_get_contents($cachePath), true);
+                    $cachePath = WRITEPATH . 'cache/adapted_result.json';
+                    if (file_exists($cachePath)) {
+                        $formatted['result']['data']['json']['adaptedResult'] = json_decode(file_get_contents($cachePath), true);
+                    }
+
+                    $formatted['source'] = 'database';
+                    return $this->respond([$formatted]);
                 }
-
-                $formatted['source'] = 'database';
-                return $this->respond([$formatted]);
             }
 
             // 2. Check if a snapshot with this api_version exists in data_snapshots table
@@ -968,9 +970,15 @@ class Products extends ResourceController
                         $countries = explode(';', $requestedCountry);
                         $this->filterSnapshotByCountries($decodedData, $countries);
                     }
-                    $decodedData[0]['source'] = 'database';
-                    $decodedData[0]['is_duplicate'] = true;
-                    return $this->respond($decodedData);
+
+                    $jsonTarget = $decodedData[0]['result']['data']['json'] ?? $decodedData[0]['data']['json'] ?? $decodedData[0]['json'] ?? $decodedData[0];
+                    $entries = $jsonTarget['productsEntries'] ?? $jsonTarget['results'] ?? [];
+
+                    if (!empty($entries)) {
+                        $decodedData[0]['source'] = 'database';
+                        $decodedData[0]['is_duplicate'] = true;
+                        return $this->respond($decodedData);
+                    }
                 }
             }
         } else {

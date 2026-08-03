@@ -457,16 +457,35 @@ class SyncService
         $dataHash = md5($rawJson);
 
         // 1. Check if a snapshot with exact origin + api_version exists
-        if ($apiVersion !== null) {
+        if ($apiVersion !== null && $apiVersion !== '') {
             $existingVersion = $this->snapshotModel
                 ->where('origin', $origin)
                 ->where('api_version', $apiVersion)
                 ->first();
             if ($existingVersion) {
+                // Merge new rawJson into existing raw_json
+                $existingRawJson = $existingVersion['raw_json'];
+                $mergedJson = $this->mergeRawJsonSnapshots($existingRawJson, $rawJson);
+
+                $decodedMerged = json_decode($mergedJson, true);
+                $target = is_array($decodedMerged) ? ($decodedMerged[0] ?? $decodedMerged) : [];
+                $targetJson = $target['result']['data']['json'] ?? $target['data']['json'] ?? $target['json'] ?? $target;
+                $entries = $targetJson['productsEntries'] ?? $targetJson['results'] ?? [];
+                $newProductCount = is_array($entries) ? count($entries) : $productCount;
+
+                $newHash = md5($mergedJson);
+
+                $this->snapshotModel->update($existingVersion['id'], [
+                    'raw_json'      => $mergedJson,
+                    'product_count' => $newProductCount,
+                    'data_hash'     => $newHash,
+                ]);
+
                 return [
                     'id' => (int)$existingVersion['id'],
-                    'is_duplicate' => true,
-                    'data_hash' => $dataHash
+                    'is_duplicate' => false,
+                    'is_merged' => true,
+                    'data_hash' => $newHash
                 ];
             }
         }
@@ -508,6 +527,86 @@ class SyncService
             'is_duplicate' => false,
             'data_hash' => $dataHash
         ];
+    }
+
+    private function mergeRawJsonSnapshots(string $existingRawJson, string $newRawJson): string
+    {
+        $existingDecoded = json_decode($existingRawJson, true);
+        $newDecoded = json_decode($newRawJson, true);
+
+        if (!is_array($existingDecoded) || !is_array($newDecoded)) {
+            return !empty($newRawJson) ? $newRawJson : $existingRawJson;
+        }
+
+        $extractEntries = function($decoded) {
+            $base = is_array($decoded) && isset($decoded[0]) ? $decoded[0] : $decoded;
+            if (isset($base['result']['data']['json']['productsEntries']) && is_array($base['result']['data']['json']['productsEntries'])) {
+                return ['entries' => $base['result']['data']['json']['productsEntries'], 'path' => 'result.data.json.productsEntries'];
+            } elseif (isset($base['data']['json']['productsEntries']) && is_array($base['data']['json']['productsEntries'])) {
+                return ['entries' => $base['data']['json']['productsEntries'], 'path' => 'data.json.productsEntries'];
+            } elseif (isset($base['json']['productsEntries']) && is_array($base['json']['productsEntries'])) {
+                return ['entries' => $base['json']['productsEntries'], 'path' => 'json.productsEntries'];
+            } elseif (isset($base['productsEntries']) && is_array($base['productsEntries'])) {
+                return ['entries' => $base['productsEntries'], 'path' => 'productsEntries'];
+            }
+            return ['entries' => [], 'path' => null];
+        };
+
+        $existingData = $extractEntries($existingDecoded);
+        $newData = $extractEntries($newDecoded);
+
+        $existingEntries = $existingData['entries'];
+        $newEntries = $newData['entries'];
+        $path = $existingData['path'] ?? $newData['path'] ?? 'result.data.json.productsEntries';
+
+        if (empty($newEntries)) {
+            return $existingRawJson;
+        }
+
+        $productMap = [];
+        foreach ($existingEntries as $p) {
+            $url = $p['productUrl'] ?? $p['product_url'] ?? null;
+            if ($url) {
+                $productMap[$url] = $p;
+            } else {
+                $productMap[] = $p;
+            }
+        }
+
+        foreach ($newEntries as $p) {
+            $url = $p['productUrl'] ?? $p['product_url'] ?? null;
+            if ($url) {
+                $productMap[$url] = $p;
+            } else {
+                $productMap[] = $p;
+            }
+        }
+
+        $mergedEntries = array_values($productMap);
+
+        if (is_array($existingDecoded) && isset($existingDecoded[0])) {
+            if ($path === 'result.data.json.productsEntries') {
+                $existingDecoded[0]['result']['data']['json']['productsEntries'] = $mergedEntries;
+            } elseif ($path === 'data.json.productsEntries') {
+                $existingDecoded[0]['data']['json']['productsEntries'] = $mergedEntries;
+            } elseif ($path === 'json.productsEntries') {
+                $existingDecoded[0]['json']['productsEntries'] = $mergedEntries;
+            } elseif ($path === 'productsEntries') {
+                $existingDecoded[0]['productsEntries'] = $mergedEntries;
+            }
+        } else {
+            if ($path === 'result.data.json.productsEntries') {
+                $existingDecoded['result']['data']['json']['productsEntries'] = $mergedEntries;
+            } elseif ($path === 'data.json.productsEntries') {
+                $existingDecoded['data']['json']['productsEntries'] = $mergedEntries;
+            } elseif ($path === 'json.productsEntries') {
+                $existingDecoded['json']['productsEntries'] = $mergedEntries;
+            } elseif ($path === 'productsEntries') {
+                $existingDecoded['productsEntries'] = $mergedEntries;
+            }
+        }
+
+        return json_encode($existingDecoded, JSON_UNESCAPED_UNICODE);
     }
 
     private function cleanDate($dateStr)
