@@ -365,7 +365,7 @@ class McpController extends ResourceController
         return "تنبيه مهم: آلية العمل ومراحل التنفيذ\n"
              . "سيتم تنفيذ المهام على مراحل متتالية، ولا يتم الانتقال إلى أي مرحلة قبل إتمام المرحلة السابقة واعتماد نتائجها.\n\n"
              . "المرحلة الأولى: اختيار واستكشاف المنتجات المرشحة والرابحة\n"
-             . "- عند طلب الاستكشاف أو التحليل، استخدم أدوات MCP المتاحة مثل `filter_winning_products` (مع تحديد country='MA' للسوق المغربي)، أو `list_snapshots` / `get_snapshot_by_date` للتواريخ المتاحة، أو `get_saved_products` للاستعلام عن المحفوظات الخاصة بالحساب.\n"
+             . "- عند طلب الاستكشاف أو التحليل، استخدم أدوات MCP المتاحة مثل `fetch_new_data` (لجلب البيانات الجديدة حسب التاريخ والدولة والتصنيف افتراضياً ككل)، أو `filter_winning_products` (مع تحديد country='MA' للسوق المغربي)، أو `list_snapshots` / `get_snapshot_by_date` للتواريخ المتاحة، أو `get_saved_products` للاستعلام عن المحفوظات الخاصة بالحساب.\n"
              . "- تحليل المنتجات المرشحة وتقييمها بناءً على معايير الجدوى والطلب المتاح بالبيانات.\n"
              . "- تطبيق نظام تقييم المنتجات (Score من 100): قوة الطلب في الإعلانات (40 نقطة)، ملاءمة السوق والموسم في المغرب (30 نقطة)، سهولة اللوجستيك (20 نقطة)، والتوافق مع قيود الميزانية والميول (10 نقاط).\n"
              . "- تصنيف المنتجات إلى: 🟢 رابحة (>= 75)، 🟡 واعدة (50-74)، 🔴 ضعيفة/عالية المخاطر (< 50).\n"
@@ -544,6 +544,23 @@ class McpController extends ResourceController
                     'properties' => [
                         'product_id' => ['type' => 'number'],
                         'title'      => ['type' => 'string']
+                    ]
+                ]
+            ],
+            [
+                'name'        => 'fetch_new_data',
+                'description' => 'Fetch new product data entries filtered by date and country, with classification/origin defaulting to all (ككل / all).',
+                'inputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'date'           => ['type' => 'string', 'description' => 'Date string (e.g. YYYY-MM-DD), date range (today, yesterday, 7days, 30days), or api_version string'],
+                        'country'        => ['type' => 'string', 'description' => '2-letter country code (e.g. MA, SA, DZ) or "all" (default all)'],
+                        'classification' => ['type' => 'string', 'description' => 'Data classification/origin filter (e.g. Winning, Local, China, Japan, or "all" / "ككل"). Defaults to "all" (ككل).'],
+                        'search_query'   => ['type' => 'string', 'description' => 'Search term for title or ad content'],
+                        'sort_by'        => ['type' => 'string', 'enum' => ['date', 'ads_count', 'title', 'price']],
+                        'sort_order'     => ['type' => 'string', 'enum' => ['ASC', 'DESC']],
+                        'limit'          => ['type' => 'number', 'description' => 'Max products to return (default 50)'],
+                        'offset'         => ['type' => 'number', 'description' => 'Offset for pagination (default 0)']
                     ]
                 ]
             ]
@@ -923,6 +940,160 @@ class McpController extends ResourceController
                 'product_id'              => $productRow['id'] ?? null,
                 'product_database_record' => $productRow,
                 'raw_trpc_json'           => $rawTrpcObject
+            ];
+        }
+
+        if ($name === 'fetch_new_data') {
+            $dateStr        = $args['date'] ?? null;
+            $countryFilter  = isset($args['country']) ? strtoupper(trim($args['country'])) : 'ALL';
+            $classification = isset($args['classification']) ? trim($args['classification']) : ($args['origin'] ?? 'all');
+            $searchQuery    = isset($args['search_query']) ? strtolower(trim($args['search_query'])) : null;
+            $sortBy         = $args['sort_by'] ?? 'date';
+            $sortOrder      = strtoupper($args['sort_order'] ?? 'DESC');
+            $limit          = intval($args['limit'] ?? 50);
+            $offset         = intval($args['offset'] ?? 0);
+
+            // Handle classification default: "all" / "ككل"
+            $isAllClassifications = empty($classification) || strtolower($classification) === 'all' || $classification === 'ككل';
+
+            $builder = $db->table('products');
+
+            // Exclude tenant-saved copies to query master product catalog
+            $builder->groupStart()
+                        ->where('is_saved', false)
+                        ->orWhere('tenant_id IS NULL')
+                    ->groupEnd();
+
+            // Filter classification/origin if not "all" / "ككل"
+            if (!$isAllClassifications) {
+                $builder->where('origin', $classification);
+            }
+
+            // Filter country
+            if ($countryFilter !== 'ALL' && !empty($countryFilter) && $countryFilter !== 'ككل') {
+                $builder->like('country', $countryFilter);
+            }
+
+            // Filter date
+            if (!empty($dateStr) && $dateStr !== 'all' && $dateStr !== 'ككل') {
+                $today = date('Y-m-d');
+                if ($dateStr === 'today') {
+                    $builder->groupStart()
+                            ->where('ad_start_date', $today)
+                            ->orWhere("CAST(created_at AS TEXT) LIKE '%{$today}%'")
+                            ->groupEnd();
+                } elseif ($dateStr === 'yesterday') {
+                    $yesterday = date('Y-m-d', strtotime('-1 day'));
+                    $builder->groupStart()
+                            ->where('ad_start_date', $yesterday)
+                            ->orWhere("CAST(created_at AS TEXT) LIKE '%{$yesterday}%'")
+                            ->groupEnd();
+                } elseif ($dateStr === '7days') {
+                    $sevenDaysAgo = date('Y-m-d', strtotime('-7 days'));
+                    $builder->groupStart()
+                            ->where('ad_start_date >=', $sevenDaysAgo)
+                            ->orWhere('created_at >=', $sevenDaysAgo)
+                            ->groupEnd();
+                } elseif ($dateStr === '30days') {
+                    $thirtyDaysAgo = date('Y-m-d', strtotime('-30 days'));
+                    $builder->groupStart()
+                            ->where('ad_start_date >=', $thirtyDaysAgo)
+                            ->orWhere('created_at >=', $thirtyDaysAgo)
+                            ->groupEnd();
+                } else {
+                    $escapedDate = $db->escapeLikeString($dateStr);
+                    $builder->groupStart()
+                            ->like('ad_start_date', $dateStr)
+                            ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
+                            ->orWhere('api_version', $dateStr)
+                            ->groupEnd();
+                }
+            }
+
+            // Search query
+            if (!empty($searchQuery)) {
+                $builder->groupStart()
+                        ->like('title', $searchQuery)
+                        ->orLike('ad_title', $searchQuery)
+                        ->orLike('ad_body', $searchQuery)
+                        ->groupEnd();
+            }
+
+            // Sorting
+            if ($sortBy === 'ads_count') {
+                $builder->orderBy('ads_count', $sortOrder);
+            } elseif ($sortBy === 'title') {
+                $builder->orderBy('title', $sortOrder);
+            } elseif ($sortBy === 'price') {
+                $builder->orderBy('CAST(price_1 AS NUMERIC)', $sortOrder);
+            } else {
+                $builder->orderBy('ad_start_date', $sortOrder)
+                        ->orderBy('id', $sortOrder);
+            }
+
+            // Execute query
+            $totalMatching = $builder->countAllResults(false);
+            $products = $builder->limit($limit, $offset)->get()->getResultArray();
+
+            // Snapshot Fallback if products table returned 0 items and date filter was supplied
+            if ($totalMatching === 0 && !empty($dateStr) && $dateStr !== 'all') {
+                $escapedDate = $db->escapeLikeString($dateStr);
+                $snapBuilder = $db->table('data_snapshots')
+                                  ->groupStart()
+                                      ->like('api_version', $dateStr)
+                                      ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
+                                  ->groupEnd();
+                if (!$isAllClassifications) {
+                    $snapBuilder->where('origin', $classification);
+                }
+                $snapshotRows = $snapBuilder->orderBy('id', 'DESC')->limit(5)->get()->getResultArray();
+                $allEntries = [];
+                foreach ($snapshotRows as $snapRow) {
+                    $entries = $this->parseSnapshotEntries($snapRow['raw_json'] ?? '');
+                    foreach ($entries as $e) {
+                        if ($countryFilter !== 'ALL' && !empty($countryFilter) && $countryFilter !== 'ككل') {
+                            $cList = array_map('trim', explode(';', strtoupper($e['country'] ?? '')));
+                            if (!in_array($countryFilter, $cList, true)) continue;
+                        }
+                        if ($searchQuery) {
+                            $title = strtolower($e['product_title'] ?? $e['title'] ?? '');
+                            if (strpos($title, $searchQuery) === false) continue;
+                        }
+                        $allEntries[] = $e;
+                    }
+                }
+                if (!empty($allEntries)) {
+                    $totalMatching = count($allEntries);
+                    $paginated = array_slice($allEntries, $offset, $limit);
+                    return [
+                        'status'          => 'success',
+                        'total'           => $totalMatching,
+                        'source'          => 'data_snapshots_fallback',
+                        'filters_applied' => [
+                            'date'           => $dateStr,
+                            'country'        => $countryFilter,
+                            'classification' => $isAllClassifications ? 'all (ككل)' : $classification,
+                            'search_query'   => $searchQuery,
+                        ],
+                        'returned_count' => count($paginated),
+                        'products'       => $paginated
+                    ];
+                }
+            }
+
+            return [
+                'status'          => 'success',
+                'total'           => $totalMatching,
+                'filters_applied' => [
+                    'date'           => $dateStr ?? 'all',
+                    'country'        => $countryFilter,
+                    'classification' => $isAllClassifications ? 'all (ككل)' : $classification,
+                    'search_query'   => $searchQuery,
+                    'sort_by'        => $sortBy,
+                    'sort_order'     => $sortOrder,
+                ],
+                'returned_count' => count($products),
+                'products'       => $products
             ];
         }
 
