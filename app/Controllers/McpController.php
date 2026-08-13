@@ -980,38 +980,34 @@ class McpController extends ResourceController
                 if ($dateStr === 'today') {
                     $builder->groupStart()
                             ->where('ad_start_date', $today)
-                            ->orWhere("CAST(created_at AS TEXT) LIKE '%{$today}%'")
+                            ->orWhere('api_version', $today)
                             ->groupEnd();
                 } elseif ($dateStr === 'yesterday') {
                     $yesterday = date('Y-m-d', strtotime('-1 day'));
                     $builder->groupStart()
                             ->where('ad_start_date', $yesterday)
-                            ->orWhere("CAST(created_at AS TEXT) LIKE '%{$yesterday}%'")
+                            ->orWhere('api_version', $yesterday)
                             ->groupEnd();
                 } elseif ($dateStr === '7days') {
                     $sevenDaysAgo = date('Y-m-d', strtotime('-7 days'));
                     $builder->groupStart()
                             ->where('ad_start_date >=', $sevenDaysAgo)
-                            ->orWhere('created_at >=', $sevenDaysAgo)
                             ->groupEnd();
                 } elseif ($dateStr === '30days') {
                     $thirtyDaysAgo = date('Y-m-d', strtotime('-30 days'));
                     $builder->groupStart()
                             ->where('ad_start_date >=', $thirtyDaysAgo)
-                            ->orWhere('created_at >=', $thirtyDaysAgo)
                             ->groupEnd();
                 } else {
                     $escapedDate = $db->escapeLikeString($dateStr);
                     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr)) {
                         $builder->groupStart()
                                 ->where('ad_start_date', $dateStr)
-                                ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
                                 ->orWhere('api_version', $dateStr)
                                 ->groupEnd();
                     } else {
                         $builder->groupStart()
                                 ->where("CAST(ad_start_date AS TEXT) LIKE '%{$escapedDate}%'")
-                                ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
                                 ->orWhere('api_version', $dateStr)
                                 ->groupEnd();
                     }
@@ -1184,38 +1180,34 @@ class McpController extends ResourceController
                         if ($dateStr === 'today') {
                             $builder->groupStart()
                                     ->where('ad_start_date', $today)
-                                    ->orWhere("CAST(created_at AS TEXT) LIKE '%{$today}%'")
+                                    ->orWhere('api_version', $today)
                                     ->groupEnd();
                         } elseif ($dateStr === 'yesterday') {
                             $yesterday = date('Y-m-d', strtotime('-1 day'));
                             $builder->groupStart()
                                     ->where('ad_start_date', $yesterday)
-                                    ->orWhere("CAST(created_at AS TEXT) LIKE '%{$yesterday}%'")
+                                    ->orWhere('api_version', $yesterday)
                                     ->groupEnd();
                         } elseif ($dateStr === '7days') {
                             $sevenDaysAgo = date('Y-m-d', strtotime('-7 days'));
                             $builder->groupStart()
                                     ->where('ad_start_date >=', $sevenDaysAgo)
-                                    ->orWhere('created_at >=', $sevenDaysAgo)
                                     ->groupEnd();
                         } elseif ($dateStr === '30days') {
                             $thirtyDaysAgo = date('Y-m-d', strtotime('-30 days'));
                             $builder->groupStart()
                                     ->where('ad_start_date >=', $thirtyDaysAgo)
-                                    ->orWhere('created_at >=', $thirtyDaysAgo)
                                     ->groupEnd();
                         } else {
                             $escapedDate = $db->escapeLikeString($dateStr);
                             if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr)) {
                                 $builder->groupStart()
                                         ->where('ad_start_date', $dateStr)
-                                        ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
                                         ->orWhere('api_version', $dateStr)
                                         ->groupEnd();
                             } else {
                                 $builder->groupStart()
                                         ->where("CAST(ad_start_date AS TEXT) LIKE '%{$escapedDate}%'")
-                                        ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
                                         ->orWhere('api_version', $dateStr)
                                         ->groupEnd();
                             }
