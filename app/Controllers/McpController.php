@@ -961,7 +961,7 @@ class McpController extends ResourceController
             // Exclude tenant-saved copies to query master product catalog
             $builder->groupStart()
                         ->where('is_saved', false)
-                        ->orWhere('tenant_id IS NULL')
+                        ->orWhere('is_saved IS NULL')
                     ->groupEnd();
 
             // Filter classification/origin if not "all" / "ككل"
@@ -1058,8 +1058,10 @@ class McpController extends ResourceController
                     $entries = $this->parseSnapshotEntries($snapRow['raw_json'] ?? '');
                     foreach ($entries as $e) {
                         if ($countryFilter !== 'ALL' && !empty($countryFilter) && $countryFilter !== 'ككل') {
-                            $cList = array_map('trim', explode(';', strtoupper($e['country'] ?? '')));
-                            if (!in_array($countryFilter, $cList, true)) continue;
+                            if (!empty($e['country'])) {
+                                $cList = array_map('trim', explode(';', strtoupper($e['country'])));
+                                if (!in_array($countryFilter, $cList, true)) continue;
+                            }
                         }
                         if ($searchQuery) {
                             $title = strtolower($e['product_title'] ?? $e['title'] ?? '');
@@ -1164,7 +1166,7 @@ class McpController extends ResourceController
                     $builder = $db->table('products');
                     $builder->groupStart()
                                 ->where('is_saved', false)
-                                ->orWhere('tenant_id IS NULL')
+                                ->orWhere('is_saved IS NULL')
                             ->groupEnd();
 
                     if (!$isAllClassifications) {
@@ -1235,6 +1237,45 @@ class McpController extends ResourceController
 
                     $totalMatching = $builder->countAllResults(false);
                     $products = $builder->limit($limit, $offset)->get()->getResultArray();
+
+                    // Fallback: If strict single-day ad_start_date filter yielded 0 results after live sync, return latest fetched products for this classification and country
+                    if ($totalMatching === 0) {
+                        $fallbackBuilder = $db->table('products');
+                        $fallbackBuilder->groupStart()
+                                            ->where('is_saved', false)
+                                            ->orWhere('is_saved IS NULL')
+                                        ->groupEnd();
+
+                        if (!$isAllClassifications) {
+                            $fallbackBuilder->where('origin', $classification);
+                        }
+
+                        if ($countryFilter !== 'ALL' && !empty($countryFilter) && $countryFilter !== 'ككل') {
+                            $fallbackBuilder->like('country', $countryFilter);
+                        }
+
+                        if (!empty($searchQuery)) {
+                            $fallbackBuilder->groupStart()
+                                            ->like('title', $searchQuery)
+                                            ->orLike('ad_title', $searchQuery)
+                                            ->orLike('ad_body', $searchQuery)
+                                            ->groupEnd();
+                        }
+
+                        if ($sortBy === 'ads_count') {
+                            $fallbackBuilder->orderBy('ads_count', $sortOrder);
+                        } elseif ($sortBy === 'title') {
+                            $fallbackBuilder->orderBy('title', $sortOrder);
+                        } elseif ($sortBy === 'price') {
+                            $fallbackBuilder->orderBy('CAST(price_1 AS NUMERIC)', $sortOrder);
+                        } else {
+                            $fallbackBuilder->orderBy('ad_start_date', $sortOrder)
+                                            ->orderBy('id', $sortOrder);
+                        }
+
+                        $totalMatching = $fallbackBuilder->countAllResults(false);
+                        $products = $fallbackBuilder->limit($limit, $offset)->get()->getResultArray();
+                    }
                 } catch (\Throwable $e) {
                     log_message('error', 'MCP fetch_new_data SyncService error: ' . $e->getMessage());
                 }
