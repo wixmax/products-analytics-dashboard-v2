@@ -448,22 +448,23 @@ class McpController extends ResourceController
                 'name'        => 'get_ai_skill_instructions',
                 'description' => 'Retrieve official system skill rules for 2-Stage E-Commerce Product Evaluation, Moroccan COD Pricing, Ad Specs, and UGC Creatives.',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'category' => [
                             'type'        => 'string',
                             'description' => 'Optional filter for specific instructions category (all, pricing, evaluation, ads)',
                             'enum'        => ['all', 'pricing', 'evaluation', 'ads']
                         ]
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ],
             [
                 'name'        => 'get_saved_products',
                 'description' => 'Retrieve products saved specifically by the authenticated user/tenant, with options for collection, country, search, and sorting.',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'collection'   => ['type' => 'string', 'description' => 'Filter by collection name (e.g. عامة, ملابس, إلكترونيات)'],
                         'country'      => ['type' => 'string', 'description' => '2-letter country code (e.g. MA, SA)'],
                         'saved_status' => ['type' => 'string', 'description' => 'Status: active or inactive'],
@@ -472,15 +473,16 @@ class McpController extends ResourceController
                         'sort_order'   => ['type' => 'string', 'enum' => ['ASC', 'DESC']],
                         'limit'        => ['type' => 'number', 'description' => 'Max products to return (default 50)'],
                         'offset'       => ['type' => 'number', 'description' => 'Offset for pagination (default 0)']
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ],
             [
                 'name'        => 'save_product',
                 'description' => 'Save or update a product in saved-ads (المحفوظات) for the authenticated user based on their MCP API token.',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'product_id'  => ['type' => 'number', 'description' => 'Database ID of the product if existing in the system'],
                         'product_url' => ['type' => 'string', 'description' => 'URL of the product to save (required if product_id is not provided)'],
                         'collection'  => ['type' => 'string', 'description' => 'Collection name (e.g. عامة, ملابس, إلكترونيات). Default is "عامة"'],
@@ -488,41 +490,44 @@ class McpController extends ResourceController
                         'rating'      => ['type' => 'number', 'description' => 'Optional rating (0-5)'],
                         'title'       => ['type' => 'string', 'description' => 'Product title (optional)'],
                         'country'     => ['type' => 'string', 'description' => 'Country code (e.g. MA)']
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ],
             [
                 'name'        => 'list_snapshots',
                 'description' => 'List available data snapshots stored in the system, with optional origin filtering and pagination.',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'origin' => ['type' => 'string', 'description' => 'Filter by origin (Winning, China, Japan, Competitor, Local)'],
                         'limit'  => ['type' => 'number', 'description' => 'Limit results (default 20)'],
                         'offset' => ['type' => 'number', 'description' => 'Offset results (default 0)']
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ],
             [
                 'name'        => 'get_snapshot_by_date',
                 'description' => 'Request product data snapshot entries by date string, api_version, or snapshot_id.',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'date'        => ['type' => 'string', 'description' => 'Date or api_version substring (e.g. 2026-07-26)'],
                         'snapshot_id' => ['type' => 'number', 'description' => 'Exact snapshot ID'],
                         'origin'      => ['type' => 'string', 'description' => 'Origin category (default Winning)'],
                         'country'     => ['type' => 'string', 'description' => 'Country code (e.g. MA, SA)'],
                         'limit'       => ['type' => 'number', 'description' => 'Max items to return (default 100)']
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ],
             [
                 'name'        => 'filter_winning_products',
                 'description' => 'Filter snapshot and DB data specifically for Winning Products (origin = Winning) using tRPC API filters.',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'snapshot_id'     => ['type' => 'number'],
                         'date'            => ['type' => 'string'],
                         'country'         => ['type' => 'string', 'description' => '2-letter country code'],
@@ -536,40 +541,43 @@ class McpController extends ResourceController
                         'sort_order'      => ['type' => 'string', 'enum' => ['ASC', 'DESC']],
                         'limit'           => ['type' => 'number'],
                         'offset'          => ['type' => 'number']
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ],
             [
                 'name'        => 'get_products',
                 'description' => 'Fetch single or multiple products by IDs, or search products by name/title.',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'ids'     => ['type' => 'array', 'items' => ['type' => 'number']],
                         'name'    => ['type' => 'string'],
                         'origin'  => ['type' => 'string'],
                         'country' => ['type' => 'string'],
                         'limit'   => ['type' => 'number']
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ],
             [
                 'name'        => 'get_product_full_json',
                 'description' => 'Retrieve complete unredacted JSON object of a product by ID or title.',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'product_id' => ['type' => 'number'],
                         'title'      => ['type' => 'string']
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ],
             [
                 'name'        => 'fetch_new_data',
                 'description' => 'Fetch new product data entries filtered by date and country, with classification/origin defaulting to all (ككل / all).',
                 'inputSchema' => [
-                    'type'       => 'object',
-                    'properties' => [
+                    'type'                 => 'object',
+                    'properties'           => [
                         'date'           => ['type' => 'string', 'description' => 'Date string (e.g. YYYY-MM-DD), date range (today, yesterday, 7days, 30days), or api_version string'],
                         'country'        => ['type' => 'string', 'description' => '2-letter country code (e.g. MA, SA, DZ) or "all" (default all)'],
                         'classification' => ['type' => 'string', 'description' => 'Data classification/origin filter (e.g. Winning, Local, China, Japan, or "all" / "ككل"). Defaults to "all" (ككل).'],
@@ -578,7 +586,8 @@ class McpController extends ResourceController
                         'sort_order'     => ['type' => 'string', 'enum' => ['ASC', 'DESC']],
                         'limit'          => ['type' => 'number', 'description' => 'Max products to return (default 50)'],
                         'offset'         => ['type' => 'number', 'description' => 'Offset for pagination (default 0)']
-                    ]
+                    ],
+                    'additionalProperties' => false
                 ]
             ]
         ];
