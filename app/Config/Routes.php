@@ -47,6 +47,7 @@ $routes->group('admin', ['filter' => 'group:superadmin,admin'], function($routes
 $routes->get('admin/users/stop-impersonating', '\App\Controllers\Admin\UsersController::stopImpersonating');
 
 $routes->get('/', 'Home::index');
+$routes->get('/all-products', 'Home::allProducts');
 $routes->get('/saved-ads', 'Home::savedAds');
 $routes->get('/international-products', 'Home::internationalProducts');
 $routes->get('/url-encoder', 'Home::urlEncoder');

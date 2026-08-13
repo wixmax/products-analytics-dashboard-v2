@@ -53,6 +53,11 @@ class Home extends BaseController
         ]);
     }
 
+    public function allProducts(): string
+    {
+        return view('all-products');
+    }
+
     public function savedAds(): string
     {
         return view('saved-ads');

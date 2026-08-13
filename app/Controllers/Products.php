@@ -15,7 +15,7 @@ class Products extends ResourceController
     {
         $model = new ProductModel();
         
-        $origin = $this->request->getVar('origin') ?? 'Winning';
+        $origin = $this->request->getVar('origin') ?? 'all';
         $search = $this->request->getVar('search');
         $country = $this->request->getVar('country');
         $status = $this->request->getVar('status');
@@ -24,7 +24,10 @@ class Products extends ResourceController
         $page = intval($this->request->getVar('page') ?? 1);
         $perPage = intval($this->request->getVar('per_page') ?? 12);
 
-        $builder = $model->where('origin', $origin);
+        $builder = $model;
+        if (!empty($origin) && $origin !== 'all' && $origin !== 'ككل') {
+            $builder = $builder->where('origin', $origin);
+        }
 
         // Exclude tenant-saved copies from the main list so we only query master synced/imported rows
         $builder->groupStart()

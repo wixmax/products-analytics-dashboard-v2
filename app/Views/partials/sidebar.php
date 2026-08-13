@@ -13,6 +13,9 @@
     <a href="<?= base_url('/') ?>" class="sidebar-nav-item <?= (current_url() == base_url() || current_url() == base_url('/')) ? 'active' : '' ?>">
       📊 لوحة التحكم
     </a>
+    <a href="<?= base_url('all-products') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'all-products') !== false ? 'active' : '' ?>">
+      🛍️ جميع المنتجات
+    </a>
     <a href="<?= base_url('saved-ads') ?>" class="sidebar-nav-item <?= strpos(current_url(), 'saved-ads') !== false ? 'active' : '' ?>">
       ⭐ الإعلانات المحفوظة
     </a>

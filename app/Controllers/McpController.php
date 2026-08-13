@@ -1002,11 +1002,19 @@ class McpController extends ResourceController
                             ->groupEnd();
                 } else {
                     $escapedDate = $db->escapeLikeString($dateStr);
-                    $builder->groupStart()
-                            ->like('ad_start_date', $dateStr)
-                            ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
-                            ->orWhere('api_version', $dateStr)
-                            ->groupEnd();
+                    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr)) {
+                        $builder->groupStart()
+                                ->where('ad_start_date', $dateStr)
+                                ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
+                                ->orWhere('api_version', $dateStr)
+                                ->groupEnd();
+                    } else {
+                        $builder->groupStart()
+                                ->where("CAST(ad_start_date AS TEXT) LIKE '%{$escapedDate}%'")
+                                ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
+                                ->orWhere('api_version', $dateStr)
+                                ->groupEnd();
+                    }
                 }
             }
 
