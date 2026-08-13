@@ -1097,19 +1097,49 @@ class McpController extends ResourceController
                         ? $countryFilter
                         : "DZ;TN;MA;LY;EG;SA;QA;EA;OM;BH;KW;GB;IE;FR;BE;LU;CH;DE;AT;ES;IT;NL;PT;NG;CI;SN;KE";
 
+                    // Dynamically format target date for API version (e.g. 1.10-12026-08-13)
+                    $targetDateStr = date('Y-m-d');
+                    if (!empty($dateStr) && $dateStr !== 'all' && $dateStr !== 'ككل') {
+                        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr)) {
+                            $targetDateStr = $dateStr;
+                        } elseif ($dateStr === 'yesterday') {
+                            $targetDateStr = date('Y-m-d', strtotime('-1 day'));
+                        }
+                    }
+                    $winningVersion = "1.10-12026-" . $targetDateStr;
+
                     $normClass = strtolower($classification);
-                    if ($normClass === 'winning') {
+                    if ($normClass === 'winning' || $isAllClassifications) {
                         $inputObj = [
                             "0" => [
                                 "json" => [
                                     "category" => "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler",
                                     "country"  => $countryParam,
-                                    "v"        => "1.10-12026-05-15"
+                                    "v"        => $winningVersion
                                 ]
                             ]
                         ];
                         $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
                         $syncService->fetchAndSaveTrpcUrl($trpcUrl);
+
+                        if ($isAllClassifications) {
+                            $inputInsights = [
+                                "0" => [
+                                    "json" => [
+                                        "title"          => "",
+                                        "category"       => "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler",
+                                        "priceFrom"      => -1,
+                                        "priceTo"        => -1,
+                                        "weeks"          => 12,
+                                        "country"        => $countryParam,
+                                        "transformation" => "none",
+                                        "v"              => "1.3--5"
+                                    ]
+                                ]
+                            ];
+                            $trpcInsightsUrl = 'https://www.overviewdata.io/api/trpc/data.insights?batch=1&input=' . urlencode(json_encode($inputInsights, JSON_FORCE_OBJECT));
+                            $syncService->fetchAndSaveTrpcUrl($trpcInsightsUrl);
+                        }
                     } elseif ($normClass === 'china') {
                         $inputObj = [
                             "0" => [
@@ -1129,7 +1159,7 @@ class McpController extends ResourceController
                         $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.japanProducts?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
                         $syncService->fetchAndSaveTrpcUrl($trpcUrl);
                     } else {
-                        // "all", "local", or default
+                        // "local" or specific category
                         $inputObj = [
                             "0" => [
                                 "json" => [
@@ -1146,20 +1176,6 @@ class McpController extends ResourceController
                         ];
                         $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.insights?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
                         $syncService->fetchAndSaveTrpcUrl($trpcUrl);
-
-                        if ($isAllClassifications) {
-                            $inputWinning = [
-                                "0" => [
-                                    "json" => [
-                                        "category" => "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler",
-                                        "country"  => $countryParam,
-                                        "v"        => "1.10-12026-05-15"
-                                    ]
-                                ]
-                            ];
-                            $trpcWinningUrl = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($inputWinning, JSON_FORCE_OBJECT));
-                            $syncService->fetchAndSaveTrpcUrl($trpcWinningUrl);
-                        }
                     }
 
                     // Re-run DB Query to fetch freshly inserted/updated products
