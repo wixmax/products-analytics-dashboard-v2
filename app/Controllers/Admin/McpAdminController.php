@@ -133,6 +133,12 @@ class McpAdminController extends BaseController
                 'description' => 'أداة تُتيح جلب البيانات والمنتجات الجديدة بناءً على التاريخ والدولة مع جعل التصنيف (Classification) ككل افتراضياً.',
                 'badge'       => 'جلب تلقائي',
             ],
+            'save_product' => [
+                'name'        => 'save_product',
+                'title'       => 'حفظ المنتج في المحفوظات (Save Product to Saved Ads)',
+                'description' => 'أداة تُتيح حفظ أو تحديث منتج في المحفوظات التابعة لحساب العضو الموثق مفتاحه.',
+                'badge'       => 'إدارة المحفوظات',
+            ],
         ];
 
         foreach ($allTools as $toolKey => &$toolMeta) {
