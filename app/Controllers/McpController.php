@@ -77,7 +77,7 @@ class McpController extends ResourceController
         $response = $this->response;
         $response->setHeader('Access-Control-Allow-Origin', '*');
         $response->setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        $response->setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        $response->setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-API-Key, api-key, api_key, x-token');
 
         $method = strtolower($this->request->getMethod());
 
@@ -137,7 +137,13 @@ class McpController extends ResourceController
         }
 
         $rawBody = $this->request->getBody();
-        $input   = !empty($rawBody) ? json_decode($rawBody, true) : null;
+        if (empty($rawBody)) {
+            $rawBody = @file_get_contents('php://input');
+        }
+        if (!empty($rawBody)) {
+            $rawBody = preg_replace('/^[\xEF\xBB\xBF\s]+/', '', $rawBody);
+        }
+        $input = !empty($rawBody) ? json_decode($rawBody, true) : null;
 
         if (!$input) {
             try {
@@ -395,17 +401,35 @@ class McpController extends ResourceController
      */
     private function resolveAuthenticatedUser()
     {
-        $token = $this->request->getGet('token');
+        $token = $this->request->getGet('token') 
+              ?? $this->request->getGet('api_key') 
+              ?? $this->request->getGet('api-key');
 
         if (empty($token)) {
             $authHeader = $this->request->getHeaderLine('Authorization');
-            if (!empty($authHeader) && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
-                $token = trim($matches[1]);
+            if (!empty($authHeader)) {
+                if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+                    $token = trim($matches[1]);
+                } else {
+                    $token = trim($authHeader);
+                }
             }
         }
 
         if (empty($token)) {
+            $token = $this->request->getHeaderLine('api-key');
+        }
+
+        if (empty($token)) {
             $token = $this->request->getHeaderLine('X-API-Key');
+        }
+
+        if (empty($token)) {
+            $token = $this->request->getHeaderLine('api_key');
+        }
+
+        if (empty($token)) {
+            $token = $this->request->getHeaderLine('x-token');
         }
 
         if (!empty($token)) {
