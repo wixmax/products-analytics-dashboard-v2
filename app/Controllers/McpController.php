@@ -1039,12 +1039,14 @@ class McpController extends ResourceController
                         ->orderBy('id', $sortOrder);
             }
 
-            // Execute query
+            // Step 1: Execute local products table query
             $totalMatching = $builder->countAllResults(false);
             $products = $builder->limit($limit, $offset)->get()->getResultArray();
 
-            // Snapshot Fallback if products table returned 0 items and date filter was supplied
-            if ($totalMatching === 0 && !empty($dateStr) && $dateStr !== 'all') {
+            $forceLiveSync = !empty($args['force_live_sync']) || !empty($args['live_fetch']);
+
+            // Step 2: Check data_snapshots table FIRST if products table returned 0 items and not force_live_sync
+            if ($totalMatching === 0 && !$forceLiveSync && !empty($dateStr) && $dateStr !== 'all' && $dateStr !== 'ككل') {
                 $escapedDate = $db->escapeLikeString($dateStr);
                 $snapBuilder = $db->table('data_snapshots')
                                   ->groupStart()
@@ -1054,7 +1056,7 @@ class McpController extends ResourceController
                 if (!$isAllClassifications) {
                     $snapBuilder->where('origin', $classification);
                 }
-                $snapshotRows = $snapBuilder->orderBy('id', 'DESC')->limit(5)->get()->getResultArray();
+                $snapshotRows = $snapBuilder->orderBy('id', 'DESC')->limit(10)->get()->getResultArray();
                 $allEntries = [];
                 foreach ($snapshotRows as $snapRow) {
                     $entries = $this->parseSnapshotEntries($snapRow['raw_json'] ?? '');
@@ -1076,7 +1078,7 @@ class McpController extends ResourceController
                     return [
                         'status'          => 'success',
                         'total'           => $totalMatching,
-                        'source'          => 'data_snapshots_fallback',
+                        'source'          => 'data_snapshots',
                         'filters_applied' => [
                             'date'           => $dateStr,
                             'country'        => $countryFilter,
@@ -1086,6 +1088,163 @@ class McpController extends ResourceController
                         'returned_count' => count($paginated),
                         'products'       => $paginated
                     ];
+                }
+            }
+
+            // Step 3: If BOTH products table AND data_snapshots have 0 matching items (OR forceLiveSync is true), fetch live data via SyncService
+            if ($totalMatching === 0 || $forceLiveSync) {
+                try {
+                    $syncService = new \App\Services\SyncService();
+                    $countryParam = ($countryFilter !== 'ALL' && $countryFilter !== 'ككل' && !empty($countryFilter))
+                        ? $countryFilter
+                        : "DZ;TN;MA;LY;EG;SA;QA;EA;OM;BH;KW;GB;IE;FR;BE;LU;CH;DE;AT;ES;IT;NL;PT;NG;CI;SN;KE";
+
+                    $normClass = strtolower($classification);
+                    if ($normClass === 'winning') {
+                        $inputObj = [
+                            "0" => [
+                                "json" => [
+                                    "category" => "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler",
+                                    "country"  => $countryParam,
+                                    "v"        => "1.10-12026-05-15"
+                                ]
+                            ]
+                        ];
+                        $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
+                        $syncService->fetchAndSaveTrpcUrl($trpcUrl);
+                    } elseif ($normClass === 'china') {
+                        $inputObj = [
+                            "0" => [
+                                "json" => null,
+                                "meta" => ["values" => ["undefined"]]
+                            ]
+                        ];
+                        $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.chinaProducts?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
+                        $syncService->fetchAndSaveTrpcUrl($trpcUrl);
+                    } elseif ($normClass === 'japan') {
+                        $inputObj = [
+                            "0" => [
+                                "json" => null,
+                                "meta" => ["values" => ["undefined"]]
+                            ]
+                        ];
+                        $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.japanProducts?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
+                        $syncService->fetchAndSaveTrpcUrl($trpcUrl);
+                    } else {
+                        // "all", "local", or default
+                        $inputObj = [
+                            "0" => [
+                                "json" => [
+                                    "title"          => "",
+                                    "category"       => "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler",
+                                    "priceFrom"      => -1,
+                                    "priceTo"        => -1,
+                                    "weeks"          => 12,
+                                    "country"        => $countryParam,
+                                    "transformation" => "none",
+                                    "v"              => "1.3--5"
+                                ]
+                            ]
+                        ];
+                        $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.insights?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
+                        $syncService->fetchAndSaveTrpcUrl($trpcUrl);
+
+                        if ($isAllClassifications) {
+                            $inputWinning = [
+                                "0" => [
+                                    "json" => [
+                                        "category" => "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler",
+                                        "country"  => $countryParam,
+                                        "v"        => "1.10-12026-05-15"
+                                    ]
+                                ]
+                            ];
+                            $trpcWinningUrl = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($inputWinning, JSON_FORCE_OBJECT));
+                            $syncService->fetchAndSaveTrpcUrl($trpcWinningUrl);
+                        }
+                    }
+
+                    // Re-run DB Query to fetch freshly inserted/updated products
+                    $builder = $db->table('products');
+                    $builder->groupStart()
+                                ->where('is_saved', false)
+                                ->orWhere('tenant_id IS NULL')
+                            ->groupEnd();
+
+                    if (!$isAllClassifications) {
+                        $builder->where('origin', $classification);
+                    }
+
+                    if ($countryFilter !== 'ALL' && !empty($countryFilter) && $countryFilter !== 'ككل') {
+                        $builder->like('country', $countryFilter);
+                    }
+
+                    if (!empty($dateStr) && $dateStr !== 'all' && $dateStr !== 'ككل') {
+                        $today = date('Y-m-d');
+                        if ($dateStr === 'today') {
+                            $builder->groupStart()
+                                    ->where('ad_start_date', $today)
+                                    ->orWhere("CAST(created_at AS TEXT) LIKE '%{$today}%'")
+                                    ->groupEnd();
+                        } elseif ($dateStr === 'yesterday') {
+                            $yesterday = date('Y-m-d', strtotime('-1 day'));
+                            $builder->groupStart()
+                                    ->where('ad_start_date', $yesterday)
+                                    ->orWhere("CAST(created_at AS TEXT) LIKE '%{$yesterday}%'")
+                                    ->groupEnd();
+                        } elseif ($dateStr === '7days') {
+                            $sevenDaysAgo = date('Y-m-d', strtotime('-7 days'));
+                            $builder->groupStart()
+                                    ->where('ad_start_date >=', $sevenDaysAgo)
+                                    ->orWhere('created_at >=', $sevenDaysAgo)
+                                    ->groupEnd();
+                        } elseif ($dateStr === '30days') {
+                            $thirtyDaysAgo = date('Y-m-d', strtotime('-30 days'));
+                            $builder->groupStart()
+                                    ->where('ad_start_date >=', $thirtyDaysAgo)
+                                    ->orWhere('created_at >=', $thirtyDaysAgo)
+                                    ->groupEnd();
+                        } else {
+                            $escapedDate = $db->escapeLikeString($dateStr);
+                            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr)) {
+                                $builder->groupStart()
+                                        ->where('ad_start_date', $dateStr)
+                                        ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
+                                        ->orWhere('api_version', $dateStr)
+                                        ->groupEnd();
+                            } else {
+                                $builder->groupStart()
+                                        ->where("CAST(ad_start_date AS TEXT) LIKE '%{$escapedDate}%'")
+                                        ->orWhere("CAST(created_at AS TEXT) LIKE '%{$escapedDate}%'")
+                                        ->orWhere('api_version', $dateStr)
+                                        ->groupEnd();
+                            }
+                        }
+                    }
+
+                    if (!empty($searchQuery)) {
+                        $builder->groupStart()
+                                ->like('title', $searchQuery)
+                                ->orLike('ad_title', $searchQuery)
+                                ->orLike('ad_body', $searchQuery)
+                                ->groupEnd();
+                    }
+
+                    if ($sortBy === 'ads_count') {
+                        $builder->orderBy('ads_count', $sortOrder);
+                    } elseif ($sortBy === 'title') {
+                        $builder->orderBy('title', $sortOrder);
+                    } elseif ($sortBy === 'price') {
+                        $builder->orderBy('CAST(price_1 AS NUMERIC)', $sortOrder);
+                    } else {
+                        $builder->orderBy('ad_start_date', $sortOrder)
+                                ->orderBy('id', $sortOrder);
+                    }
+
+                    $totalMatching = $builder->countAllResults(false);
+                    $products = $builder->limit($limit, $offset)->get()->getResultArray();
+                } catch (\Throwable $e) {
+                    log_message('error', 'MCP fetch_new_data SyncService error: ' . $e->getMessage());
                 }
             }
 
