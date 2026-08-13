@@ -475,6 +475,22 @@ class McpController extends ResourceController
                 ]
             ],
             [
+                'name'        => 'save_product',
+                'description' => 'Save or update a product in saved-ads (المحفوظات) for the authenticated user based on their MCP API token.',
+                'inputSchema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'product_id'  => ['type' => 'number', 'description' => 'Database ID of the product if existing in the system'],
+                        'product_url' => ['type' => 'string', 'description' => 'URL of the product to save (required if product_id is not provided)'],
+                        'collection'  => ['type' => 'string', 'description' => 'Collection name (e.g. عامة, ملابس, إلكترونيات). Default is "عامة"'],
+                        'notes'       => ['type' => 'string', 'description' => 'Optional user notes for the saved ad'],
+                        'rating'      => ['type' => 'number', 'description' => 'Optional rating (0-5)'],
+                        'title'       => ['type' => 'string', 'description' => 'Product title (optional)'],
+                        'country'     => ['type' => 'string', 'description' => 'Country code (e.g. MA)']
+                    ]
+                ]
+            ],
+            [
                 'name'        => 'list_snapshots',
                 'description' => 'List available data snapshots stored in the system, with optional origin filtering and pagination.',
                 'inputSchema' => [
@@ -660,6 +676,133 @@ class McpController extends ResourceController
                     'sort_order'   => $sortOrder,
                 ],
                 'products' => $savedProducts
+            ];
+        }
+
+        if ($name === 'save_product' || $name === 'save_ad') {
+            $authUser = $this->resolveAuthenticatedUser();
+            if (!$authUser) {
+                return [
+                    'status' => 'error',
+                    'error'  => 'Unauthorized: Invalid or missing API token. Please pass a valid token in the URL or Authorization header.'
+                ];
+            }
+
+            $tenantId   = $authUser['tenant_id'] ?? 1;
+            $productId  = isset($args['product_id']) ? intval($args['product_id']) : null;
+            $productUrl = $args['product_url'] ?? null;
+            $collection = !empty($args['collection']) ? $args['collection'] : 'عامة';
+            $notes      = $args['notes'] ?? '';
+            $rating     = isset($args['rating']) ? intval($args['rating']) : 0;
+
+            $targetProduct = null;
+
+            if ($productId) {
+                $targetProduct = $productModel->find($productId);
+                if ($targetProduct && empty($productUrl)) {
+                    $productUrl = $targetProduct['product_url'] ?? null;
+                }
+            }
+
+            $existingTenantProduct = null;
+            if (!empty($productUrl)) {
+                $existingTenantProduct = $productModel->where('product_url', $productUrl)
+                                                     ->where('tenant_id', $tenantId)
+                                                     ->first();
+            }
+
+            if ($existingTenantProduct) {
+                $updateData = [
+                    'is_saved'     => true,
+                    'saved_at'     => date('Y-m-d H:i:s'),
+                    'saved_status' => 'active',
+                    'collection'   => $collection ?: ($existingTenantProduct['collection'] ?: 'عامة'),
+                ];
+                if (!empty($notes)) {
+                    $updateData['notes'] = $notes;
+                }
+                if ($rating > 0) {
+                    $updateData['rating'] = $rating;
+                }
+                if (!empty($args['title'])) {
+                    $updateData['title'] = $args['title'];
+                }
+
+                $productModel->update($existingTenantProduct['id'], $updateData);
+                $savedRecord = $productModel->find($existingTenantProduct['id']);
+
+                return [
+                    'status'   => 'success',
+                    'action'   => 'updated_saved',
+                    'message'  => 'تم حفظ وتحديث المنتج بنجاح في المحفوظات! ⭐',
+                    'user'     => [
+                        'id'        => $authUser['id'] ?? null,
+                        'username'  => $authUser['username'] ?? 'User',
+                        'tenant_id' => $tenantId
+                    ],
+                    'product'  => $savedRecord
+                ];
+            }
+
+            $globalProduct = null;
+            if (!empty($productUrl)) {
+                $globalProduct = $productModel->where('product_url', $productUrl)->first();
+            } elseif ($targetProduct) {
+                $globalProduct = $targetProduct;
+                $productUrl    = $targetProduct['product_url'] ?? '';
+            }
+
+            $source = $globalProduct ?: ($targetProduct ?: []);
+
+            if (empty($productUrl) && empty($source)) {
+                return [
+                    'status' => 'error',
+                    'error'  => 'Product not found. Please provide a valid product_id or product_url.'
+                ];
+            }
+
+            $origin = $args['origin'] ?? $source['origin'] ?? 'Winning';
+            $dataToInsert = [
+                'title'              => $args['title'] ?? $source['title'] ?? 'بدون عنوان',
+                'product_url'        => $productUrl ?: ($source['product_url'] ?? ''),
+                'country'            => $args['country'] ?? $source['country'] ?? '',
+                'algo'               => $args['algo'] ?? $source['algo'] ?? 'winning',
+                'ad_start_date'      => $args['ad_start_date'] ?? $source['ad_start_date'] ?? date('Y-m-d'),
+                'ads_count'          => intval($args['ads_count'] ?? $source['ads_count'] ?? 0),
+                'unique_image_count' => intval($args['unique_image_count'] ?? $source['unique_image_count'] ?? 0),
+                'unique_video_count' => intval($args['unique_video_count'] ?? $source['unique_video_count'] ?? 0),
+                'avg_creatives'      => floatval($args['avg_creatives'] ?? $source['avg_creatives'] ?? 1),
+                'ads_per_unique_url' => floatval($args['ads_per_unique_url'] ?? $source['ads_per_unique_url'] ?? 1),
+                'ad_title'           => $args['ad_title'] ?? $source['ad_title'] ?? '',
+                'ad_body'            => $args['ad_body'] ?? $source['ad_body'] ?? '',
+                'ad_image_urls'      => is_array($args['ad_image_urls'] ?? null) ? implode(';', $args['ad_image_urls']) : ($args['ad_image_urls'] ?? $source['ad_image_urls'] ?? ''),
+                'ad_video_urls'      => is_array($args['ad_video_urls'] ?? null) ? implode(';', $args['ad_video_urls']) : ($args['ad_video_urls'] ?? $source['ad_video_urls'] ?? ''),
+                'price_1'            => strval($args['price'] ?? $args['price_1'] ?? $source['price_1'] ?? '0'),
+                'active_ads'         => true,
+                'origin'             => $origin,
+                'api_version'        => $args['api_version'] ?? $source['api_version'] ?? '',
+                'is_saved'           => true,
+                'saved_at'           => date('Y-m-d H:i:s'),
+                'collection'         => $collection,
+                'saved_status'       => 'active',
+                'rating'             => $rating,
+                'notes'              => $notes,
+                'tenant_id'          => $tenantId
+            ];
+
+            $newId = $productModel->insert($dataToInsert);
+            $savedRecord = $productModel->find($newId);
+
+            return [
+                'status'   => 'success',
+                'action'   => 'saved',
+                'message'  => 'تم حفظ المنتج بنجاح في المحفوظات! ⭐',
+                'user'     => [
+                    'id'        => $authUser['id'] ?? null,
+                    'username'  => $authUser['username'] ?? 'User',
+                    'tenant_id' => $tenantId
+                ],
+                'product'  => $savedRecord
             ];
         }
 
@@ -978,15 +1121,17 @@ class McpController extends ResourceController
             if (!empty($dateStr) && $dateStr !== 'all' && $dateStr !== 'ككل') {
                 $today = date('Y-m-d');
                 if ($dateStr === 'today') {
+                    $escapedToday = $db->escapeLikeString($today);
                     $builder->groupStart()
                             ->where('ad_start_date', $today)
-                            ->orWhere('api_version', $today)
+                            ->orWhere("api_version LIKE '%{$escapedToday}%'")
                             ->groupEnd();
                 } elseif ($dateStr === 'yesterday') {
                     $yesterday = date('Y-m-d', strtotime('-1 day'));
+                    $escapedYesterday = $db->escapeLikeString($yesterday);
                     $builder->groupStart()
                             ->where('ad_start_date', $yesterday)
-                            ->orWhere('api_version', $yesterday)
+                            ->orWhere("api_version LIKE '%{$escapedYesterday}%'")
                             ->groupEnd();
                 } elseif ($dateStr === '7days') {
                     $sevenDaysAgo = date('Y-m-d', strtotime('-7 days'));
@@ -1000,17 +1145,10 @@ class McpController extends ResourceController
                             ->groupEnd();
                 } else {
                     $escapedDate = $db->escapeLikeString($dateStr);
-                    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr)) {
-                        $builder->groupStart()
-                                ->where('ad_start_date', $dateStr)
-                                ->orWhere('api_version', $dateStr)
-                                ->groupEnd();
-                    } else {
-                        $builder->groupStart()
-                                ->where("CAST(ad_start_date AS TEXT) LIKE '%{$escapedDate}%'")
-                                ->orWhere('api_version', $dateStr)
-                                ->groupEnd();
-                    }
+                    $builder->groupStart()
+                            ->where('ad_start_date', $dateStr)
+                            ->orWhere("api_version LIKE '%{$escapedDate}%'")
+                            ->groupEnd();
                 }
             }
 
@@ -1196,15 +1334,17 @@ class McpController extends ResourceController
                     if (!empty($dateStr) && $dateStr !== 'all' && $dateStr !== 'ككل') {
                         $today = date('Y-m-d');
                         if ($dateStr === 'today') {
+                            $escapedToday = $db->escapeLikeString($today);
                             $builder->groupStart()
                                     ->where('ad_start_date', $today)
-                                    ->orWhere('api_version', $today)
+                                    ->orWhere("api_version LIKE '%{$escapedToday}%'")
                                     ->groupEnd();
                         } elseif ($dateStr === 'yesterday') {
                             $yesterday = date('Y-m-d', strtotime('-1 day'));
+                            $escapedYesterday = $db->escapeLikeString($yesterday);
                             $builder->groupStart()
                                     ->where('ad_start_date', $yesterday)
-                                    ->orWhere('api_version', $yesterday)
+                                    ->orWhere("api_version LIKE '%{$escapedYesterday}%'")
                                     ->groupEnd();
                         } elseif ($dateStr === '7days') {
                             $sevenDaysAgo = date('Y-m-d', strtotime('-7 days'));
@@ -1218,17 +1358,10 @@ class McpController extends ResourceController
                                     ->groupEnd();
                         } else {
                             $escapedDate = $db->escapeLikeString($dateStr);
-                            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr)) {
-                                $builder->groupStart()
-                                        ->where('ad_start_date', $dateStr)
-                                        ->orWhere('api_version', $dateStr)
-                                        ->groupEnd();
-                            } else {
-                                $builder->groupStart()
-                                        ->where("CAST(ad_start_date AS TEXT) LIKE '%{$escapedDate}%'")
-                                        ->orWhere('api_version', $dateStr)
-                                        ->groupEnd();
-                            }
+                            $builder->groupStart()
+                                    ->where('ad_start_date', $dateStr)
+                                    ->orWhere("api_version LIKE '%{$escapedDate}%'")
+                                    ->groupEnd();
                         }
                     }
 
