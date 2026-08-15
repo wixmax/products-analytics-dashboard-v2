@@ -1278,7 +1278,7 @@ class McpController extends ResourceController
                             $targetDateStr = date('Y-m-d', strtotime('-1 day'));
                         }
                     }
-                    $winningVersion = "1.10-12026-" . $targetDateStr;
+                    $winningVersion = "1.10-1" . $targetDateStr;
 
                     $normClass = strtolower($classification);
                     if ($normClass === 'winning' || $isAllClassifications) {
