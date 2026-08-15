@@ -368,6 +368,39 @@
               </button>
             </div>
           </div>
+
+          <!-- Card: Facebook Graph API Access Token -->
+          <div class="settings-card">
+            <div class="settings-card-title">
+              🔑 إعدادات مكتبة إعلانات فيسبوك (Facebook Ads Library API)
+            </div>
+            <p class="settings-card-desc">
+              قم بضبط مفتاح الوصول الرسمي لمكتبة إعلانات فيسبوك (Graph API Access Token) للاستفادة من أدوات البحث عن المنافسين، تفكيك الإعلانات، وتحليلات الأداء والإنفاق.
+            </p>
+
+            <div class="settings-form-group">
+              <label for="fb-access-token-input" style="font-weight: 700; font-size: 0.85rem; margin-bottom: 4px;">
+                Facebook Graph API Access Token:
+              </label>
+              <input
+                type="password"
+                id="fb-access-token-input"
+                class="form-control"
+                placeholder="أدخل مفتاح وصول فيسبوك (يبدأ بـ EAAG...)"
+                style="width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);"
+              />
+              <span style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 4px; display: block;">
+                يمكن استخراج المفتاح من <a href="https://developers.facebook.com/tools/explorer/" target="_blank" style="color: var(--color-primary); text-decoration: underline;">Facebook Graph API Explorer</a> مع صلاحية <code>ads_read</code>.
+              </span>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+              <button class="btn btn-primary" style="font-weight: 700; padding: 8px 20px;" onclick="saveFacebookTokenSetting()">
+                💾 حفظ توكن فيسبوك
+              </button>
+            </div>
+          </div>
+
           <div class="settings-card">
             <div class="settings-card-title">
               🌐 مصدر جلب البيانات الافتراضي
@@ -878,6 +911,49 @@
             console.error("Error loading analytics scope:", err);
             radioSnapshot.checked = true;
           }
+        }
+
+        await loadFacebookSettings();
+      }
+
+      // Load Facebook Token Setting
+      async function loadFacebookSettings() {
+        const input = document.getElementById('fb-access-token-input');
+        if (!input) return;
+        try {
+          const res = await fetch('/api/settings/facebook_access_token');
+          if (res.ok) {
+            const data = await res.json();
+            if (data.value) {
+              input.value = data.value;
+            }
+          }
+        } catch (err) {
+          console.error("Error loading Facebook token:", err);
+        }
+      }
+
+      // Save Facebook Access Token Setting
+      async function saveFacebookTokenSetting() {
+        const input = document.getElementById('fb-access-token-input');
+        if (!input) return;
+        const val = input.value.trim();
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'facebook_access_token', value: val })
+          });
+
+          if (res.ok) {
+            showToast("تم حفظ توكن Facebook Graph API بنجاح! 🔑✨", "success");
+          } else {
+            showToast("فشل حفظ توكن فيسبوك. يرجى المحاولة لاحقاً.", "error");
+          }
+        } catch (err) {
+          console.error("Error saving Facebook token:", err);
+          showToast("خطأ في الاتصال بالسيرفر.", "error");
         }
       }
 

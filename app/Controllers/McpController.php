@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Models\ProductModel;
 use App\Models\SnapshotModel;
+use App\Libraries\FacebookAdsService;
 use CodeIgniter\RESTful\ResourceController;
 
 class McpController extends ResourceController
@@ -611,6 +612,113 @@ class McpController extends ResourceController
                         'limit'          => ['type' => 'number', 'description' => 'Max products to return (default 50)'],
                         'offset'         => ['type' => 'number', 'description' => 'Offset for pagination (default 0)']
                     ],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
+                'name'        => 'facebook_search_ads',
+                'description' => 'Search Facebook Ads Library with advanced filters (brand_name, country, ad_type, date_range, limit).',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'brand_name' => ['type' => 'string', 'description' => 'Brand or keyword name to search in Facebook Ads Library'],
+                        'country'    => ['type' => 'string', 'description' => 'Target country code (e.g. US, MA, SA, GB). Default US'],
+                        'ad_type'    => ['type' => 'string', 'enum' => ['ALL', 'POLITICAL_AND_ISSUE_ADS', 'HOUSING_ADS', 'NEWS_ADS', 'UNCATEGORIZED']],
+                        'date_range' => ['type' => 'number', 'description' => 'Days to look back (default 30)'],
+                        'limit'      => ['type' => 'number', 'description' => 'Maximum number of ads to return (1-100, default 50)'],
+                        'token'      => ['type' => 'string', 'description' => 'Optional custom Facebook Graph API token']
+                    ],
+                    'required'             => ['brand_name'],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
+                'name'        => 'facebook_discover_competitors',
+                'description' => 'Discover active competitor brands advertising in an industry / niche with ad volume rankings.',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'industry_keywords' => ['type' => 'string', 'description' => 'Industry or niche keywords (e.g. "fitness app", "skincare", "food delivery")'],
+                        'region'            => ['type' => 'string', 'description' => 'Target country/region code (default US)'],
+                        'min_ads'           => ['type' => 'number', 'description' => 'Minimum ads threshold to qualify brand (default 5)'],
+                        'limit'             => ['type' => 'number', 'description' => 'Maximum brands to return (default 50)'],
+                        'token'             => ['type' => 'string', 'description' => 'Optional custom Facebook Graph API token']
+                    ],
+                    'required'             => ['industry_keywords'],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
+                'name'        => 'facebook_analyze_creative',
+                'description' => 'Deep analysis of ad creative elements (text copy, CTAs, sentiment, and urgency triggers).',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'ad_snapshot_url' => ['type' => 'string', 'description' => 'Facebook ad snapshot URL'],
+                        'extract_text'    => ['type' => 'boolean', 'description' => 'Extract full text copy and sentiment keywords (default true)'],
+                        'analyze_images'  => ['type' => 'boolean', 'description' => 'Analyze image elements (default true)'],
+                        'detect_cta'      => ['type' => 'boolean', 'description' => 'Detect Call To Action (CTA) buttons and urgency words (default true)']
+                    ],
+                    'required'             => ['ad_snapshot_url'],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
+                'name'        => 'facebook_analyze_performance',
+                'description' => 'Analyze advertising performance metrics for a brand (estimated impressions, spend range, platform distribution, demographics).',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'brand_name'  => ['type' => 'string', 'description' => 'Brand name to analyze'],
+                        'time_period' => ['type' => 'number', 'description' => 'Analysis time window in days (default 30)'],
+                        'token'       => ['type' => 'string', 'description' => 'Optional custom Facebook Graph API token']
+                    ],
+                    'required'             => ['brand_name'],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
+                'name'        => 'facebook_competitive_analysis',
+                'description' => 'Compare ad strategies across multiple competitor brands (identifying market leaders, spend levels, platform trends, and common creative themes).',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'brands_list'    => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'List of brand names to compare'],
+                        'analysis_depth' => ['type' => 'string', 'enum' => ['standard', 'deep']],
+                        'token'          => ['type' => 'string', 'description' => 'Optional custom Facebook Graph API token']
+                    ],
+                    'required'             => ['brands_list'],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
+                'name'        => 'facebook_intelligence_report',
+                'description' => 'Generate complete intelligence report for a brand with competitor benchmarks and actionable marketing recommendations.',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'brand_name'          => ['type' => 'string', 'description' => 'Primary brand name to generate report for'],
+                        'include_competitors' => ['type' => 'boolean', 'description' => 'Include automated competitor discovery and benchmarking (default true)'],
+                        'report_depth'        => ['type' => 'string', 'enum' => ['basic', 'standard', 'comprehensive']],
+                        'token'               => ['type' => 'string', 'description' => 'Optional custom Facebook Graph API token']
+                    ],
+                    'required'             => ['brand_name'],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
+                'name'        => 'facebook_export_ads',
+                'description' => 'Export Facebook ads data in various formats (json, csv, markdown) with optional creative analysis.',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'brand_name'        => ['type' => 'string', 'description' => 'Brand name to export ads for'],
+                        'export_format'     => ['type' => 'string', 'enum' => ['json', 'csv', 'markdown'], 'description' => 'Export format (default json)'],
+                        'include_creatives' => ['type' => 'boolean', 'description' => 'Include creative copy analysis (default false)'],
+                        'limit'             => ['type' => 'number', 'description' => 'Maximum ads to export (default 100)'],
+                        'token'             => ['type' => 'string', 'description' => 'Optional custom Facebook Graph API token']
+                    ],
+                    'required'             => ['brand_name'],
                     'additionalProperties' => false
                 ]
             ]
@@ -1478,6 +1586,67 @@ class McpController extends ResourceController
                 'returned_count' => count($products),
                 'products'       => $products
             ];
+        }
+
+        // ===== FACEBOOK ADS LIBRARY MCP TOOLS =====
+        $fbService = new FacebookAdsService();
+
+        if ($name === 'facebook_search_ads' || $name === 'search_facebook_ads' || $name === 'fb_search_ads') {
+            $brandName = (string) ($args['brand_name'] ?? '');
+            $country   = (string) ($args['country'] ?? 'US');
+            $adType    = (string) ($args['ad_type'] ?? 'ALL');
+            $dateRange = (int) ($args['date_range'] ?? 30);
+            $limit     = (int) ($args['limit'] ?? 50);
+            $token     = $args['token'] ?? null;
+            return $fbService->searchAds($brandName, $country, $adType, $dateRange, $limit, $token);
+        }
+
+        if ($name === 'facebook_discover_competitors' || $name === 'discover_competitor_brands' || $name === 'fb_discover_competitors') {
+            $industryKeywords = (string) ($args['industry_keywords'] ?? '');
+            $region           = (string) ($args['region'] ?? 'US');
+            $minAds           = (int) ($args['min_ads'] ?? 5);
+            $limit            = (int) ($args['limit'] ?? 50);
+            $token            = $args['token'] ?? null;
+            return $fbService->discoverCompetitors($industryKeywords, $region, $minAds, $limit, $token);
+        }
+
+        if ($name === 'facebook_analyze_creative' || $name === 'analyze_ad_creative_elements' || $name === 'fb_analyze_creative') {
+            $snapshotUrl = (string) ($args['ad_snapshot_url'] ?? '');
+            $extractText = (bool) ($args['extract_text'] ?? true);
+            $analyzeImg  = (bool) ($args['analyze_images'] ?? true);
+            $detectCta   = (bool) ($args['detect_cta'] ?? true);
+            return $fbService->analyzeCreativeElements($snapshotUrl, $extractText, $analyzeImg, $detectCta);
+        }
+
+        if ($name === 'facebook_analyze_performance' || $name === 'analyze_ad_performance_metrics' || $name === 'fb_analyze_performance') {
+            $brandName  = (string) ($args['brand_name'] ?? '');
+            $timePeriod = (int) ($args['time_period'] ?? 30);
+            $token      = $args['token'] ?? null;
+            return $fbService->analyzePerformanceMetrics($brandName, $timePeriod, null, $token);
+        }
+
+        if ($name === 'facebook_competitive_analysis' || $name === 'competitive_ad_analysis' || $name === 'fb_competitive_analysis') {
+            $brandsList = (array) ($args['brands_list'] ?? []);
+            $depth      = (string) ($args['analysis_depth'] ?? 'standard');
+            $token      = $args['token'] ?? null;
+            return $fbService->competitiveAnalysis($brandsList, null, $depth, $token);
+        }
+
+        if ($name === 'facebook_intelligence_report' || $name === 'generate_facebook_intelligence_report' || $name === 'fb_intelligence_report') {
+            $brandName           = (string) ($args['brand_name'] ?? '');
+            $includeCompetitors  = (bool) ($args['include_competitors'] ?? true);
+            $reportDepth         = (string) ($args['report_depth'] ?? 'comprehensive');
+            $token               = $args['token'] ?? null;
+            return $fbService->generateIntelligenceReport($brandName, $includeCompetitors, $reportDepth, $token);
+        }
+
+        if ($name === 'facebook_export_ads' || $name === 'export_facebook_ads_data' || $name === 'fb_export_ads') {
+            $brandName        = (string) ($args['brand_name'] ?? '');
+            $exportFormat     = (string) ($args['export_format'] ?? 'json');
+            $includeCreatives = (bool) ($args['include_creatives'] ?? false);
+            $limit            = (int) ($args['limit'] ?? 100);
+            $token            = $args['token'] ?? null;
+            return $fbService->exportAdsData($brandName, $exportFormat, $includeCreatives, $limit, $token);
         }
 
         throw new \Exception("Unknown tool: {$name}");

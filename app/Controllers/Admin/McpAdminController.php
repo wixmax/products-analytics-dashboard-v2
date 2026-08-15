@@ -139,6 +139,48 @@ class McpAdminController extends BaseController
                 'description' => 'أداة تُتيح حفظ أو تحديث منتج في المحفوظات التابعة لحساب العضو الموثق مفتاحه.',
                 'badge'       => 'إدارة المحفوظات',
             ],
+            'facebook_search_ads' => [
+                'name'        => 'facebook_search_ads',
+                'title'       => 'البحث في مكتبة إعلانات فيسبوك (Facebook Ads Search)',
+                'description' => 'أداة البحث المتقدم والمفلتر في مكتبة إعلانات فيسبوك الرسمية حسب العلامة التجارية والدولة.',
+                'badge'       => 'إعلانات فيسبوك',
+            ],
+            'facebook_discover_competitors' => [
+                'name'        => 'facebook_discover_competitors',
+                'title'       => 'استكشاف المنافسين في القطاع (Discover Competitors)',
+                'description' => 'اكتشاف المتاجر والعلامات التجارية المنافسة التي تطلق إعلانات نشطة في قطاع محدد وترتيبها.',
+                'badge'       => 'تحليل المنافسين',
+            ],
+            'facebook_analyze_creative' => [
+                'name'        => 'facebook_analyze_creative',
+                'title'       => 'تحليل المحتوى الإعلاني والـ CTAs (Analyze Creative)',
+                'description' => 'تفكيك لقطة الإعلان، استخراج النصوص، أزرار الدعوة للإجراء (CTA)، وكلمات الإلحاح والحوافز.',
+                'badge'       => 'تحليل المحتوى',
+            ],
+            'facebook_analyze_performance' => [
+                'name'        => 'facebook_analyze_performance',
+                'title'       => 'تحليل أداء وإنفاق الإعلانات (Performance & Spend Metrics)',
+                'description' => 'تقدير مرات الظهور، نطاقات الإنفاق، وتوزيع المنصات (Facebook, Instagram) والديموغرافيا.',
+                'badge'       => 'أداء وإنفاق',
+            ],
+            'facebook_competitive_analysis' => [
+                'name'        => 'facebook_competitive_analysis',
+                'title'       => 'المقارنة التنافسية الذكية (Competitive Analysis)',
+                'description' => 'مقارنة استراتيجيات الإعلانات بين عدة منافسين وتحديد قائد السوق والأنماط المشتركة.',
+                'badge'       => 'مقارنة استخباراتية',
+            ],
+            'facebook_intelligence_report' => [
+                'name'        => 'facebook_intelligence_report',
+                'title'       => 'تقرير الاستخبارات الإعلانية الشامل (Facebook Intelligence Report)',
+                'description' => 'توليد تقرير استخباراتي متكامل للعلامة التجارية مع مقارنة المنافسين وتوصيات تسويقية دقيقة.',
+                'badge'       => 'تقرير استخباراتي',
+            ],
+            'facebook_export_ads' => [
+                'name'        => 'facebook_export_ads',
+                'title'       => 'تصدير بيانات الإعلانات (Export Facebook Ads)',
+                'description' => 'تصدير بيانات الإعلانات والتحليلات بتنسيقات متعددة (JSON, CSV, Markdown).',
+                'badge'       => 'تصدير البيانات',
+            ],
         ];
 
         foreach ($allTools as $toolKey => &$toolMeta) {
@@ -171,6 +213,8 @@ class McpAdminController extends BaseController
             }
         }
 
+        $facebookToken = $this->getSetting('facebook_access_token', env('FACEBOOK_ACCESS_TOKEN', ''));
+
         return view('admin/mcp', [
             'globalEnabled'       => $globalEnabled,
             'systemPrompt'        => $systemPrompt,
@@ -181,7 +225,23 @@ class McpAdminController extends BaseController
             'usersWithTokenCount' => $usersWithTokenCount,
             'enabledToolsCount'   => $enabledToolsCount,
             'mcpEndpointUrl'      => site_url('api/mcp'),
+            'facebookToken'       => $facebookToken,
         ]);
+    }
+
+    /**
+     * Save Facebook Graph API Access Token
+     */
+    public function saveFacebookToken(): RedirectResponse
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return redirect()->to('/')->with('error', 'غير مسموح لك بالوصول.');
+        }
+
+        $token = trim((string) $this->request->getPost('facebook_access_token'));
+        $this->setSetting('facebook_access_token', $token);
+
+        return redirect()->back()->with('message', 'تم حفظ مفتاح Facebook Graph API Access Token بنجاح! 🔑✨');
     }
 
     /**

@@ -417,6 +417,42 @@
             </form>
           </div>
 
+          <!-- Section 2.5: Facebook Graph API Access Token Configuration -->
+          <div class="admin-card">
+            <div class="admin-card-title">
+              🔑 إعدادات وتوكن مكتبة إعلانات فيسبوك (Facebook Graph API Token)
+            </div>
+            <p class="admin-card-desc">
+              أدخل مفتاح وصول Facebook Graph API Access Token لتمكين أدوات استكشاف وتحليل مكتبة الإعلانات والبحث عن المنافسين بنجاح.
+            </p>
+
+            <form action="<?= base_url('admin/mcp/save-fb-token') ?>" method="POST">
+              <?= csrf_field() ?>
+              <div style="margin-bottom: 1rem;">
+                <label for="facebook_access_token" style="font-weight: 700; font-size: 0.9rem; color: var(--color-text-main); display: block; margin-bottom: 6px;">
+                  Facebook Graph API Access Token:
+                </label>
+                <input
+                  type="password"
+                  name="facebook_access_token"
+                  id="facebook_access_token"
+                  value="<?= esc($facebookToken ?? '') ?>"
+                  placeholder="EAAG..."
+                  style="width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main);"
+                />
+                <span style="font-size: 0.75rem; color: var(--color-text-muted); display: block; margin-top: 4px;">
+                  يمكنك الحصول على التوكن من <a href="https://developers.facebook.com/tools/explorer/" target="_blank" style="color: var(--color-primary); text-decoration: underline;">Facebook Graph API Explorer</a> مع صلاحية <code>ads_read</code>.
+                </span>
+              </div>
+
+              <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
+                <button type="submit" class="btn btn-primary" style="font-size: 0.85rem; padding: 6px 16px;">
+                  💾 حفظ توكن فيسبوك
+                </button>
+              </div>
+            </form>
+          </div>
+
           <!-- Section 3: Member API Tokens Table -->
           <div class="admin-card">
             <div class="admin-card-title">

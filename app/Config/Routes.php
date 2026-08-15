@@ -43,6 +43,7 @@ $routes->group('admin', ['filter' => 'group:superadmin,admin'], function($routes
     $routes->post('mcp/generate-token/(:num)', '\App\Controllers\Admin\McpAdminController::generateUserToken/$1');
     $routes->post('mcp/revoke-token/(:num)', '\App\Controllers\Admin\McpAdminController::revokeUserToken/$1');
     $routes->post('mcp/update-prompt', '\App\Controllers\Admin\McpAdminController::updateSystemPrompt');
+    $routes->post('mcp/save-fb-token', '\App\Controllers\Admin\McpAdminController::saveFacebookToken');
 });
 $routes->get('admin/users/stop-impersonating', '\App\Controllers\Admin\UsersController::stopImpersonating');
 
@@ -114,6 +115,17 @@ $routes->post('/api/ai/history/(:num)/delete', 'Products::aiDeleteHistory/$1');
 // Model Context Protocol (MCP) Endpoints
 $routes->match(['GET', 'POST', 'OPTIONS'], '/api/mcp', 'McpController::handleMcp');
 $routes->match(['GET', 'POST', 'OPTIONS'], '/api/mcp/(:segment)', 'McpController::handleMcp/$1');
+
+// Facebook Ads Library Intelligence REST API Endpoints
+$routes->group('api/facebook-ads', function($routes) {
+    $routes->match(['GET', 'POST'], 'search', 'FacebookAdsController::search');
+    $routes->match(['GET', 'POST'], 'discover-competitors', 'FacebookAdsController::discoverCompetitors');
+    $routes->post('analyze-creative', 'FacebookAdsController::analyzeCreative');
+    $routes->match(['GET', 'POST'], 'analyze-performance', 'FacebookAdsController::analyzePerformance');
+    $routes->post('competitive-analysis', 'FacebookAdsController::competitiveAnalysis');
+    $routes->match(['GET', 'POST'], 'intelligence-report', 'FacebookAdsController::intelligenceReport');
+    $routes->post('export', 'FacebookAdsController::export');
+});
 
 // Update Database Schema Route (non-destructive migrations update)
 $routes->get('update-db', '\App\Controllers\InstallController::updateDatabaseSchema');
