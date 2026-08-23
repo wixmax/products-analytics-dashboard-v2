@@ -275,7 +275,7 @@ async function openDetailsModal(productOrIdx) {
     }
   }
 }
-const openProductDetailsModal = openDetailsModal;
+var openProductDetailsModal = openDetailsModal;
 
 function updateModalSaveState() {
   if (!currentProductForDetails) return;

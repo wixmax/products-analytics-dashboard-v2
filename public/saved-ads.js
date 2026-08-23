@@ -1059,7 +1059,7 @@ async function toggleStoreListAction() {
   }
 }
 
-let vidObserver = null;
+var vidObserver = window.vidObserver || null;
 
 function loadVideoPlaceholder(ph) {
   if (ph.dataset.vidClickHandled) return;

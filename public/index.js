@@ -1480,7 +1480,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initBackToTop();
 });
 
-let vidObserver = null;
+var vidObserver = window.vidObserver || null;
 
 function initVideoJs(scope) {
   if (!vidObserver && typeof IntersectionObserver !== "undefined") {
