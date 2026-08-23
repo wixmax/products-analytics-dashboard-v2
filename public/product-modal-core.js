@@ -58,11 +58,34 @@ function normalizeProductObject(p) {
     actualPrice: p.price_1 || p.actualPrice || p.price || '0',
     title: p.title || p.product_title || 'بدون عنوان',
     country: (p.country || 'MA').toUpperCase(),
+    ad_title: p.ad_title || p.title || '',
+    ad_body: p.ad_body || p.ad_title || '',
     ad_image_urls: p.ad_image_urls || p.thumbnail_url || p.image_url || p.media_url || '',
     ad_video_urls: p.ad_video_urls || '',
     ad_start_date: p.ad_start_date || p.created_at || '',
-    ads_count: p.ads_count || 1
+    ads_count: p.ads_count || 1,
+    avg_creatives: p.avg_creatives || 1
   };
+}
+
+async function fetchActivityData(productUrl, refresh = false) {
+  try {
+    if (!productUrl || productUrl === '#') return null;
+    const params = new URLSearchParams({ product_url: productUrl });
+    if (refresh) params.set("refresh", "1");
+    const res = await fetch(`/api/products/activity?${params.toString()}`);
+    if (!res.ok) return null;
+    const result = await res.json();
+    if (result.source === "error") return null;
+
+    return {
+      activity: result.activity || null,
+      strategy_analysis: result.strategy_analysis || null,
+    };
+  } catch (e) {
+    console.warn("Failed to fetch activity data", e);
+    return null;
+  }
 }
 
 async function openDetailsModal(productOrIdx) {
@@ -98,6 +121,27 @@ async function openDetailsModal(productOrIdx) {
   const priceInput = document.getElementById('details-price-input');
   if (priceInput) {
     priceInput.value = p.actualPrice || '0';
+  }
+
+  // Populate all raw JSON properties in scrollable container
+  const rawDataContainer = document.getElementById("details-raw-data-list");
+  if (rawDataContainer) {
+    let listHtml = "";
+    for (const [key, value] of Object.entries(p)) {
+      if (value !== null && value !== undefined && value !== "") {
+        let valStr = String(value);
+        if (valStr.length > 80) valStr = valStr.slice(0, 80) + "...";
+        listHtml += `
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding: 4px 0; font-family: sans-serif; gap: 10px;">
+            <span style="color: var(--color-primary); font-weight: 600; text-transform: capitalize;">${key}:</span>
+            <span style="word-break: break-all; text-align: right; color: var(--color-text-main); font-weight: 500;">${valStr}</span>
+          </div>
+        `;
+      }
+    }
+    rawDataContainer.innerHTML =
+      listHtml ||
+      `<div style="text-align: center; padding: 10px; color: var(--color-text-muted);">لا توجد بيانات إضافية</div>`;
   }
 
   // Populate Media Items (Videos & Images)
@@ -190,7 +234,7 @@ async function openDetailsModal(productOrIdx) {
   }
   updateModalSaveState();
 
-  // Timeline and simulated activity
+  // Timeline and simulated/real activity
   const chartElem = document.getElementById('details-chart');
   if (chartElem) {
     chartElem.innerHTML = `
@@ -199,11 +243,31 @@ async function openDetailsModal(productOrIdx) {
       </div>
     `;
 
-    let activityEntries = generateSimulatedActivity(p);
+    let resData = await fetchActivityData(p.productUrl, false);
+    let activityEntries = null;
+    let backendStrategy = null;
+
+    if (resData) {
+      activityEntries = resData.activity;
+      backendStrategy = resData.strategy_analysis;
+    }
+
+    if (!activityEntries || activityEntries.length === 0) {
+      activityEntries = generateSimulatedActivity(p);
+    }
+
     if (typeof renderTimelineAndMetrics === 'function') {
       renderTimelineAndMetrics(p, activityEntries);
     } else {
       fallbackRenderTimeline(p, activityEntries);
+    }
+
+    if (backendStrategy) {
+      const badgeElem = document.querySelector(".strategy-badge");
+      if (badgeElem) badgeElem.textContent = backendStrategy.badge;
+
+      const textElem = document.getElementById("details-analysis-text");
+      if (textElem) textElem.textContent = backendStrategy.text;
     }
   }
 }
@@ -213,7 +277,7 @@ function updateModalSaveState() {
   if (!currentProductForDetails) return;
   const pId = String(currentProductForDetails.id || '');
   const isSaved = (typeof savedProductIds !== 'undefined' && savedProductIds.has(pId)) ||
-                  (typeof savedProducts !== 'undefined' && savedProducts.some(p => String(p.id || p.product_id) === pId));
+                  (typeof savedProducts !== 'undefined' && savedProducts.some(p => String(p.id || p.product_id) === pId || (p.productUrl && p.productUrl === currentProductForDetails.productUrl)));
   const saveBtn = document.getElementById("details-save-btn");
   const collectionSelect = document.getElementById("details-collection-select");
 
@@ -230,15 +294,12 @@ function updateModalSaveState() {
   }
 
   if (collectionSelect) {
-    if (isSaved && typeof collections !== 'undefined') {
-      collectionSelect.style.display = "inline-block";
-      const sList = typeof savedProducts !== 'undefined' ? savedProducts : [];
-      const productInSaved = sList.find(p => String(p.id || p.product_id) === pId);
-      const savedCol = productInSaved ? (productInSaved.collection || "عامة") : "عامة";
-      collectionSelect.innerHTML = collections.map(c => `<option value="${c}" ${savedCol === c ? "selected" : ""}>📁 ${c}</option>`).join("");
-    } else {
-      collectionSelect.style.display = "none";
-    }
+    collectionSelect.style.display = "inline-block";
+    const sList = typeof savedProducts !== 'undefined' ? savedProducts : [];
+    const productInSaved = sList.find(p => String(p.id || p.product_id) === pId || (p.productUrl && p.productUrl === currentProductForDetails.productUrl));
+    const savedCol = productInSaved ? (productInSaved.collection || "عامة") : "عامة";
+    const cList = typeof collections !== 'undefined' ? collections : ["عامة"];
+    collectionSelect.innerHTML = cList.map(c => `<option value="${c}" ${savedCol === c ? "selected" : ""}>📁 ${c}</option>`).join("");
   }
 }
 
@@ -368,13 +429,13 @@ function openIndexInfoModal(productOrIdx) {
   if (creativesEl) creativesEl.textContent = p.avg_creatives || 1;
 
   const dateEl = document.getElementById("index-info-date");
-  if (dateEl) dateEl.textContent = `${p.ad_start_date || "--"}${timeAgoText}`;
+  if (dateEl) dateEl.textContent = `${p.ad_start_date ? p.ad_start_date.split(' ')[0] : "--"}${timeAgoText}`;
 
   const adTitleEl = document.getElementById("index-info-ad-title");
-  if (adTitleEl) adTitleEl.textContent = `💬 ${p.ad_title || "نص الإعلان"}`;
+  if (adTitleEl) adTitleEl.textContent = `💬 ${p.ad_title || p.title || "نص الإعلان"}`;
 
   const adBodyEl = document.getElementById("index-info-ad-body");
-  if (adBodyEl) adBodyEl.textContent = p.ad_body || "لا يوجد نص تفصيلي.";
+  if (adBodyEl) adBodyEl.textContent = p.ad_body || p.ad_title || "لا يوجد نص تفصيلي.";
 
   const visitBtn = document.getElementById("index-info-visit-btn");
   if (visitBtn) {
@@ -532,11 +593,46 @@ function showAdAnalysisToast() {
   showToast('✨ جاري فحص زوايا التسويق والعروض الخاصة بالإعلان...');
 }
 
-function refreshActivityData() {
-  showToast('🔄 تم تحديث مؤشرات النشاط والإعلانات!');
-  if (currentProductForDetails) {
-    openDetailsModal(currentProductForDetails);
+async function refreshActivityData() {
+  if (!currentProductForDetails) return;
+  const p = currentProductForDetails;
+  const chartElem = document.getElementById("details-chart");
+  if (chartElem) {
+    chartElem.innerHTML = `
+      <div style="width:100%; text-align:center; padding: 2rem 0; color: var(--color-text-muted);">
+        ⏳ جاري تحديث بيانات النشاط...
+      </div>
+    `;
   }
+
+  let resData = await fetchActivityData(p.productUrl, true);
+  let activityEntries = null;
+  let backendStrategy = null;
+
+  if (resData) {
+    activityEntries = resData.activity;
+    backendStrategy = resData.strategy_analysis;
+  }
+
+  if (!activityEntries || activityEntries.length === 0) {
+    activityEntries = generateSimulatedActivity(p);
+  }
+
+  if (typeof renderTimelineAndMetrics === 'function') {
+    renderTimelineAndMetrics(p, activityEntries);
+  } else {
+    fallbackRenderTimeline(p, activityEntries);
+  }
+
+  if (backendStrategy) {
+    const badgeElem = document.querySelector(".strategy-badge");
+    if (badgeElem) badgeElem.textContent = backendStrategy.badge;
+
+    const textElem = document.getElementById("details-analysis-text");
+    if (textElem) textElem.textContent = backendStrategy.text;
+  }
+
+  showToast('🔄 تم تحديث مؤشرات النشاط والإعلانات بنجاح!');
 }
 
 function handleDetailsPriceChange(val) {
