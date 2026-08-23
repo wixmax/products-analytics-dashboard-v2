@@ -3,12 +3,12 @@
  * Shared across: index.php, saved-ads.php, all-products.php, international-products.php
  */
 
-let currentProductForDetails = null;
-let currentActiveProduct = null;
-let currentProductDetailsWithAnalysis = null;
-let vidObserver = null;
+var currentProductForDetails = window.currentProductForDetails || null;
+var currentActiveProduct = window.currentActiveProduct || null;
+var currentProductDetailsWithAnalysis = window.currentProductDetailsWithAnalysis || null;
+var vidObserver = window.vidObserver || null;
 
-const CORE_COUNTRIES_LIST = [
+var CORE_COUNTRIES_LIST = window.CORE_COUNTRIES_LIST || [
   { code: "DZ", name: "الجزائر", flag: "🇩🇿" },
   { code: "TN", name: "تونس", flag: "🇹🇳" },
   { code: "MA", name: "المغرب", flag: "🇲🇦" },

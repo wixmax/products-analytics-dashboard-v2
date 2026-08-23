@@ -649,8 +649,8 @@ function showToast(message, type = "info") {
 // =========================================
 // 9. Product Details Modal Controller
 // =========================================
-let currentProductForDetails = null;
-let currentProductDetailsWithAnalysis = null;
+var currentProductForDetails = window.currentProductForDetails || null;
+var currentProductDetailsWithAnalysis = window.currentProductDetailsWithAnalysis || null;
 
 async function openDetailsModal(product) {
   currentProductForDetails = product;

@@ -557,9 +557,9 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
-    <script src="<?= base_url('analysis-helper.js') ?>?v=3.5"></script>
-    <script src="<?= base_url('product-modal-core.js') ?>?v=3.5"></script>
-    <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=3.5"></script>
-    <script src="<?= base_url('saved-ads.js') ?>?v=3.5"></script>
+    <script src="<?= base_url('analysis-helper.js') ?>?v=4.0"></script>
+    <script src="<?= base_url('product-modal-core.js') ?>?v=4.0"></script>
+    <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=4.0"></script>
+    <script src="<?= base_url('saved-ads.js') ?>?v=4.0"></script>
   </body>
 </html>
