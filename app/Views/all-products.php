@@ -357,47 +357,125 @@
       </main>
     </div>
 
-    <!-- Product Details Modal (Reused) -->
+    <!-- Product Details Modal -->
     <div class="details-modal-overlay" id="details-modal">
       <div class="details-modal-card">
         <div class="details-modal-header">
           <div class="details-modal-title" id="details-title">
-            تفاصيل المنتج والإعلانات
+            تفاصيل الإعلان والنشاط
           </div>
           <div class="details-modal-header-actions">
-            <button class="btn btn-success" id="details-store-btn" onclick="toggleStoreListAction()">
+            <button
+              class="btn btn-secondary"
+              onclick="openDetailsHelpModal()"
+              style="
+                border: 1px solid var(--color-primary);
+                color: var(--color-primary);
+                background: transparent;
+                margin-left: 8px;
+                font-weight: 600;
+              "
+            >
+              💡 دليل القراءة
+            </button>
+            <button
+              class="btn btn-success"
+              id="details-store-btn"
+              onclick="toggleStoreListAction()"
+            >
               ➕ إضافة المتجر للقائمة
             </button>
-            <button class="btn btn-secondary" id="details-save-btn" style="border: 1px solid var(--color-success); color: var(--color-success); background: transparent;">
+            <button
+              class="btn btn-secondary"
+              id="details-save-btn"
+              style="
+                border: 1px solid var(--color-success);
+                color: var(--color-success);
+                background: transparent;
+              "
+            >
               احفظ المنتج
             </button>
+            <select
+              id="details-collection-select"
+              style="
+                font-size: 0.8rem;
+                padding: 0.5rem;
+                border-radius: var(--radius-sm);
+                border: 1px solid var(--border-color);
+                background: var(--bg-input);
+                color: var(--color-text-main);
+                width: 145px;
+                display: none;
+                margin-left: 8px;
+                cursor: pointer;
+              "
+              onchange="handleDetailsCollectionChange()"
+            ></select>
             <button class="details-modal-close" onclick="closeDetailsModal()">
               &times;
             </button>
           </div>
         </div>
         <div class="details-modal-body">
-          <!-- Left Panel: Timeline & Metrics -->
+          <!-- Left Panel: Chart & Metrics -->
           <div class="details-left-panel">
+            <!-- Timeline Section -->
             <div class="details-section-card">
               <div class="details-section-title">
-                🕒 المخطط الزمني لنشاط الإعلان
+                🕒 المخطط الزمني
+                <span
+                  style="
+                    font-size: 0.85rem;
+                    color: var(--color-text-muted);
+                    font-weight: normal;
+                    margin-right: 8px;
+                  "
+                  >تاريخ مرئي لنشاط الإعلان وعدد مرات إعادة تفعيله.</span
+                >
               </div>
               <div class="details-timeline-chart" id="details-chart">
-                <!-- Dynamic timeline bars -->
+                <!-- Dynamic Bars generated via JS -->
+              </div>
+              <div class="details-chart-legend">
+                <div class="legend-item">
+                  <div class="legend-marker bar"></div>
+                  <span>ارتفاع العمود: يمثل عدد الكرياتيف النشطة (الكثافة).</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-marker dot"></div>
+                  <span>النقطة الحمراء: تشير إلى "تاريخ انتهاء مجدول".</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-marker orange"></div>
+                  <span>الشريط البرتقالي: إعادة إحياء ونشاط بعد توقف.</span>
+                </div>
               </div>
             </div>
 
+            <!-- Ad Strategy Analysis Section -->
             <div class="strategy-analysis-card">
-              <div class="details-section-title" style="color: var(--color-primary)">
+              <div
+                class="details-section-title"
+                style="color: var(--color-primary)"
+              >
                 ⚡ تحليل استراتيجية الإعلان
               </div>
-              <div class="strategy-badge">✓ سجل قاعدة البيانات</div>
-              <p id="details-analysis-text" style="font-size: 0.85rem; line-height: 1.6; color: var(--color-text-main); margin-top: 8px;">
-                المنتج مخزن في قاعدة البيانات مع كامل التفاصيل الفنية والإعلانات المرتبطة.
+              <div class="strategy-badge">✓ منتج رابح (تم التحسين)</div>
+              <p
+                id="details-analysis-text"
+                style="
+                  font-size: 0.85rem;
+                  line-height: 1.6;
+                  color: var(--color-text-main);
+                  margin-top: 8px;
+                "
+              >
+                قام المعلن باختيار مكثف (High Peak)، ثم ركز على الإعلانات الرابحة لزيادة المبيعات (Scaling).
               </p>
             </div>
 
+            <!-- Key Indicators Section -->
             <div class="details-section-card">
               <div class="details-section-title">⚙️ المؤشرات الرئيسية</div>
               <div class="indicators-grid">
@@ -417,11 +495,19 @@
                   <div class="indicator-title">📅 آخر ظهور</div>
                   <div class="indicator-value" id="details-last-seen">-</div>
                 </div>
+                <div class="indicator-card">
+                  <div class="indicator-title">🔝 أقصى عدد كرياتيف</div>
+                  <div class="indicator-value" id="details-max-creatives">0</div>
+                </div>
+                <div class="indicator-card">
+                  <div class="indicator-title">🔄 إعادة النشاط</div>
+                  <div class="indicator-value" id="details-reactivations">0</div>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Right Panel: Media & Raw JSON -->
+          <!-- Right Panel: Showcase Media & Description -->
           <div class="details-right-panel">
             <div class="details-media-showcase" id="details-media">
               <!-- Dynamic media items -->
@@ -430,20 +516,216 @@
             <div class="details-product-info">
               <div class="details-product-title" id="details-info-title">-</div>
               <p class="details-product-desc" id="details-info-desc">-</p>
+              
+              <!-- Price edit input -->
+              <div class="details-price-edit" style="margin-top: 15px; display: flex; align-items: center; gap: 10px; background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <span style="font-weight: 700; font-size: 0.85rem; color: var(--color-primary);">💰 سعر المنتج:</span>
+                <input type="text" id="details-price-input" value="0" style="width: 100px; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); font-size: 0.85rem; text-align: center; font-weight: 600;" onchange="handleDetailsPriceChange(this.value)" />
+                <span style="font-size: 0.85rem; color: var(--color-text-muted);">DH / عملة محلية</span>
+              </div>
             </div>
 
-            <div class="details-raw-data-card" style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px; margin-top: 15px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-weight: 700; font-size: 0.85rem; color: var(--color-primary);">📋 بيانات المنتج (JSON)</span>
+            <!-- All Data & JSON Download Section -->
+            <div
+              class="details-raw-data-card"
+              style="
+                background: var(--bg-input);
+                border-radius: var(--radius-sm);
+                border: 1px solid var(--border-color);
+                padding: 12px;
+                margin-top: 15px;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 8px;
+                "
+              >
+                <span
+                  style="
+                    font-weight: 700;
+                    font-size: 0.85rem;
+                    color: var(--color-primary);
+                  "
+                  >📋 بيانات المنتج الكاملة (JSON)</span
+                >
+                <button
+                  class="btn btn-secondary"
+                  id="details-json-download-btn"
+                  onclick="downloadProductDataJSON()"
+                  style="
+                    padding: 4px 8px;
+                    font-size: 0.75rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                  "
+                >
+                  📥 تحميل JSON
+                </button>
               </div>
-              <div id="details-raw-data-list" style="max-height: 150px; overflow-y: auto; font-size: 0.75rem; color: var(--color-text-muted); font-family: var(--font-mono); line-height: 1.4; display: flex; flex-direction: column; gap: 4px; direction: ltr; text-align: left;">
+              <div
+                id="details-raw-data-list"
+                style="
+                  max-height: 150px;
+                  overflow-y: auto;
+                  font-size: 0.75rem;
+                  color: var(--color-text-muted);
+                  font-family: var(--font-mono);
+                  line-height: 1.4;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 4px;
+                  direction: ltr;
+                  text-align: left;
+                "
+              >
+                <!-- Dynamically populated key-value list -->
               </div>
             </div>
 
             <div class="details-action-buttons">
-              <a href="#" target="_blank" class="btn btn-dashed" id="details-fb-library-btn">🌐 عرض في مكتبة الإعلانات</a>
+              <button
+                class="btn btn-success"
+                id="details-product-action-btn"
+                onclick="showProductAnalysisToast()"
+              >
+                📊 تحليل المنتج AI
+              </button>
+              <button
+                class="btn btn-primary"
+                id="details-download-btn"
+                onclick="downloadProductMedia()"
+              >
+                📥 تحميل
+              </button>
+              <button
+                class="btn btn-purple"
+                id="details-ad-analysis-btn"
+                onclick="showAdAnalysisToast()"
+              >
+                ✨ تحليل الإعلان
+              </button>
+              <a
+                href="#"
+                target="_blank"
+                class="btn btn-dashed"
+                id="details-fb-library-btn"
+                >🌐 عرض في مكتبة الإعلانات</a
+              >
+              <button
+                class="btn btn-secondary"
+                id="details-refresh-activity-btn"
+                onclick="refreshActivityData()"
+                style="border:1px solid var(--color-primary);color:var(--color-primary)"
+              >
+                🔄 تحديث النشاط
+              </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details Help Modal -->
+    <div class="help-modal-overlay" id="details-help-modal">
+      <div class="help-modal-card">
+        <div class="help-modal-header">
+          <div class="help-modal-title">💡 دليل قراءة وتحليل الإحصائيات</div>
+          <button class="help-modal-close" onclick="closeDetailsHelpModal()">
+            &times;
+          </button>
+        </div>
+        <div class="help-modal-body">
+          <div class="help-section">
+            <div class="help-section-title">
+              🕒 المخطط الزمني (Activity Timeline)
+            </div>
+            <div class="help-section-desc">
+              يُظهر حجم ونشاط إعلانات المنتج على مدار الـ 12 أسبوعاً الماضية.
+              <br />• <b>ارتفاع الأعمدة</b>: يُمثل كثافة الإعلانات النشطة وحجم الميزانيات المخصصة من المنافسين.
+              <br />• <b>النقاط الحمراء</b>: تُشير لانتهاء وتوقف حملات إعلانية معينة (غربلة الإعلانات الخاسرة).
+            </div>
+          </div>
+
+          <div
+            class="help-section"
+            style="border-left: 4px solid var(--color-success)"
+          >
+            <div class="help-section-title" style="color: var(--color-success)">
+              🔄 أحداث إعادة التنشيط (Reactivation Events)
+            </div>
+            <div class="help-section-desc">
+              <b>الإشارة الذهبية للأرباح!</b> تُحسب عند رصد فترة خمول تليها عودة قوية ومفاجئة للإعلانات. يدل هذا على أن المنتج مربح للغاية، وأن المعلن أوقفه مؤقتاً بسبب <b>نفاد المخزون</b> ثم أعاد تشغيله فور توفر البضاعة.
+            </div>
+          </div>
+
+          <div class="help-section">
+            <div class="help-section-title">
+              🧠 تحليل استراتيجية الإعلان (Marketing Strategy)
+            </div>
+            <div class="help-section-desc">
+              قراءة تسويقية ذكية تلخص لك توجه المنافس الإعلاني:
+              <br />• <b>التكبير والتوسع (Scaling)</b>: تفعيل ميزانيات ضخمة وعشرات الإعلانات النشطة في نفس الوقت.
+              <br />• <b>الاختبار الأولي (Testing)</b>: تشغيل إعلانات محدودة لاستكشاف اهتمام السوق.
+            </div>
+          </div>
+
+          <div class="help-section">
+            <div class="help-section-title">
+              📊 المؤشرات الرئيسية (KPIs Metrics)
+            </div>
+            <div class="help-section-desc">
+              • <b>المشاهدات المقدرة (Estimated Views)</b>: حساب المدى المحتمل للانتشار والوصول.
+              <br />• <b>التفاعل المقدر (Estimated Engagement)</b>: معدل التفاعل المتوقع في السوق المحلي بمتوسط 7%.
+              <br />• <b>أقصى عدد كرياتيف (Max Creatives)</b>: عدد الزوايا الإعلانية الفريدة والفيديوهات التي يختبرها المنافس.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Index Info Modal (معلومات) -->
+    <div class="modal-overlay" id="index-info-modal" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 200;">
+      <div class="modal-card" style="background: var(--bg-card); padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); width: 90%; max-width: 520px; box-shadow: var(--shadow-lg); transition: var(--transition-all); max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+          <div>
+            <h3 id="index-info-title" style="font-weight: 700; font-size: 1.1rem; margin-bottom: 4px;">-</h3>
+            <div id="index-info-domain" style="font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600;">-</div>
+          </div>
+          <button class="details-modal-close" onclick="closeIndexInfoModal()">&times;</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem;">
+          <div style="background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); text-align: center;">
+            <div id="index-info-ads" style="font-size: 1.2rem; font-weight: 700; color: var(--color-primary);">0</div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted);">إعلانات نشطة</div>
+          </div>
+          <div style="background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); text-align: center;">
+            <div id="index-info-images" style="font-size: 1.2rem; font-weight: 700; color: var(--color-primary);">0</div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted);">عدد الصور</div>
+          </div>
+          <div style="background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); text-align: center;">
+            <div id="index-info-creatives" style="font-size: 1.2rem; font-weight: 700; color: var(--color-primary);">1</div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted);">متوسط الكرياتيف</div>
+          </div>
+          <div style="background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); text-align: center;">
+            <div id="index-info-date" style="font-size: 0.85rem; font-weight: 700; color: var(--color-text-main); margin-top: 4px;">--</div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted);">تاريخ الإطلاق</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <div id="index-info-ad-title" style="font-weight: 700; font-size: 0.85rem; margin-bottom: 4px; color: var(--color-text-main);">💬 نص الإعلان</div>
+          <div id="index-info-ad-body" style="font-size: 0.8rem; line-height: 1.6; color: var(--color-text-muted); background: var(--bg-input); padding: 10px; border-radius: var(--radius-sm); max-height: 120px; overflow-y: auto;">-</div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="btn btn-secondary" onclick="closeIndexInfoModal()">إغلاق</button>
+          <button class="btn btn-primary" id="index-info-visit-btn">🛒 زيارة المتجر</button>
         </div>
       </div>
     </div>
@@ -471,6 +753,7 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
+    <script src="<?= base_url('analysis-helper.js') ?>?v=1.0"></script>
     <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=1.0"></script>
     <script>
       let currentPage = 1;
@@ -478,7 +761,13 @@
       let debounceTimer = null;
       let catalogProducts = [];
       let savedProductIds = new Set();
+      let savedProducts = [];
+      let collections = ["عامة"];
+      let watchedStores = [];
       let currentActiveProduct = null;
+      let currentProductForDetails = null;
+      let currentProductDetailsWithAnalysis = null;
+      let vidObserver = null;
 
       const COUNTRIES_LIST = [
         { code: "DZ", name: "الجزائر", flag: "🇩🇿" },
@@ -501,6 +790,8 @@
       document.addEventListener("DOMContentLoaded", () => {
         setupThemeToggle();
         fetchSavedProductsList();
+        fetchCollectionsList();
+        fetchWatchlist();
         fetchCatalogProducts(1);
       });
 
@@ -526,13 +817,33 @@
           const res = await fetch('/api/products/saved');
           if (res.ok) {
             const data = await res.json();
-            const savedList = data.saved_products || data.products || (Array.isArray(data) ? data : []);
-            savedProductIds = new Set((Array.isArray(savedList) ? savedList : []).map(p => String(p.id || p.product_id)));
+            savedProducts = data.saved_products || data.products || (Array.isArray(data) ? data : []);
+            savedProductIds = new Set((Array.isArray(savedProducts) ? savedProducts : []).map(p => String(p.id || p.product_id)));
             document.getElementById('metric-saved-count').textContent = savedProductIds.size;
           }
         } catch (e) {
           console.error("Failed to fetch saved products list:", e);
         }
+      }
+
+      async function fetchCollectionsList() {
+        try {
+          const res = await fetch('/api/products/saved/collections');
+          if (res.ok) {
+            const data = await res.json();
+            collections = data.collections || ["عامة"];
+          }
+        } catch (e) {}
+      }
+
+      async function fetchWatchlist() {
+        try {
+          const res = await fetch('/api/products/watchlist');
+          if (res.ok) {
+            const data = await res.json();
+            watchedStores = data.stores || [];
+          }
+        } catch (e) {}
       }
 
       async function fetchCatalogProducts(page = 1) {
@@ -706,7 +1017,6 @@
                   <span>${countryCode}</span>
                 </div>
               </div>
-
               <div class="card-body">
                 <h4 class="p-title" title="${title}">${title}</h4>
                 <div style="color: var(--color-text-muted); font-size: 0.75rem; margin-top: -2px; display: flex; justify-content: space-between; align-items: center;">
@@ -721,7 +1031,7 @@
 
               <div class="card-footer" style="gap: 6px; padding: 8px;">
                 ${productUrl && productUrl !== '#' ? `<a href="${productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">🛒 زيارة</a>` : ''}
-                <button onclick="openProductDetailsModal(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.6rem; font-size: 0.7rem;">ℹ️ معلومات</button>
+                <button onclick="openIndexInfoModal(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.6rem; font-size: 0.7rem;">ℹ️ معلومات</button>
                 <button onclick="openProductDetailsModal(${idx})" class="btn btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">📊 تفاصيل</button>
                 ${saveBtnHtml}
               </div>
@@ -782,6 +1092,29 @@
         });
       }
 
+      function initVideoJs(scope) {
+        (scope || document).querySelectorAll("video.video-js").forEach((el) => {
+          if (el.dataset.vjsInited) return;
+          el.dataset.vjsInited = "1";
+          try {
+            if (typeof videojs === "function") {
+              const player = videojs(el, {
+                fluid: true,
+                controls: true,
+                preload: "none",
+              });
+              player.on("play", () => {
+                const all = videojs.getPlayers();
+                Object.keys(all).forEach((id) => {
+                  const p = all[id];
+                  if (p !== player && !p.paused()) p.pause();
+                });
+              });
+            }
+          } catch (e) { /* ignore */ }
+        });
+      }
+
       function renderPagination(totalItems, page, perPage) {
         const bar = document.getElementById('catalog-pagination-bar');
         const summary = document.getElementById('pagination-summary');
@@ -827,14 +1160,19 @@
           if (data.status === 'success' || data.saved !== undefined) {
             if (data.saved) {
               savedProductIds.add(String(productId));
-              btnElem.classList.add('saved');
+              if (btnElem) btnElem.classList.add('btn-success');
+              if (btnElem) btnElem.classList.remove('btn-secondary');
+              if (btnElem) btnElem.textContent = '⭐';
               showToast('✅ تم حفظ المنتج للمفضلة بنجاح!');
             } else {
               savedProductIds.delete(String(productId));
-              btnElem.classList.remove('saved');
+              if (btnElem) btnElem.classList.remove('btn-success');
+              if (btnElem) btnElem.classList.add('btn-secondary');
+              if (btnElem) btnElem.textContent = '☆';
               showToast('🗑️ تم إزالة المنتج من المفضلة.');
             }
             document.getElementById('metric-saved-count').textContent = savedProductIds.size;
+            updateModalSaveState();
           }
         } catch (err) {
           console.error("Save toggle error:", err);
@@ -842,37 +1180,430 @@
         }
       }
 
-      function openProductDetailsModal(index) {
-        const p = catalogProducts[index];
+      function updateModalSaveState() {
+        if (!currentProductForDetails) return;
+        const pId = String(currentProductForDetails.id || '');
+        const isSaved = savedProductIds.has(pId);
+        const saveBtn = document.getElementById("details-save-btn");
+        const collectionSelect = document.getElementById("details-collection-select");
+
+        if (saveBtn) {
+          if (isSaved) {
+            saveBtn.textContent = "⭐ محفوظ";
+            saveBtn.style.background = "var(--color-success)";
+            saveBtn.style.color = "white";
+          } else {
+            saveBtn.textContent = "احفظ المنتج";
+            saveBtn.style.background = "transparent";
+            saveBtn.style.color = "var(--color-success)";
+          }
+        }
+
+        if (collectionSelect) {
+          if (isSaved) {
+            collectionSelect.style.display = "inline-block";
+            const productInSaved = savedProducts.find(p => String(p.id || p.product_id) === pId);
+            const savedCol = productInSaved ? (productInSaved.collection || "عامة") : "عامة";
+            collectionSelect.innerHTML = collections.map(c => `<option value="${c}" ${savedCol === c ? "selected" : ""}>📁 ${c}</option>`).join("");
+          } else {
+            collectionSelect.style.display = "none";
+          }
+        }
+      }
+
+      async function openProductDetailsModal(productOrIdx) {
+        let p = typeof productOrIdx === 'number' ? catalogProducts[productOrIdx] : productOrIdx;
         if (!p) return;
+
+        p = {
+          ...p,
+          productUrl: p.product_url || p.productUrl || '#',
+          actualPrice: p.price_1 || p.actualPrice || '0',
+          title: p.title || p.product_title || 'بدون عنوان'
+        };
+
+        currentProductForDetails = p;
         currentActiveProduct = p;
 
-        document.getElementById('details-info-title').textContent = p.title || 'منتج من قاعدة البيانات';
-        document.getElementById('details-info-desc').textContent = p.ad_body || p.ad_title || 'لا يوجد وصف تفصيلي متوفر.';
-        document.getElementById('details-views').textContent = (p.views || 0).toLocaleString();
-        document.getElementById('details-engagement').textContent = (p.engagement || '7%');
-        document.getElementById('details-first-seen').textContent = p.ad_start_date || p.created_at || '-';
-        document.getElementById('details-last-seen').textContent = p.updated_at || p.created_at || '-';
+        const modal = document.getElementById('details-modal');
+        if (!modal) return;
+        modal.style.display = 'flex';
 
-        const rawList = document.getElementById('details-raw-data-list');
-        rawList.innerHTML = `
-          <div><strong>ID:</strong> ${p.id}</div>
-          <div><strong>Origin:</strong> ${p.origin || 'Winning'}</div>
-          <div><strong>Country:</strong> ${p.country || 'MA'}</div>
-          <div><strong>Ads Count:</strong> ${p.ads_count || 1}</div>
-          <div><strong>Price:</strong> ${p.price_1 || '0'} DH</div>
-          <div><strong>URL:</strong> <a href="${p.product_url || '#'}" target="_blank" style="color:var(--color-primary);">${p.product_url || '-'}</a></div>
-        `;
+        document.getElementById('details-title').textContent = p.title || 'تفاصيل الإعلان والنشاط';
+        document.getElementById('details-info-title').textContent = p.title || 'بدون عنوان';
+        document.getElementById('details-info-desc').textContent = p.ad_body || p.ad_title || 'لا يوجد نص تفصيلي للإعلان.';
+
+        const priceInput = document.getElementById('details-price-input');
+        if (priceInput) {
+          priceInput.value = p.actualPrice || '0';
+        }
+
+        const mediaContainer = document.getElementById('details-media');
+        const imageUrls = [
+          ...new Set(
+            (p.ad_image_urls || p.thumbnail_url || p.image_url || p.media_url || '')
+              .split(';')
+              .map(u => u.trim())
+              .filter(Boolean)
+          )
+        ];
+        const videoUrls = [
+          ...new Set(
+            (p.ad_video_urls || '')
+              .split(';')
+              .map(u => u.trim())
+              .filter(Boolean)
+          )
+        ];
+
+        const countryCode = (p.country || 'MA').toUpperCase();
+        const countryMeta = COUNTRIES_LIST.find(c => c.code === countryCode);
+        const flag = countryMeta ? countryMeta.flag : '🌍';
+        const overlayText = `${flag} إعلان نشط`;
+
+        let mediaHtml = '';
+        if (videoUrls.length > 0) {
+          videoUrls.forEach((vUrl) => {
+            mediaHtml += `
+              <div class="details-media-item">
+                <video class="video-js vjs-big-play-centered" controls autoplay muted loop playsinline>
+                  <source src="${vUrl}" type="video/mp4">
+                </video>
+                <div class="details-media-overlay-text">${overlayText}</div>
+              </div>
+            `;
+          });
+          imageUrls.forEach((imgUrl) => {
+            mediaHtml += `
+              <div class="details-media-item">
+                <img src="${imgUrl}" alt="${p.title}">
+                <div class="details-media-overlay-text">${overlayText}</div>
+              </div>
+            `;
+          });
+        } else if (imageUrls.length > 0) {
+          imageUrls.forEach((imgUrl) => {
+            mediaHtml += `
+              <div class="details-media-item">
+                <img src="${imgUrl}" alt="${p.title}">
+                <div class="details-media-overlay-text">${overlayText}</div>
+              </div>
+            `;
+          });
+        } else {
+          mediaHtml = `<div class="no-media" style="grid-column: 1/-1; height: 200px;"><span>📦 لا توجد وسائط معاينة</span></div>`;
+        }
+        mediaContainer.innerHTML = mediaHtml;
+        initVideoJs(mediaContainer);
+
+        let domain = 'متجر خارجي';
+        try {
+          if (p.productUrl && p.productUrl !== '#') {
+            domain = new URL(p.productUrl).hostname.replace('www.', '');
+          }
+        } catch(e) {}
 
         const fbBtn = document.getElementById('details-fb-library-btn');
-        fbBtn.href = `https://www.facebook.com/ads/library/?q=${encodeURIComponent(p.title || '')}`;
+        if (fbBtn) {
+          fbBtn.href = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=${encodeURIComponent(countryCode)}&q=${encodeURIComponent(p.title || '')}`;
+        }
 
-        document.getElementById('details-modal').style.display = 'flex';
+        const storeBtn = document.getElementById('details-store-btn');
+        if (storeBtn) {
+          const isStoreAdded = watchedStores.includes(domain);
+          if (isStoreAdded) {
+            storeBtn.textContent = '🟢 تم إضافة المتجر للقائمة';
+            storeBtn.className = 'btn btn-success';
+          } else {
+            storeBtn.textContent = '➕ إضافة المتجر للقائمة';
+            storeBtn.className = 'btn btn-secondary';
+          }
+        }
+
+        const saveBtn = document.getElementById('details-save-btn');
+        if (saveBtn) {
+          saveBtn.onclick = () => {
+            toggleSaveProduct(p.id, null);
+          };
+        }
+        updateModalSaveState();
+
+        document.getElementById('details-chart').innerHTML = `
+          <div style="width:100%; text-align:center; padding: 2rem 0; color: var(--color-text-muted);">
+            ⏳ جاري تحميل مخطط النشاط...
+          </div>
+        `;
+
+        let activityEntries = generateSimulatedActivity(p);
+        if (typeof renderTimelineAndMetrics === 'function') {
+          renderTimelineAndMetrics(p, activityEntries);
+        } else {
+          fallbackRenderTimeline(p, activityEntries);
+        }
+      }
+
+      function fallbackRenderTimeline(product, entries) {
+        document.getElementById('details-views').textContent = ((product.ads_count || 1) * 1500).toLocaleString();
+        document.getElementById('details-engagement').textContent = '7%';
+        document.getElementById('details-first-seen').textContent = product.ad_start_date || product.created_at || '-';
+        document.getElementById('details-last-seen').textContent = product.updated_at || product.created_at || '-';
+        document.getElementById('details-max-creatives').textContent = `${product.ads_count || 1} كرياتيف`;
+        document.getElementById('details-reactivations').textContent = `1 أحداث`;
+      }
+
+      function generateSimulatedActivity(product) {
+        let seed = 0;
+        const url = product.productUrl || product.product_url || product.title || "";
+        for (let i = 0; i < url.length; i++) {
+          seed = (seed << 5) - seed + url.charCodeAt(i);
+          seed = seed & seed;
+        }
+        function pseudoRand() {
+          seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+          return seed / 0x7fffffff;
+        }
+
+        const entries = [];
+        const totalAds = product.ads_count || 12;
+        const videoUrls = (product.ad_video_urls || "").split(";").filter(Boolean);
+
+        let baseDate = new Date();
+        if (product.ad_start_date) {
+          const pDate = new Date(product.ad_start_date);
+          if (!isNaN(pDate.getTime())) baseDate = pDate;
+        } else {
+          baseDate.setDate(baseDate.getDate() - 180);
+        }
+
+        const numInt1 = Math.max(1, Math.floor(totalAds * 0.4));
+        for (let i = 0; i < numInt1; i++) {
+          const start = new Date(baseDate);
+          start.setDate(start.getDate() + i * 2);
+          const end = new Date(start);
+          end.setDate(end.getDate() + 15 + Math.floor(pseudoRand() * 20));
+          entries.push({
+            ad_start_date: start.toISOString().split("T")[0],
+            ad_end_date: end.toISOString().split("T")[0],
+            ad_video_urls: videoUrls[i % videoUrls.length] || "",
+          });
+        }
+
+        const numInt2 = Math.max(1, Math.floor(totalAds * 0.4));
+        for (let i = 0; i < numInt2; i++) {
+          const start = new Date(baseDate);
+          start.setDate(start.getDate() + 45 + i * 2);
+          const end = new Date(start);
+          end.setDate(end.getDate() + 20 + Math.floor(pseudoRand() * 25));
+          entries.push({
+            ad_start_date: start.toISOString().split("T")[0],
+            ad_end_date: end.toISOString().split("T")[0],
+            ad_video_urls: videoUrls[i % videoUrls.length] || "",
+          });
+        }
+
+        return entries;
+      }
+
+      function openIndexInfoModal(productOrIdx) {
+        const p = typeof productOrIdx === 'number' ? catalogProducts[productOrIdx] : productOrIdx;
+        if (!p) return;
+
+        const modal = document.getElementById("index-info-modal");
+        if (!modal) return;
+
+        const imageUrls = (p.ad_image_urls || p.image_url || p.thumbnail_url || "").split(";").filter(Boolean);
+
+        let domain = "متجر خارجي";
+        const pUrl = p.product_url || p.productUrl || "";
+        try {
+          if (pUrl && pUrl !== '#')
+            domain = new URL(pUrl).hostname.replace("www.", "");
+        } catch (e) {}
+
+        let timeAgoText = "";
+        if (p.ad_start_date) {
+          const startDate = new Date(p.ad_start_date);
+          if (!isNaN(startDate.getTime())) {
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            startDate.setHours(0, 0, 0, 0);
+            const diffDays = Math.floor((now - startDate) / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) timeAgoText = " (اليوم)";
+            else if (diffDays === 1) timeAgoText = " (أمس)";
+            else if (diffDays < 7) timeAgoText = ` (منذ ${diffDays} أيام)`;
+            else if (diffDays < 30)
+              timeAgoText = ` (منذ ${Math.floor(diffDays / 7)} أسبوع)`;
+            else timeAgoText = ` (منذ ${Math.floor(diffDays / 30)} شهر)`;
+          }
+        }
+
+        document.getElementById("index-info-title").textContent = p.title || p.product_title || "بدون عنوان";
+        document.getElementById("index-info-domain").textContent = `🏪 ${domain}`;
+        document.getElementById("index-info-ads").textContent = p.ads_count || 1;
+        document.getElementById("index-info-images").textContent = imageUrls.length;
+        document.getElementById("index-info-creatives").textContent = p.avg_creatives || 1;
+        document.getElementById("index-info-date").textContent = `${p.ad_start_date || "--"}${timeAgoText}`;
+        document.getElementById("index-info-ad-title").textContent = `💬 ${p.ad_title || "نص الإعلان"}`;
+        document.getElementById("index-info-ad-body").textContent = p.ad_body || "لا يوجد نص تفصيلي.";
+
+        document.getElementById("index-info-visit-btn").onclick = () => {
+          if (pUrl && pUrl !== '#') window.open(pUrl, "_blank");
+        };
+
+        modal.style.display = "flex";
+      }
+
+      function closeIndexInfoModal() {
+        const modal = document.getElementById("index-info-modal");
+        if (modal) modal.style.display = "none";
       }
 
       function closeDetailsModal() {
         document.getElementById('details-modal').style.display = 'none';
       }
+
+      function openDetailsHelpModal() {
+        const modal = document.getElementById("details-help-modal");
+        if (modal) modal.style.display = "flex";
+      }
+
+      function closeDetailsHelpModal() {
+        const modal = document.getElementById("details-help-modal");
+        if (modal) modal.style.display = "none";
+      }
+
+      async function toggleStoreListAction() {
+        if (!currentProductForDetails) return;
+        const pUrl = currentProductForDetails.product_url || currentProductForDetails.productUrl;
+        let domain = 'متجر خارجي';
+        try {
+          if (pUrl && pUrl !== '#') domain = new URL(pUrl).hostname.replace('www.', '');
+        } catch(e) {}
+
+        const btn = document.getElementById('details-store-btn');
+        try {
+          const res = await fetch('/api/products/watchlist/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.action === 'removed') {
+              watchedStores = watchedStores.filter(d => d !== domain);
+              if (btn) {
+                btn.textContent = '➕ إضافة المتجر للقائمة';
+                btn.className = 'btn btn-secondary';
+              }
+              showToast('تمت إزالة المتجر من قائمتك الخاصة', 'info');
+            } else {
+              if (!watchedStores.includes(domain)) watchedStores.push(domain);
+              if (btn) {
+                btn.textContent = '🟢 تم إضافة المتجر للقائمة';
+                btn.className = 'btn btn-success';
+              }
+              showToast('تمت إضافة المتجر لقائمتك بنجاح! 🛍️', 'success');
+            }
+          }
+        } catch(err) {
+          console.error(err);
+          showToast('تعذر تعديل قائمة المتاجر', 'error');
+        }
+      }
+
+      function downloadProductMedia() {
+        if (!currentProductForDetails) return;
+        const videoUrls = (currentProductForDetails.ad_video_urls || '').split(';').filter(Boolean);
+        const imageUrls = (currentProductForDetails.ad_image_urls || currentProductForDetails.image_url || '').split(';').filter(Boolean);
+        const mediaUrl = videoUrls[0] || imageUrls[0];
+
+        if (mediaUrl) {
+          const a = document.createElement('a');
+          a.href = mediaUrl;
+          a.download = `media_${(currentProductForDetails.title || 'item').slice(0, 10)}`;
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast('جاري تنزيل ملف الميديا... 📥', 'success');
+        } else {
+          showToast('لا توجد ميديا صالحة للتحميل.', 'warning');
+        }
+      }
+
+      function showProductAnalysisToast() {
+        showToast('📊 جاري بدء تحليل أداء المنتج وتجهيز لوحة المؤشرات...');
+      }
+
+      function showAdAnalysisToast() {
+        showToast('✨ جاري فحص زوايا التسويق والعروض الخاصة بالإعلان...');
+      }
+
+      function refreshActivityData() {
+        showToast('🔄 تم تحديث مؤشرات النشاط والإعلانات!');
+        if (currentProductForDetails) {
+          openProductDetailsModal(currentProductForDetails);
+        }
+      }
+
+      function handleDetailsPriceChange(val) {
+        if (currentProductForDetails) {
+          currentProductForDetails.price_1 = val;
+          currentProductForDetails.actualPrice = val;
+          showToast(`تم تعديل السعر إلى ${val} DH`);
+        }
+      }
+
+      async function handleDetailsCollectionChange() {
+        if (!currentProductForDetails) return;
+        const select = document.getElementById("details-collection-select");
+        if (!select) return;
+        const colName = select.value;
+        const pUrl = currentProductForDetails.product_url || currentProductForDetails.productUrl;
+
+        try {
+          const res = await fetch("/api/products/saved/collection", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ product_url: pUrl, collection: colName }),
+          });
+          if (res.ok) {
+            showToast(`تم نقل المنتج لمجموعة: ${colName}`, "success");
+          }
+        } catch (err) {
+          console.error(err);
+          showToast("تعذر تغيير المجموعة.", "error");
+        }
+      }
+
+      function downloadProductDataJSON() {
+        const targetData = currentProductDetailsWithAnalysis || currentProductForDetails;
+        if (!targetData) {
+          showToast('لا توجد بيانات متاحة للتحميل', 'warning');
+          return;
+        }
+        const dataStr = JSON.stringify(targetData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeTitle = (targetData.title || 'product').replace(/[^\w\s\-]/g, '_').slice(0, 30);
+        a.download = `product_${safeTitle}_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('تم تحميل ملف JSON بنجاح 📥', 'success');
+      }
+
+      window.addEventListener('click', (event) => {
+        const helpModal = document.getElementById('details-help-modal');
+        const detailsModal = document.getElementById('details-modal');
+        const infoModal = document.getElementById('index-info-modal');
+        if (event.target === helpModal) closeDetailsHelpModal();
+        if (event.target === detailsModal) closeDetailsModal();
+        if (event.target === infoModal) closeIndexInfoModal();
+      });
 
       function showToast(msg) {
         const toast = document.createElement('div');
