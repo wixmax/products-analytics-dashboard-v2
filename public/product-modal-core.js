@@ -51,20 +51,24 @@ function initVideoJs(scope) {
 
 function normalizeProductObject(p) {
   if (!p) return null;
+  const rawImages = p.ad_image_urls || p.product_image || p.thumbnail_url || p.image_url || p.media_url || p.images || p.image || '';
+  const rawVideos = p.ad_video_urls || p.video_url || p.video || p.videos || '';
+  const countryVal = (p.country || 'MA').toUpperCase();
+
   return {
     ...p,
     id: p.id || p.product_id,
-    productUrl: p.product_url || p.productUrl || '#',
-    actualPrice: p.price_1 || p.actualPrice || p.price || '0',
-    title: p.title || p.product_title || 'بدون عنوان',
-    country: (p.country || 'MA').toUpperCase(),
-    ad_title: p.ad_title || p.title || '',
-    ad_body: p.ad_body || p.ad_title || '',
-    ad_image_urls: p.ad_image_urls || p.thumbnail_url || p.image_url || p.media_url || '',
-    ad_video_urls: p.ad_video_urls || '',
+    productUrl: p.product_url || p.productUrl || p.url || '#',
+    actualPrice: p.price_1 || p.actualPrice || p.product_price || p.price || '0',
+    title: p.title || p.product_title || p.name || 'بدون عنوان',
+    country: countryVal,
+    ad_title: p.ad_title || p.title || p.product_title || '',
+    ad_body: p.ad_body || p.ad_title || p.description || '',
+    ad_image_urls: typeof rawImages === 'string' ? rawImages : (Array.isArray(rawImages) ? rawImages.join(';') : ''),
+    ad_video_urls: typeof rawVideos === 'string' ? rawVideos : (Array.isArray(rawVideos) ? rawVideos.join(';') : ''),
     ad_start_date: p.ad_start_date || p.created_at || '',
-    ads_count: p.ads_count || 1,
-    avg_creatives: p.avg_creatives || 1
+    ads_count: parseInt(p.ads_count) || 1,
+    avg_creatives: parseInt(p.avg_creatives) || 1
   };
 }
 
