@@ -220,12 +220,14 @@ class McpAdminController extends BaseController
         }
 
         $facebookToken = $this->getSetting('facebook_access_token', env('FACEBOOK_ACCESS_TOKEN', ''));
+        $skills        = $this->getSkillsList();
 
         return view('admin/mcp', [
             'globalEnabled'       => $globalEnabled,
             'systemPrompt'        => $systemPrompt,
             'defaultSystemPrompt' => $this->getDefaultSystemPrompt(),
             'tools'               => $allTools,
+            'skills'              => $skills,
             'users'               => $users,
             'totalUsers'          => $totalUsers,
             'usersWithTokenCount' => $usersWithTokenCount,
@@ -233,6 +235,192 @@ class McpAdminController extends BaseController
             'mcpEndpointUrl'      => site_url('api/mcp'),
             'facebookToken'       => $facebookToken,
         ]);
+    }
+
+    /**
+     * Retrieve all managed AI skills from settings (or defaults).
+     */
+    public function getSkillsList(): array
+    {
+        $raw = $this->getSetting('mcp_skills_list');
+        if (!empty($raw)) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded) && !empty($decoded)) {
+                return $decoded;
+            }
+        }
+
+        // Initialize default skills
+        $codSkillFile = realpath(APPPATH . '/../.agents/skills/cod-assistant/SKILL.md');
+        $codInstructions = ($codSkillFile && file_exists($codSkillFile)) 
+            ? file_get_contents($codSkillFile) 
+            : $this->getDefaultSystemPrompt();
+
+        $nanoSkillFile = realpath(APPPATH . '/../.agents/skills/nano-banana-pro-consistent-ads/SKILL.md');
+        $nanoInstructions = ($nanoSkillFile && file_exists($nanoSkillFile)) 
+            ? file_get_contents($nanoSkillFile) 
+            : "# Nano Banana Pro Ad & Web Color Pipeline\n";
+
+        $defaults = [
+            'cod-assistant' => [
+                'id'           => 'cod-assistant',
+                'name'         => 'cod-assistant',
+                'title'        => 'مهارة تحليل واستكشاف منتجات COD (COD Assistant)',
+                'description'  => 'استكشاف وتقييم المنتجات الرابحة وحساب الجدوى المالية لنموذج COD بالسوق المغربي وهيكلة الإعلانات.',
+                'badge'        => 'COD Strategy مهارة استراتيجية',
+                'tool_name'    => 'get_ai_skill_instructions',
+                'instructions' => $codInstructions,
+                'enabled'      => true,
+                'is_system'    => true,
+            ],
+            'nano-banana-pro-consistent-ads' => [
+                'id'           => 'nano-banana-pro-consistent-ads',
+                'name'         => 'nano-banana-pro-consistent-ads',
+                'title'        => 'مهارة Nano Banana Pro (الهوية البصرية وتوليد الإعلانات)',
+                'description'  => 'توليد برومبتات إعلانية متناسقة بدقة Image Lock، واستخراج نظام ألوان الويب (HEX/CSS Variables).',
+                'badge'        => 'Creative Skill مهارة إبداعية',
+                'tool_name'    => 'get_nano_banana_pro_instructions',
+                'instructions' => $nanoInstructions,
+                'enabled'      => true,
+                'is_system'    => true,
+            ],
+        ];
+
+        $this->setSetting('mcp_skills_list', json_encode($defaults, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        return $defaults;
+    }
+
+    /**
+     * Create or update an AI Skill.
+     */
+    public function saveSkill(): RedirectResponse
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return redirect()->to('/')->with('error', 'غير مسموح لك بالوصول.');
+        }
+
+        $skillId      = trim((string) $this->request->getPost('skill_id'));
+        $originalId   = trim((string) $this->request->getPost('original_id'));
+        $title        = trim((string) $this->request->getPost('title'));
+        $description  = trim((string) $this->request->getPost('description'));
+        $badge        = trim((string) $this->request->getPost('badge'));
+        $toolName     = trim((string) $this->request->getPost('tool_name'));
+        $instructions = trim((string) $this->request->getPost('instructions'));
+        $enabled      = $this->request->getPost('enabled') === '1' || $this->request->getPost('enabled') === 'on';
+
+        if (empty($skillId) || empty($title) || empty($instructions)) {
+            return redirect()->back()->with('error', 'يرجى ملء جميع الحقول الإلزامية (معرف المهارة، العنوان، والتعليمات).');
+        }
+
+        // Sanitize slug
+        $slug = preg_replace('/[^a-z0-9\-_]/', '', strtolower($skillId));
+        if (empty($slug)) {
+            $slug = 'custom-skill-' . time();
+        }
+
+        if (empty($toolName)) {
+            $toolName = 'get_' . str_replace('-', '_', $slug) . '_instructions';
+        } else {
+            $toolName = preg_replace('/[^a-z0-9_]/', '', strtolower($toolName));
+        }
+
+        if (empty($badge)) {
+            $badge = 'Custom Skill مهارة مخصصة';
+        }
+
+        $skills = $this->getSkillsList();
+
+        // If ID changed during edit, clean up old entry
+        if (!empty($originalId) && $originalId !== $slug && isset($skills[$originalId])) {
+            $isSys = $skills[$originalId]['is_system'] ?? false;
+            unset($skills[$originalId]);
+        } else {
+            $isSys = $skills[$slug]['is_system'] ?? false;
+        }
+
+        $skills[$slug] = [
+            'id'           => $slug,
+            'name'         => $slug,
+            'title'        => $title,
+            'description'  => $description,
+            'badge'        => $badge,
+            'tool_name'    => $toolName,
+            'instructions' => $instructions,
+            'enabled'      => $enabled,
+            'is_system'    => $isSys,
+            'updated_at'   => date('Y-m-d H:i:s'),
+        ];
+
+        $this->setSetting('mcp_skills_list', json_encode($skills, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+        // Sync file system: .agents/skills/{slug}/SKILL.md
+        try {
+            $skillDir = realpath(APPPATH . '/../') . '/.agents/skills/' . $slug;
+            if (!is_dir($skillDir)) {
+                @mkdir($skillDir, 0777, true);
+            }
+            file_put_contents($skillDir . '/SKILL.md', $instructions);
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed writing SKILL.md: ' . $e->getMessage());
+        }
+
+        // If this is the COD assistant, also sync global system prompt setting
+        if ($slug === 'cod-assistant') {
+            $this->setSetting('mcp_system_prompt', $instructions);
+        }
+
+        return redirect()->back()->with('message', "تم حفظ مهارة '{$title}' بنجاح! 🧠✨");
+    }
+
+    /**
+     * Delete an AI Skill.
+     */
+    public function deleteSkill(): RedirectResponse
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return redirect()->to('/')->with('error', 'غير مسموح لك بالوصول.');
+        }
+
+        $skillId = trim((string) $this->request->getPost('skill_id'));
+        $skills = $this->getSkillsList();
+
+        if (!isset($skills[$skillId])) {
+            return redirect()->back()->with('error', 'المهارة غير موجودة.');
+        }
+
+        if (!empty($skills[$skillId]['is_system'])) {
+            return redirect()->back()->with('error', 'لا يمكن حذف المهارات الأساسية للنظام، ولكن يمكنك تعطيلها أو تعديلها.');
+        }
+
+        $skillTitle = $skills[$skillId]['title'] ?? $skillId;
+        unset($skills[$skillId]);
+
+        $this->setSetting('mcp_skills_list', json_encode($skills, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+        return redirect()->back()->with('message', "تم حذف مهارة '{$skillTitle}' بنجاح. 🗑️");
+    }
+
+    /**
+     * Toggle skill active/disabled state.
+     */
+    public function toggleSkill(): RedirectResponse
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return redirect()->to('/')->with('error', 'غير مسموح لك بالوصول.');
+        }
+
+        $skillId = trim((string) $this->request->getPost('skill_id'));
+        $status  = $this->request->getPost('status') === '1';
+
+        $skills = $this->getSkillsList();
+        if (isset($skills[$skillId])) {
+            $skills[$skillId]['enabled'] = $status;
+            $this->setSetting('mcp_skills_list', json_encode($skills, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            $msg = $status ? "تم تفعيل مهارة '{$skills[$skillId]['title']}' بنجاح! ✅" : "تم تعطيل مهارة '{$skills[$skillId]['title']}' 🚫";
+            return redirect()->back()->with('message', $msg);
+        }
+
+        return redirect()->back()->with('error', 'المهارة غير موجودة.');
     }
 
     /**

@@ -235,43 +235,45 @@ class McpController extends ResourceController
                 ];
 
             case 'prompts/list':
+                $skills = $this->getDynamicSkills();
+                $prompts = [];
+                foreach ($skills as $sId => $skill) {
+                    if (empty($skill['enabled'])) continue;
+                    $prompts[] = [
+                        'name'        => str_replace('-', '_', $sId),
+                        'description' => $skill['description'] ?? $skill['title'],
+                        'arguments'   => [
+                            [
+                                'name'        => 'product_name',
+                                'description' => 'Optional name or title of the product',
+                                'required'    => false
+                            ],
+                            [
+                                'name'        => 'product_image_url',
+                                'description' => 'Optional product image reference URL',
+                                'required'    => false
+                            ],
+                            [
+                                'name'        => 'language',
+                                'description' => 'Target language (e.g. Arabic, Moroccan Darija, French)',
+                                'required'    => false
+                            ]
+                        ]
+                    ];
+                }
+
+                // Default aliases
+                $prompts[] = [
+                    'name'        => 'ecommerce_analytics_assistant',
+                    'description' => 'System prompt and skill instructions for e-commerce COD product analysis and winning ads discovery.',
+                    'arguments'   => []
+                ];
+
                 return [
                     'jsonrpc' => '2.0',
                     'id'      => $jsonrpcId,
                     'result'  => [
-                        'prompts' => [
-                            [
-                                'name'        => 'ecommerce_analytics_assistant',
-                                'description' => 'System prompt and skill instructions for e-commerce COD product analysis and winning ads discovery.',
-                                'arguments'   => []
-                            ],
-                            [
-                                'name'        => 'cod_assistant',
-                                'description' => 'Full COD e-commerce assistant pipeline covering discovery, evaluation, unit economics, and ad strategy.',
-                                'arguments'   => []
-                            ],
-                            [
-                                'name'        => 'nano_banana_pro_consistent_ads',
-                                'description' => 'Nano Banana Pro Image-to-Image Ad Generator with Web Color System for high-converting ads and landing page design.',
-                                'arguments'   => [
-                                    [
-                                        'name'        => 'product_name',
-                                        'description' => 'Name or title of the product',
-                                        'required'    => true
-                                    ],
-                                    [
-                                        'name'        => 'product_image_url',
-                                        'description' => 'Image URL or reference asset for Nano Banana Pro image-to-image lock',
-                                        'required'    => false
-                                    ],
-                                    [
-                                        'name'        => 'language',
-                                        'description' => 'Language for typography and copywriting (e.g. Arabic, Moroccan Darija, French)',
-                                        'required'    => false
-                                    ]
-                                ]
-                            ]
-                        ]
+                        'prompts' => $prompts
                     ]
                 ];
 
@@ -279,23 +281,36 @@ class McpController extends ResourceController
                 $promptName = $params['name'] ?? 'ecommerce_analytics_assistant';
                 $promptArgs = $params['arguments'] ?? [];
 
-                if ($promptName === 'nano_banana_pro_consistent_ads') {
-                    return [
-                        'jsonrpc' => '2.0',
-                        'id'      => $jsonrpcId,
-                        'result'  => [
-                            'description' => 'Nano Banana Pro Image-to-Image Ad Generator with Web Color System.',
-                            'messages'    => [
-                                [
-                                    'role'    => 'user',
-                                    'content' => [
-                                        'type' => 'text',
-                                        'text' => $this->getNanoBananaSkillPrompt($promptArgs)
+                $skills = $this->getDynamicSkills();
+                foreach ($skills as $sId => $skill) {
+                    $slug = str_replace('-', '_', $sId);
+                    if ($promptName === $slug || $promptName === $sId) {
+                        $instructions = $skill['instructions'] ?? '';
+                        if ($sId === 'nano-banana-pro-consistent-ads') {
+                            $instructions = $this->getNanoBananaSkillPrompt($promptArgs);
+                        } else {
+                            if (!empty($promptArgs['product_name'])) {
+                                $instructions = "# Target Product: {$promptArgs['product_name']}\n\n" . $instructions;
+                            }
+                        }
+
+                        return [
+                            'jsonrpc' => '2.0',
+                            'id'      => $jsonrpcId,
+                            'result'  => [
+                                'description' => $skill['title'] ?? 'Skill prompt',
+                                'messages'    => [
+                                    [
+                                        'role'    => 'user',
+                                        'content' => [
+                                            'type' => 'text',
+                                            'text' => $instructions
+                                        ]
                                     ]
                                 ]
                             ]
-                        ]
-                    ];
+                        ];
+                    }
                 }
 
                 return [
@@ -406,6 +421,43 @@ class McpController extends ResourceController
                     ]
                 ];
         }
+    }
+
+    /**
+     * Retrieve all managed AI skills from database settings
+     */
+    private function getDynamicSkills(): array
+    {
+        $db = \Config\Database::connect();
+        $row = $db->table('settings')->where('key', 'mcp_skills_list')->get()->getRowArray();
+        if ($row && !empty($row['value'])) {
+            $decoded = json_decode($row['value'], true);
+            if (is_array($decoded) && !empty($decoded)) {
+                return $decoded;
+            }
+        }
+
+        // Fallback default skills
+        return [
+            'cod-assistant' => [
+                'id'           => 'cod-assistant',
+                'title'        => 'مهارة تحليل واستكشاف منتجات COD (COD Assistant)',
+                'description'  => 'System prompt and skill instructions for e-commerce COD product analysis and winning ads discovery.',
+                'badge'        => 'COD Strategy',
+                'tool_name'    => 'get_ai_skill_instructions',
+                'instructions' => $this->getSystemPrompt(),
+                'enabled'      => true,
+            ],
+            'nano-banana-pro-consistent-ads' => [
+                'id'           => 'nano-banana-pro-consistent-ads',
+                'title'        => 'مهارة Nano Banana Pro (الهوية البصرية وتوليد الإعلانات)',
+                'description'  => 'Nano Banana Pro Image-to-Image Ad Generator with Web Color System.',
+                'badge'        => 'Creative Skill',
+                'tool_name'    => 'get_nano_banana_pro_instructions',
+                'instructions' => $this->getNanoBananaSkillPrompt(),
+                'enabled'      => true,
+            ],
+        ];
     }
 
     /**
@@ -539,16 +591,22 @@ class McpController extends ResourceController
             }
         }
 
-        $allTools = [
-            [
-                'name'        => 'get_nano_banana_pro_instructions',
-                'description' => 'Retrieve official Nano Banana Pro Image-to-Image Ad Generator & Web Color System skill rules, structured prompt templates, and CSS variables.',
+        $skills = $this->getDynamicSkills();
+        $skillTools = [];
+        foreach ($skills as $sId => $skill) {
+            if (empty($skill['enabled'])) continue;
+            $toolName = $skill['tool_name'] ?? ('get_' . str_replace('-', '_', $sId) . '_instructions');
+            if (in_array($toolName, $disabledTools, true)) continue;
+
+            $skillTools[] = [
+                'name'        => $toolName,
+                'description' => $skill['description'] ?? ('Retrieve skill instructions for ' . ($skill['title'] ?? $sId)),
                 'inputSchema' => [
                     'type'                 => 'object',
                     'properties'           => [
                         'product_name'      => [
                             'type'        => 'string',
-                            'description' => 'Optional product name to customize the localized prompt templates.'
+                            'description' => 'Optional product name to customize prompt templates.'
                         ],
                         'product_image_url' => [
                             'type'        => 'string',
@@ -556,27 +614,15 @@ class McpController extends ResourceController
                         ],
                         'language'          => [
                             'type'        => 'string',
-                            'description' => 'Target language for in-image typography and copywriting (e.g. Arabic, Moroccan Darija, French).'
+                            'description' => 'Target language for copywriting and typography (e.g. Arabic, Moroccan Darija, French).'
                         ]
                     ],
                     'additionalProperties' => false
                 ]
-            ],
-            [
-                'name'        => 'get_ai_skill_instructions',
-                'description' => 'Retrieve official system skill rules for 2-Stage E-Commerce Product Evaluation, Moroccan COD Pricing, Ad Specs, and UGC Creatives.',
-                'inputSchema' => [
-                    'type'                 => 'object',
-                    'properties'           => [
-                        'category' => [
-                            'type'        => 'string',
-                            'description' => 'Optional filter for specific instructions category (all, pricing, evaluation, ads)',
-                            'enum'        => ['all', 'pricing', 'evaluation', 'ads']
-                        ]
-                    ],
-                    'additionalProperties' => false
-                ]
-            ],
+            ];
+        }
+
+        $allTools = array_merge($skillTools, [
             [
                 'name'        => 'get_saved_products',
                 'description' => 'Retrieve products saved specifically by the authenticated user/tenant, with options for collection, country, search, and sorting.',
@@ -815,7 +861,7 @@ class McpController extends ResourceController
                     'additionalProperties' => false
                 ]
             ]
-        ];
+        ]);
 
         return array_values(array_filter($allTools, function($t) use ($disabledTools) {
             return !in_array($t['name'], $disabledTools, true);
@@ -836,22 +882,28 @@ class McpController extends ResourceController
         $snapshotModel = new SnapshotModel();
         $productModel  = new ProductModel();
 
-        if ($name === 'get_nano_banana_pro_instructions') {
-            return [
-                'status'             => 'success',
-                'skill_name'         => 'nano-banana-pro-consistent-ads',
-                'title'              => 'Nano Banana Pro Image-to-Image Ad Generator with Web Color System',
-                'version'            => '3.2.0',
-                'skill_instructions' => $this->getNanoBananaSkillPrompt($args)
-            ];
-        }
+        $skills = $this->getDynamicSkills();
+        foreach ($skills as $sId => $skill) {
+            $toolName = $skill['tool_name'] ?? ('get_' . str_replace('-', '_', $sId) . '_instructions');
+            if ($name === $toolName || $name === ('get_' . str_replace('-', '_', $sId) . '_instructions')) {
+                if ($sId === 'nano-banana-pro-consistent-ads') {
+                    $instructions = $this->getNanoBananaSkillPrompt($args);
+                } else {
+                    $instructions = $skill['instructions'] ?? '';
+                    if (!empty($args['product_name'])) {
+                        $instructions = "# Target Product: {$args['product_name']}\n\n" . $instructions;
+                    }
+                }
 
-        if ($name === 'get_ai_skill_instructions') {
-            return [
-                'status'             => 'success',
-                'skill_name'         => 'Morocco COD & 2-Stage Winning Product Research Skill',
-                'skill_instructions' => $this->getSystemPrompt()
-            ];
+                return [
+                    'status'             => 'success',
+                    'skill_id'           => $sId,
+                    'skill_name'         => $skill['title'] ?? $sId,
+                    'title'              => $skill['title'] ?? $sId,
+                    'badge'              => $skill['badge'] ?? 'AI Skill',
+                    'skill_instructions' => $instructions
+                ];
+            }
         }
 
         if ($name === 'get_saved_products') {

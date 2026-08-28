@@ -9,37 +9,35 @@ require $paths->systemDirectory . '/Boot.php';
 
 CodeIgniter\Boot::bootSpark($paths);
 
-$controller = new \App\Controllers\McpController();
-$reflection = new \ReflectionClass($controller);
+$adminController = new \App\Controllers\Admin\McpAdminController();
+$mcpController   = new \App\Controllers\McpController();
 
-// 1. Check tools/list
+echo "--- 1. Testing McpAdminController::getSkillsList ---\n";
+$skills = $adminController->getSkillsList();
+echo "Found " . count($skills) . " skills: " . implode(', ', array_keys($skills)) . "\n";
+assert(isset($skills['cod-assistant']), 'cod-assistant missing');
+assert(isset($skills['nano-banana-pro-consistent-ads']), 'nano-banana-pro-consistent-ads missing');
+
+echo "--- 2. Testing MCP Tools Manifest Reflection ---\n";
+$reflection = new \ReflectionClass($mcpController);
 $manifestMethod = $reflection->getMethod('getToolsManifest');
 $manifestMethod->setAccessible(true);
-$tools = $manifestMethod->invoke($controller);
+$tools = $manifestMethod->invoke($mcpController);
 $toolNames = array_column($tools, 'name');
-echo "AVAILABLE MCP TOOLS: " . implode(', ', $toolNames) . "\n";
+echo "Registered MCP Tools: " . implode(', ', $toolNames) . "\n";
+assert(in_array('get_nano_banana_pro_instructions', $toolNames, true), 'get_nano_banana_pro_instructions missing');
+assert(in_array('get_ai_skill_instructions', $toolNames, true), 'get_ai_skill_instructions missing');
 
-// 2. Check get_ai_skill_instructions
-$callToolMethod = $reflection->getMethod('executeTool');
-$callToolMethod->setAccessible(true);
+echo "--- 3. Testing Dynamic Tool Call Execution ---\n";
+$execMethod = $reflection->getMethod('executeTool');
+$execMethod->setAccessible(true);
 
-$res1 = $callToolMethod->invoke($controller, 'get_ai_skill_instructions', []);
-echo "TOOL 1 (get_ai_skill_instructions) CONTAINS HANDOVER LINE: " 
-    . (strpos($res1['skill_instructions'] ?? '', 'nano-banana-pro-consistent-ads') !== false ? 'YES' : 'NO') 
-    . "\n";
+$resNano = $execMethod->invoke($mcpController, 'get_nano_banana_pro_instructions', ['product_name' => 'Smart Watch Pro']);
+echo "Nano Banana Call Status: " . ($resNano['status'] ?? 'ERROR') . " | Title: " . ($resNano['title'] ?? 'ERROR') . "\n";
+assert($resNano['status'] === 'success');
 
-// 3. Check get_nano_banana_pro_instructions
-$res2 = $callToolMethod->invoke($controller, 'get_nano_banana_pro_instructions', [
-    'product_name' => 'Portable Manicure Kit',
-    'product_image_url' => 'https://example.com/item.jpg',
-    'language' => 'Arabic'
-]);
-echo "TOOL 2 (get_nano_banana_pro_instructions) STATUS: " . ($res2['status'] ?? 'FAIL') . "\n";
-echo "TOOL 2 SKILL NAME: " . ($res2['skill_name'] ?? 'FAIL') . "\n";
-echo "TOOL 2 CONTAINS COLOR SYSTEM: " 
-    . (strpos($res2['skill_instructions'] ?? '', 'Web & Brand Color System') !== false ? 'YES' : 'NO') 
-    . "\n";
+$resCod = $execMethod->invoke($mcpController, 'get_ai_skill_instructions', []);
+echo "COD Assistant Call Status: " . ($resCod['status'] ?? 'ERROR') . " | Contains Handover: " . (strpos($resCod['skill_instructions'], 'nano-banana-pro-consistent-ads') !== false ? 'YES' : 'NO') . "\n";
+assert($resCod['status'] === 'success');
 
-
-
-
+echo "\n ALL SKILL MANAGEMENT TESTS PASSED SUCCESSFULLY! \n";

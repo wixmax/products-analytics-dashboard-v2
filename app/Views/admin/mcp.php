@@ -245,6 +245,182 @@
       input:checked + .slider:before {
         transform: translateX(20px);
       }
+
+      /* Skills Section & Modal */
+      .skills-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .skills-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+        gap: 1.25rem;
+      }
+      .skill-card {
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        transition: var(--transition-all);
+        position: relative;
+      }
+      .skill-card.disabled {
+        opacity: 0.65;
+        filter: grayscale(0.3);
+      }
+      .skill-card:hover {
+        border-color: var(--color-primary);
+        box-shadow: var(--shadow-sm);
+      }
+      .skill-prompt-preview {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        padding: 8px 12px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+        max-height: 110px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        line-height: 1.4;
+      }
+      .skill-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 8px;
+        border-top: 1px solid var(--border-color);
+        gap: 8px;
+      }
+
+      /* Modal Styling */
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        padding: 1rem;
+      }
+      .modal-backdrop.active {
+        display: flex;
+      }
+      .modal-dialog {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        max-width: 800px;
+        width: 100%;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
+        animation: modalFadeIn 0.2s ease-out;
+      }
+      @keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .modal-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: var(--color-text-main);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .modal-close {
+        background: transparent;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        line-height: 1;
+        padding: 0 4px;
+        border-radius: 4px;
+        transition: var(--transition-all);
+      }
+      .modal-close:hover {
+        color: var(--color-error);
+      }
+      .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.2rem;
+      }
+      .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        background: var(--bg-input);
+      }
+      .form-row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+      @media (max-width: 640px) {
+        .form-row-2 {
+          grid-template-columns: 1fr;
+        }
+        .skills-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .form-group label {
+        display: block;
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: var(--color-text-main);
+        margin-bottom: 5px;
+      }
+      .form-group input,
+      .form-group textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-color);
+        background: var(--bg-input);
+        color: var(--color-text-main);
+        font-family: inherit;
+        font-size: 0.9rem;
+      }
+      .form-group textarea {
+        font-family: 'JetBrains Mono', 'Cairo', monospace;
+        line-height: 1.5;
+        resize: vertical;
+      }
+      .form-group input:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+      }
     </style>
   </head>
   <body>
@@ -383,38 +559,97 @@
             </div>
           </div>
 
-          <!-- Section 2: MCP System Prompt & Skill Instructions -->
+          <!-- Section 2: AI Skills & Prompts Management -->
           <div class="admin-card">
-            <div class="admin-card-title">
-              📜 تعليمات وتوجيهات الذكاء الاصطناعي (MCP System Prompt & Skill)
+            <div class="skills-header-row">
+              <div>
+                <div class="admin-card-title" style="margin-bottom: 4px; border-bottom: none; padding-bottom: 0;">
+                  🧠 مهارات وتوجيهات الذكاء الاصطناعي (AI Skills & Prompts Library)
+                </div>
+                <p class="admin-card-desc" style="margin-bottom: 0;">
+                  إدارة المهارات والـ Prompts التوجيهية للذكاء الاصطناعي، مع إمكانية إضافة مهارات مخصصة، تعديلها، وربطها بأدوات MCP تلقائياً.
+                </p>
+              </div>
+
+              <button type="button" class="btn btn-primary" onclick="openAddSkillModal()" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 6px 14px;">
+                <span>➕ إضافة مهارة جديدة</span>
+              </button>
             </div>
-            <p class="admin-card-desc">
-              تحديد التوجيهات العامة ومهارات النظام التي يتم إرسالها لتطبيقات الذكاء الاصطناعي (مثل Perplexity أو Claude) عبر استعلامات <code>prompts/list</code> و <code>prompts/get</code> لتحديد طريقة التفكير وتنسيق الإجابات والتسلسل الصحيح لاستدعاء الأدوات.
-            </p>
 
-            <form action="<?= base_url('admin/mcp/update-prompt') ?>" method="POST">
-              <?= csrf_field() ?>
-              <div style="margin-bottom: 1rem;">
-                <label for="system_prompt" style="font-weight: 700; font-size: 0.9rem; color: var(--color-text-main); display: block; margin-bottom: 6px;">
-                  نص التوجيهات ومهارات الذكاء الاصطناعي (MCP Skill Instructions Prompt):
-                </label>
-                <textarea
-                  name="system_prompt"
-                  id="system_prompt"
-                  rows="7"
-                  style="width: 100%; font-family: 'Cairo', sans-serif; font-size: 0.9rem; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--color-text-main); line-height: 1.6; resize: vertical;"
-                ><?= esc($systemPrompt) ?></textarea>
-              </div>
+            <div class="skills-grid">
+              <?php foreach ($skills as $sId => $skill): ?>
+                <?php 
+                  $skillToolName = $skill['tool_name'] ?? ('get_' . str_replace('-', '_', $sId) . '_instructions');
+                  $isEnabled = !empty($skill['enabled']);
+                ?>
+                <div class="skill-card <?= $isEnabled ? '' : 'disabled' ?>" id="card-skill-<?= esc($sId) ?>">
+                  <div class="tool-header">
+                    <div>
+                      <div class="tool-name">
+                        🧠 <?= esc($sId) ?>
+                      </div>
+                      <span class="tool-badge"><?= esc($skill['badge'] ?? 'AI Skill') ?></span>
+                    </div>
 
-              <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
-                <button type="submit" name="reset" value="1" class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 12px;" onclick="return confirm('هل أنت تأكد من استعادة التوجيه الافتراضي؟');">
-                  🔄 استعادة التوجيه الافتراضي
-                </button>
-                <button type="submit" class="btn btn-primary" style="font-size: 0.85rem; padding: 6px 16px;">
-                  💾 حفظ التوجيه والمهارات
-                </button>
-              </div>
-            </form>
+                    <form action="<?= base_url('admin/mcp/toggle-skill') ?>" method="POST" id="form-toggle-skill-<?= esc($sId) ?>">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="skill_id" value="<?= esc($sId) ?>" />
+                      <input type="hidden" name="status" value="<?= $isEnabled ? '0' : '1' ?>" />
+                      <label class="switch" title="<?= $isEnabled ? 'تعطيل المهارة' : 'تفعيل المهارة' ?>">
+                        <input type="checkbox" <?= $isEnabled ? 'checked' : '' ?> onchange="document.getElementById('form-toggle-skill-<?= esc($sId) ?>').submit();" />
+                        <span class="slider"></span>
+                      </label>
+                    </form>
+                  </div>
+
+                  <div style="font-weight: 700; font-size: 0.95rem; color: var(--color-text-main);">
+                    <?= esc($skill['title']) ?>
+                  </div>
+
+                  <div class="tool-desc">
+                    <?= esc($skill['description']) ?>
+                  </div>
+
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--color-primary); background: rgba(99, 102, 241, 0.08); padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                    <span>⚡ أداة MCP:</span>
+                    <code><?= esc($skillToolName) ?></code>
+                  </div>
+
+                  <div style="margin-top: 4px;">
+                    <div style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-muted); margin-bottom: 4px;">
+                      📄 مقتطف من قواعد وتوجيهات المهارة (Prompt Preview):
+                    </div>
+                    <div class="skill-prompt-preview"><?= esc(mb_substr($skill['instructions'] ?? '', 0, 300)) ?><?php if (mb_strlen($skill['instructions'] ?? '') > 300) echo '...'; ?></div>
+                  </div>
+
+                  <div class="skill-card-footer">
+                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">
+                      <span>الحالة: <strong><?= $isEnabled ? '🟢 مفعلة' : '🔴 معطلة' ?></strong></span>
+                    </div>
+
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                      <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copySkillInstructions(<?= esc(json_encode($skill['instructions'] ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE), 'attr') ?>)">
+                        📋 نسخ
+                      </button>
+
+                      <button type="button" class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem; background: var(--color-primary);" onclick='openEditSkillModal(<?= json_encode($skill, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>)'>
+                        ✏️ تعديل
+                      </button>
+
+                      <?php if (empty($skill['is_system'])): ?>
+                        <form action="<?= base_url('admin/mcp/delete-skill') ?>" method="POST" onsubmit="return confirm('هل أنت متأكد من حذف هذه المهارة المخصصة نهائياً؟');" style="margin: 0;">
+                          <?= csrf_field() ?>
+                          <input type="hidden" name="skill_id" value="<?= esc($sId) ?>" />
+                          <button type="submit" class="btn btn-error" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(239, 68, 68, 0.1); color: var(--color-error); border: 1px solid rgba(239, 68, 68, 0.2);" title="حذف المهارة">
+                            🗑️
+                          </button>
+                        </form>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
           </div>
 
           <!-- Section 2.5: Facebook Graph API Access Token Configuration -->
@@ -538,10 +773,155 @@
       </main>
     </div>
 
+    <!-- Modal: Add / Edit AI Skill -->
+    <div class="modal-backdrop" id="skillModal" onclick="handleModalBackdropClick(event)">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div class="modal-title" id="modalSkillHeader">
+            <span>🧠</span>
+            <span id="modalSkillTitleText">إضافة مهارة جديدة للذكاء الاصطناعي</span>
+          </div>
+          <button type="button" class="modal-close" onclick="closeSkillModal()">&times;</button>
+        </div>
+
+        <form action="<?= base_url('admin/mcp/save-skill') ?>" method="POST" id="skillForm">
+          <?= csrf_field() ?>
+          <input type="hidden" name="original_id" id="modal_original_id" value="" />
+
+          <div class="modal-body">
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="modal_skill_id">معرف المهارة (Slug / Identifier) <span style="color:var(--color-error);">*</span></label>
+                <input type="text" name="skill_id" id="modal_skill_id" placeholder="مثال: nano-banana-pro-consistent-ads" required />
+                <span style="font-size:0.72rem; color:var(--color-text-muted);">أحرف إنجليزية صغيرة وشرطات فقط</span>
+              </div>
+
+              <div class="form-group">
+                <label for="modal_tool_name">اسم الأداة في الـ MCP (Tool Name)</label>
+                <input type="text" name="tool_name" id="modal_tool_name" placeholder="مثال: get_nano_banana_pro_instructions" />
+                <span style="font-size:0.72rem; color:var(--color-text-muted);">اسم الدالة المستدعاة من قبل الذكاء الاصطناعي</span>
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="modal_title">عنوان المهارة (Title) <span style="color:var(--color-error);">*</span></label>
+                <input type="text" name="title" id="modal_title" placeholder="مثال: مهارة Nano Banana Pro لتوليد الإعلانات" required />
+              </div>
+
+              <div class="form-group">
+                <label for="modal_badge">الشارة (Badge Tag)</label>
+                <input type="text" name="badge" id="modal_badge" placeholder="مثال: Creative Skill مهارة إبداعية" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="modal_description">الوصف المختصر (Description)</label>
+              <input type="text" name="description" id="modal_description" placeholder="وصف موجز للمهارة يظهر في لوحة التحكم وقائمة أدوات MCP" />
+            </div>
+
+            <div class="form-group">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <label for="modal_instructions" style="margin-bottom:0;">نص التوجيهات وقواعد المهارة (Skill Prompt Instructions - Markdown) <span style="color:var(--color-error);">*</span></label>
+                <span style="font-size:0.72rem; color:var(--color-primary);">يدعم Markdown بالكامل</span>
+              </div>
+              <textarea name="instructions" id="modal_instructions" rows="12" placeholder="اكتب هنا القواعد، المراحل، ونماذج البرومبتات التوجيهية للذكاء الاصطناعي..." required></textarea>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg-input); border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+              <label class="switch">
+                <input type="checkbox" name="enabled" id="modal_enabled" value="1" checked />
+                <span class="slider"></span>
+              </label>
+              <label for="modal_enabled" style="font-weight:700; font-size:0.88rem; cursor:pointer; margin:0;">
+                تفعيل هذه المهارة وإتاحتها في سيرفر الـ MCP
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeSkillModal()">
+              إلغاء
+            </button>
+            <button type="submit" class="btn btn-primary" style="padding: 8px 20px;">
+              💾 حفظ المهارة
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <script>
       document.addEventListener("DOMContentLoaded", async () => {
         await setupTheme();
       });
+
+      // Modal Controls
+      function openAddSkillModal() {
+        document.getElementById('modalSkillHeader').innerHTML = '<span>➕</span> <span>إضافة مهارة جديدة للذكاء الاصطناعي</span>';
+        document.getElementById('modal_original_id').value = '';
+        document.getElementById('modal_skill_id').value = '';
+        document.getElementById('modal_skill_id').readOnly = false;
+        document.getElementById('modal_tool_name').value = '';
+        document.getElementById('modal_title').value = '';
+        document.getElementById('modal_badge').value = 'Custom Skill مهارة مخصصة';
+        document.getElementById('modal_description').value = '';
+        document.getElementById('modal_instructions').value = '';
+        document.getElementById('modal_enabled').checked = true;
+
+        document.getElementById('skillModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function openEditSkillModal(skill) {
+        if (!skill) return;
+        document.getElementById('modalSkillHeader').innerHTML = '<span>✏️</span> <span>تعديل المهارة: ' + (skill.title || skill.id) + '</span>';
+        document.getElementById('modal_original_id').value = skill.id || '';
+        document.getElementById('modal_skill_id').value = skill.id || '';
+        
+        // If system skill, slug shouldn't be casually broken
+        if (skill.is_system) {
+          document.getElementById('modal_skill_id').readOnly = true;
+        } else {
+          document.getElementById('modal_skill_id').readOnly = false;
+        }
+
+        document.getElementById('modal_tool_name').value = skill.tool_name || ('get_' + (skill.id || '').replace(/-/g, '_') + '_instructions');
+        document.getElementById('modal_title').value = skill.title || '';
+        document.getElementById('modal_badge').value = skill.badge || '';
+        document.getElementById('modal_description').value = skill.description || '';
+        document.getElementById('modal_instructions').value = skill.instructions || '';
+        document.getElementById('modal_enabled').checked = Boolean(skill.enabled);
+
+        document.getElementById('skillModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSkillModal() {
+        document.getElementById('skillModal').classList.remove('active');
+        document.body.style.overflow = '';
+      }
+
+      function handleModalBackdropClick(e) {
+        if (e.target.id === 'skillModal') {
+          closeSkillModal();
+        }
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeSkillModal();
+        }
+      });
+
+      function copySkillInstructions(text) {
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+          alert('تم نسخ نص التوجيهات والقواعد بنجاح! 📋✨');
+        }).catch(err => {
+          console.error('Failed to copy: ', err);
+        });
+      }
 
       async function setupTheme() {
         const themeBtn = document.getElementById("theme-toggle-btn");

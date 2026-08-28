@@ -44,6 +44,9 @@ $routes->group('admin', ['filter' => 'group:superadmin,admin'], function($routes
     $routes->post('mcp/revoke-token/(:num)', '\App\Controllers\Admin\McpAdminController::revokeUserToken/$1');
     $routes->post('mcp/update-prompt', '\App\Controllers\Admin\McpAdminController::updateSystemPrompt');
     $routes->post('mcp/save-fb-token', '\App\Controllers\Admin\McpAdminController::saveFacebookToken');
+    $routes->post('mcp/save-skill', '\App\Controllers\Admin\McpAdminController::saveSkill');
+    $routes->post('mcp/delete-skill', '\App\Controllers\Admin\McpAdminController::deleteSkill');
+    $routes->post('mcp/toggle-skill', '\App\Controllers\Admin\McpAdminController::toggleSkill');
 });
 $routes->get('admin/users/stop-impersonating', '\App\Controllers\Admin\UsersController::stopImpersonating');
 
