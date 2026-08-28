@@ -571,9 +571,18 @@
                 </p>
               </div>
 
-              <button type="button" class="btn btn-primary" onclick="openAddSkillModal()" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 6px 14px;">
-                <span>➕ إضافة مهارة جديدة</span>
-              </button>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <form action="<?= base_url('admin/mcp/reset-skills') ?>" method="POST" onsubmit="return confirm('هل أنت متأكد من استعادة وتحديث كافة مهارات وتوجيهات النظام الافتراضية؟');" style="margin: 0;">
+                  <?= csrf_field() ?>
+                  <button type="submit" class="btn btn-secondary" style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; padding: 6px 12px;">
+                    <span>🔄 استعادة التوجيهات الافتراضية</span>
+                  </button>
+                </form>
+
+                <button type="button" class="btn btn-primary" onclick="openAddSkillModal()" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 6px 14px;">
+                  <span>➕ إضافة مهارة جديدة</span>
+                </button>
+              </div>
             </div>
 
             <div class="skills-grid">
@@ -821,9 +830,14 @@
             </div>
 
             <div class="form-group">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; flex-wrap:wrap; gap:6px;">
                 <label for="modal_instructions" style="margin-bottom:0;">نص التوجيهات وقواعد المهارة (Skill Prompt Instructions - Markdown) <span style="color:var(--color-error);">*</span></label>
-                <span style="font-size:0.72rem; color:var(--color-primary);">يدعم Markdown بالكامل</span>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:0.72rem;" onclick="loadDefaultPromptForSkill()" id="btnLoadDefaultPrompt">
+                    🔄 جلب النص الافتراضي للمهارة
+                  </button>
+                  <span style="font-size:0.72rem; color:var(--color-primary);">يدعم Markdown بالكامل</span>
+                </div>
               </div>
               <textarea name="instructions" id="modal_instructions" rows="12" placeholder="اكتب هنا القواعد، المراحل، ونماذج البرومبتات التوجيهية للذكاء الاصطناعي..." required></textarea>
             </div>
@@ -852,9 +866,25 @@
     </div>
 
     <script>
+      window.DEFAULT_COD_PROMPT = <?= json_encode($defaultSystemPrompt, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+      window.DEFAULT_NANO_PROMPT = <?= json_encode($defaultNanoPrompt, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+
       document.addEventListener("DOMContentLoaded", async () => {
         await setupTheme();
       });
+
+      function loadDefaultPromptForSkill() {
+        const skillId = document.getElementById('modal_skill_id').value.trim();
+        if (skillId === 'nano-banana-pro-consistent-ads') {
+          if (confirm('هل تريد استبدال النص الحالي بنص مهارة Nano Banana Pro الافتراضي؟')) {
+            document.getElementById('modal_instructions').value = window.DEFAULT_NANO_PROMPT;
+          }
+        } else {
+          if (confirm('هل تريد استبدال النص الحالي بنص مهارة COD Assistant (المراحل الثلاث) الافتراضي؟')) {
+            document.getElementById('modal_instructions').value = window.DEFAULT_COD_PROMPT;
+          }
+        }
+      }
 
       // Modal Controls
       function openAddSkillModal() {

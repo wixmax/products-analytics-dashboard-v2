@@ -254,13 +254,15 @@ class McpAdminController extends BaseController
             }
         }
 
-        $facebookToken = $this->getSetting('facebook_access_token', env('FACEBOOK_ACCESS_TOKEN', ''));
-        $skills        = $this->getSkillsList();
+        $facebookToken     = $this->getSetting('facebook_access_token', env('FACEBOOK_ACCESS_TOKEN', ''));
+        $skills            = $this->getSkillsList();
+        $defaultNanoPrompt = $this->getDefaultNanoPrompt();
 
         return view('admin/mcp', [
             'globalEnabled'       => $globalEnabled,
             'systemPrompt'        => $systemPrompt,
             'defaultSystemPrompt' => $this->getDefaultSystemPrompt(),
+            'defaultNanoPrompt'   => $defaultNanoPrompt,
             'tools'               => $allTools,
             'skills'              => $skills,
             'users'               => $users,
@@ -270,6 +272,128 @@ class McpAdminController extends BaseController
             'mcpEndpointUrl'      => site_url('api/mcp'),
             'facebookToken'       => $facebookToken,
         ]);
+    }
+
+    /**
+     * Get default Nano Banana Pro Skill instructions Markdown
+     */
+    public function getDefaultNanoPrompt(): string
+    {
+        $nanoSkillFile = realpath(APPPATH . '/../.agents/skills/nano-banana-pro-consistent-ads/SKILL.md');
+        if ($nanoSkillFile && file_exists($nanoSkillFile)) {
+            return file_get_contents($nanoSkillFile);
+        }
+
+        return <<<'SKILL'
+---
+name: nano-banana-pro-consistent-ads
+title: Nano Banana Pro Image-to-Image Ad Generator with Web Color System
+version: 3.2.0
+description: Generates high-converting visual prompts, strictly locked products, and explicit CSS/HEX color systems for web integration.
+---
+
+# Nano Banana Pro Ad & Web Color Pipeline
+
+## Core Instructions for Nano Banana Pro
+When processing input image `{{ask_user_product_image}}`:
+1. **Color Extraction & Web System Design:** 
+   - Analyze the product tones and generate a complete **Web Design Color System** with exact HEX values to be used both inside the ad imagery and on the web landing page (CSS/Tailwind).
+2. **Zero-Modification Rule:** Treat the uploaded product as an immutable asset. Maintain exact shapes, materials, tool alignments, colors, and branding badges.
+3. **Context-Only Editing:** Only modify the surrounding environment, lighting reflections, human models, and graphic overlays.
+4. **Typography Engine:** Render all text strings strictly in `{{LANGUAGE}}` with crisp vector-like edges, high contrast, and correct reading alignment. Do NOT translate to English under any circumstances. Never render the technical tag "RTL" as visible text.
+
+---
+
+## 1. Global Brand & Web Color Palette Output
+
+Before generating the sections, the model must output this structured color block:
+
+```markdown
+## 🎨 Web & Brand Color System (CSS Variables)
+
+| Role | Color Name | HEX Code | Usage on Web / Landing Page |
+| :--- | :--- | :--- | :--- |
+| **Primary** | Terracotta Deep | `#A45A3E` | Main Headlines, Primary CTA Buttons, Key Badges |
+| **Secondary** | Muted Clay | `#D28C70` | Subheadings, Icons, Secondary Highlights |
+| **Accent / Action** | Gold / Warm Amber | `#E5A842` | Star Ratings, Limited-time Offer Tags, Badges |
+| **Background Light** | Warm Cream / Beige | `#F7F2EB` | Main Page Sections, Cards Background |
+| **Background Dark** | Espresso / Deep Slate | `#2B1D18` | Dark Mode Sections, High-contrast Trust Banners |
+| **Surface / Card** | Pure Neutral White | `#FFFFFF` | Review Cards, Feature Containers, Form Fields |
+| **Text Dark** | Deep Charcoal | `#1F1A18` | Main Body Text, Paragraphs, FAQ Answers |
+| **Text Light** | Off-White | `#FDFBF7` | Text over Primary / Dark CTA buttons |
+```
+
+```css
+/* CSS Custom Properties for Direct-Response Landing Page */
+:root {
+  --color-primary: #A45A3E;
+  --color-secondary: #D28C70;
+  --color-accent: #E5A842;
+  --color-bg-main: #F7F2EB;
+  --color-surface: #FFFFFF;
+  --color-text-main: #1F1A18;
+  --color-text-muted: #6E625D;
+}
+```
+
+---
+
+## 2. Sections Breakdown
+
+1. **Hero Offer (`hero_offer`)**: Complete open + closed case lock on a premium backdrop + localized trust bar & 4 bullet points.
+2. **Before / After (`before_after`)**: Split layout with identical locked product styling and localized problem/solution labels.
+3. **Authority / Social Validation (`authority_social_validation`)**: Locked product in focus foreground with soft background salon/expert + star rating badge.
+4. **Tools Breakdown (`ingredients_mechanism`)**: Exploded / organized view of the exact tools from the case with pointing arrows and localized labels.
+5. **Customer Reviews (`customer_reviews`)**: Local target audience user holding the exact reference kit + review card overlay.
+6. **FAQ Section (`faq_section`)**: Minimal clean background with closed reference case + 3 localized Q&A blocks.
+7. **Social Feed Creative (`social_ad_creative`)**: Dynamic feed ad (4:5) featuring hand using the exact clipper from the kit + promo badge.
+SKILL;
+    }
+
+    /**
+     * Reset and restore all default system skills in database.
+     */
+    public function resetDefaultSkills(): RedirectResponse
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return redirect()->to('/')->with('error', 'غير مسموح لك بالوصول.');
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $codPrompt = $this->getDefaultSystemPrompt();
+        $nanoPrompt = $this->getDefaultNanoPrompt();
+
+        $defaults = [
+            'cod-assistant' => [
+                'id'           => 'cod-assistant',
+                'name'         => 'cod-assistant',
+                'title'        => 'مهارة تحليل واستكشاف منتجات COD (COD Assistant)',
+                'description'  => 'استكشاف وتقييم المنتجات الرابحة وحساب الجدوى المالية لنموذج COD بالسوق المغربي وهيكلة الإعلانات.',
+                'badge'        => 'COD Strategy مهارة استراتيجية',
+                'tool_name'    => 'get_ai_skill_instructions',
+                'instructions' => $codPrompt,
+                'enabled'      => true,
+                'is_system'    => true,
+                'updated_at'   => $now,
+            ],
+            'nano-banana-pro-consistent-ads' => [
+                'id'           => 'nano-banana-pro-consistent-ads',
+                'name'         => 'nano-banana-pro-consistent-ads',
+                'title'        => 'مهارة Nano Banana Pro (الهوية البصرية وتوليد الإعلانات)',
+                'description'  => 'توليد برومبتات إعلانية متناسقة بدقة Image Lock، واستخراج نظام ألوان الويب (HEX/CSS Variables).',
+                'badge'        => 'Creative Skill مهارة إبداعية',
+                'tool_name'    => 'get_nano_banana_pro_instructions',
+                'instructions' => $nanoPrompt,
+                'enabled'      => true,
+                'is_system'    => true,
+                'updated_at'   => $now,
+            ],
+        ];
+
+        $this->setSetting('mcp_system_prompt', $codPrompt);
+        $this->setSetting('mcp_skills_list', json_encode($defaults, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+        return redirect()->back()->with('message', 'تمت استعادة كافة المهارات والتوجيهات الافتراضية للذكاء الاصطناعي بنجاح! 🔄✨');
     }
 
     /**
