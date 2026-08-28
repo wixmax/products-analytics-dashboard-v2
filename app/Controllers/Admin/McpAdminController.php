@@ -279,11 +279,6 @@ class McpAdminController extends BaseController
      */
     public function getDefaultNanoPrompt(): string
     {
-        $nanoSkillFile = realpath(APPPATH . '/../.agents/skills/nano-banana-pro-consistent-ads/SKILL.md');
-        if ($nanoSkillFile && file_exists($nanoSkillFile)) {
-            return file_get_contents($nanoSkillFile);
-        }
-
         return <<<'SKILL'
 ---
 name: nano-banana-pro-consistent-ads
@@ -410,15 +405,8 @@ SKILL;
         }
 
         // Initialize default skills
-        $codSkillFile = realpath(APPPATH . '/../.agents/skills/cod-assistant/SKILL.md');
-        $codInstructions = ($codSkillFile && file_exists($codSkillFile)) 
-            ? file_get_contents($codSkillFile) 
-            : $this->getDefaultSystemPrompt();
-
-        $nanoSkillFile = realpath(APPPATH . '/../.agents/skills/nano-banana-pro-consistent-ads/SKILL.md');
-        $nanoInstructions = ($nanoSkillFile && file_exists($nanoSkillFile)) 
-            ? file_get_contents($nanoSkillFile) 
-            : "# Nano Banana Pro Ad & Web Color Pipeline\n";
+        $codInstructions  = $this->getDefaultSystemPrompt();
+        $nanoInstructions = $this->getDefaultNanoPrompt();
 
         $defaults = [
             'cod-assistant' => [
@@ -511,17 +499,6 @@ SKILL;
         ];
 
         $this->setSetting('mcp_skills_list', json_encode($skills, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-
-        // Sync file system: .agents/skills/{slug}/SKILL.md
-        try {
-            $skillDir = realpath(APPPATH . '/../') . '/.agents/skills/' . $slug;
-            if (!is_dir($skillDir)) {
-                @mkdir($skillDir, 0777, true);
-            }
-            file_put_contents($skillDir . '/SKILL.md', $instructions);
-        } catch (\Throwable $e) {
-            log_message('error', 'Failed writing SKILL.md: ' . $e->getMessage());
-        }
 
         // If this is the COD assistant, also sync global system prompt setting
         if ($slug === 'cod-assistant') {

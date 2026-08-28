@@ -469,9 +469,10 @@ class McpController extends ResourceController
         $productImage = $args['product_image_url'] ?? '{{ask_user_product_image}}';
         $lang         = $args['language'] ?? 'Arabic';
 
-        $skillFile = realpath(APPPATH . '/../.agents/skills/nano-banana-pro-consistent-ads/SKILL.md');
-        if ($skillFile && file_exists($skillFile)) {
-            $content = file_get_contents($skillFile);
+        $skills = $this->getDynamicSkills();
+        $content = $skills['nano-banana-pro-consistent-ads']['instructions'] ?? '';
+
+        if (!empty($content)) {
             $content = str_replace('{{ask_user_product_image}}', $productImage, $content);
             $content = str_replace('{{LANGUAGE}}', $lang, $content);
             if ($productName !== '{{PRODUCT_NAME}}') {
