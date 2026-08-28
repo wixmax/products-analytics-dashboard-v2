@@ -242,14 +242,62 @@ class McpController extends ResourceController
                         'prompts' => [
                             [
                                 'name'        => 'ecommerce_analytics_assistant',
-                                'description' => 'System prompt and skill instructions for e-commerce product analysis and winning ads discovery.',
+                                'description' => 'System prompt and skill instructions for e-commerce COD product analysis and winning ads discovery.',
                                 'arguments'   => []
+                            ],
+                            [
+                                'name'        => 'cod_assistant',
+                                'description' => 'Full COD e-commerce assistant pipeline covering discovery, evaluation, unit economics, and ad strategy.',
+                                'arguments'   => []
+                            ],
+                            [
+                                'name'        => 'nano_banana_pro_consistent_ads',
+                                'description' => 'Nano Banana Pro Image-to-Image Ad Generator with Web Color System for high-converting ads and landing page design.',
+                                'arguments'   => [
+                                    [
+                                        'name'        => 'product_name',
+                                        'description' => 'Name or title of the product',
+                                        'required'    => true
+                                    ],
+                                    [
+                                        'name'        => 'product_image_url',
+                                        'description' => 'Image URL or reference asset for Nano Banana Pro image-to-image lock',
+                                        'required'    => false
+                                    ],
+                                    [
+                                        'name'        => 'language',
+                                        'description' => 'Language for typography and copywriting (e.g. Arabic, Moroccan Darija, French)',
+                                        'required'    => false
+                                    ]
+                                ]
                             ]
                         ]
                     ]
                 ];
 
             case 'prompts/get':
+                $promptName = $params['name'] ?? 'ecommerce_analytics_assistant';
+                $promptArgs = $params['arguments'] ?? [];
+
+                if ($promptName === 'nano_banana_pro_consistent_ads') {
+                    return [
+                        'jsonrpc' => '2.0',
+                        'id'      => $jsonrpcId,
+                        'result'  => [
+                            'description' => 'Nano Banana Pro Image-to-Image Ad Generator with Web Color System.',
+                            'messages'    => [
+                                [
+                                    'role'    => 'user',
+                                    'content' => [
+                                        'type' => 'text',
+                                        'text' => $this->getNanoBananaSkillPrompt($promptArgs)
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ];
+                }
+
                 return [
                     'jsonrpc' => '2.0',
                     'id'      => $jsonrpcId,
@@ -363,6 +411,29 @@ class McpController extends ResourceController
     /**
      * Retrieve global MCP system prompt / skill instructions
      */
+    private function getNanoBananaSkillPrompt(array $args = []): string
+    {
+        $productName  = $args['product_name'] ?? '{{PRODUCT_NAME}}';
+        $productImage = $args['product_image_url'] ?? '{{ask_user_product_image}}';
+        $lang         = $args['language'] ?? 'Arabic';
+
+        $skillFile = realpath(APPPATH . '/../.agents/skills/nano-banana-pro-consistent-ads/SKILL.md');
+        if ($skillFile && file_exists($skillFile)) {
+            $content = file_get_contents($skillFile);
+            $content = str_replace('{{ask_user_product_image}}', $productImage, $content);
+            $content = str_replace('{{LANGUAGE}}', $lang, $content);
+            if ($productName !== '{{PRODUCT_NAME}}') {
+                $content = "# Target Product: {$productName}\n\n" . $content;
+            }
+            return $content;
+        }
+
+        return "# Nano Banana Pro Ad & Web Color Pipeline\n\n"
+             . "Product: {$productName}\n"
+             . "Reference Asset: {$productImage}\n"
+             . "Target Language: {$lang}\n";
+    }
+
     private function getSystemPrompt(): string
     {
         $db = \Config\Database::connect();
@@ -469,6 +540,28 @@ class McpController extends ResourceController
         }
 
         $allTools = [
+            [
+                'name'        => 'get_nano_banana_pro_instructions',
+                'description' => 'Retrieve official Nano Banana Pro Image-to-Image Ad Generator & Web Color System skill rules, structured prompt templates, and CSS variables.',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'product_name'      => [
+                            'type'        => 'string',
+                            'description' => 'Optional product name to customize the localized prompt templates.'
+                        ],
+                        'product_image_url' => [
+                            'type'        => 'string',
+                            'description' => 'Optional product image reference URL for image-to-image lock.'
+                        ],
+                        'language'          => [
+                            'type'        => 'string',
+                            'description' => 'Target language for in-image typography and copywriting (e.g. Arabic, Moroccan Darija, French).'
+                        ]
+                    ],
+                    'additionalProperties' => false
+                ]
+            ],
             [
                 'name'        => 'get_ai_skill_instructions',
                 'description' => 'Retrieve official system skill rules for 2-Stage E-Commerce Product Evaluation, Moroccan COD Pricing, Ad Specs, and UGC Creatives.',
@@ -742,6 +835,16 @@ class McpController extends ResourceController
 
         $snapshotModel = new SnapshotModel();
         $productModel  = new ProductModel();
+
+        if ($name === 'get_nano_banana_pro_instructions') {
+            return [
+                'status'             => 'success',
+                'skill_name'         => 'nano-banana-pro-consistent-ads',
+                'title'              => 'Nano Banana Pro Image-to-Image Ad Generator with Web Color System',
+                'version'            => '3.2.0',
+                'skill_instructions' => $this->getNanoBananaSkillPrompt($args)
+            ];
+        }
 
         if ($name === 'get_ai_skill_instructions') {
             return [

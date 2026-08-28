@@ -9,41 +9,37 @@ require $paths->systemDirectory . '/Boot.php';
 
 CodeIgniter\Boot::bootSpark($paths);
 
-$db = \Config\Database::connect();
-$now = date('Y-m-d H:i:s');
+$controller = new \App\Controllers\McpController();
+$reflection = new \ReflectionClass($controller);
 
-$prompt = "تنبيه مهم: آلية العمل ومراحل التنفيذ\n"
-     . "سيتم تنفيذ المهام على مراحل متتالية، ولا يتم الانتقال إلى أي مرحلة قبل إتمام المرحلة السابقة واعتماد نتائجها.\n\n"
-     . "المرحلة الأولى: اختيار واستكشاف المنتجات المرشحة والرابحة\n"
-     . "- عند طلب الاستكشاف أو التحليل، استخدم أدوات MCP المتاحة مثل `filter_winning_products` (مع تحديد country='MA' للسوق المغربي)، أو `list_snapshots` / `get_snapshot_by_date` للتواريخ المتاحة، أو `get_saved_products` للاستعلام عن المحفوظات الخاصة بالحساب.\n"
-     . "- تحليل المنتجات المرشحة وتقييمها بناءً على معايير الجدوى والطلب المتاح بالبيانات.\n"
-     . "- تطبيق نظام تقييم المنتجات (Score من 100): قوة الطلب في الإعلانات (40 نقطة)، ملاءمة السوق والموسم في المغرب (30 نقطة)، سهولة اللوجستيك (20 نقطة)، والتوافق مع قيود الميزانية والميول (10 نقاط).\n"
-     . "- تصنيف المنتجات إلى: 🟢 رابحة (>= 75)، 🟡 واعدة (50-74)، 🔴 ضعيفة/عالية المخاطر (< 50).\n"
-     . "- عرض قائمة التقييم والجداول بوضوح، وانتظار اختيار وموافقة المستخدم على المنتج الرابح قبل الانتقال للمرحلة التالية.\n\n"
-     . "المرحلة الثانية: إدخال بيانات المنتج والتحليل التفصيلي الشامل\n"
-     . "بعد اعتماد المنتج الرابح، استخدم أداة `get_product_full_json` لجلب البيانات الخام الكاملة للمنتج (أو طلب البيانات النواقص مثل C_wholesale و C_shipping من المستخدم)، ثم ابدأ تنفيذ جميع العمليات التالية:\n"
-     . "1. التحليل المالي والتسعير ونموذج COD للسوق المغربي:\n"
-     . "   - حساب التكلفة الفعلية للتوصيل مع الرجوع: C_shipping / (1 - R).\n"
-     . "   - مقارنة سعر البيع المقترح مع سعر المنافس وتوضيح الفارق التنافسي بالنسبة المئوية.\n"
-     . "   - تقديم جداول تسعير مفصلة تشمل هامش الربح الصافي النهائي (M_final).\n"
-     . "2. خطة الإعلانات وتصريف المخزون:\n"
-     . "   - تحديد مدة تصريف المخزون بناءً على حجم الوحدات (مثلاً Micro-Batch للمخزون < 20 قطعة).\n"
-     . "   - تقسيم الميزانية الإعلانية عبر ثلاث مراحل: اختبار، توسيع، وحرق المخزون.\n"
-     . "3. صناعة المحتوى الإعلاني والـ Creatives:\n"
-     . "   - إنشاء سكربتات إعلانية مبنية على هيكل (Hook -> Problem -> Solution -> Offer -> CTA).\n"
-     . "   - تقديم برومبتات AI دقيقة لتوليد فيديوهات UGC وعناوين ووصف إعلاني لكل منتج رابح.\n"
-     . "   - توليد 4 برومبتات AI لصور إعلانية (احترافية، Lifestyle، زاوية تحويلية).\n"
-     . "   - كتابة 3 نسخ إعلانية لفيسبوك (Primary Text) ومحتوى مخصص لتيك توك (Hooks, Hashtags).\n\n"
-     . "اللغة والأسلوب:\n"
-     . "- استخدام اللغة العربية الفصحى أو الدارجة المغربية مع قبول المصطلحات التقنية (ROAS, CPA, COD).\n"
-     . "- الاعتماد المكثف على الجداول والأرقام الواضحة والعملية.";
+// 1. Check tools/list
+$manifestMethod = $reflection->getMethod('getToolsManifest');
+$manifestMethod->setAccessible(true);
+$tools = $manifestMethod->invoke($controller);
+$toolNames = array_column($tools, 'name');
+echo "AVAILABLE MCP TOOLS: " . implode(', ', $toolNames) . "\n";
 
-$db->table('settings')->where('key', 'mcp_system_prompt')->delete();
-$db->table('settings')->insert([
-    'key'        => 'mcp_system_prompt',
-    'value'      => $prompt,
-    'created_at' => $now,
-    'updated_at' => $now,
+// 2. Check get_ai_skill_instructions
+$callToolMethod = $reflection->getMethod('executeTool');
+$callToolMethod->setAccessible(true);
+
+$res1 = $callToolMethod->invoke($controller, 'get_ai_skill_instructions', []);
+echo "TOOL 1 (get_ai_skill_instructions) CONTAINS HANDOVER LINE: " 
+    . (strpos($res1['skill_instructions'] ?? '', 'nano-banana-pro-consistent-ads') !== false ? 'YES' : 'NO') 
+    . "\n";
+
+// 3. Check get_nano_banana_pro_instructions
+$res2 = $callToolMethod->invoke($controller, 'get_nano_banana_pro_instructions', [
+    'product_name' => 'Portable Manicure Kit',
+    'product_image_url' => 'https://example.com/item.jpg',
+    'language' => 'Arabic'
 ]);
+echo "TOOL 2 (get_nano_banana_pro_instructions) STATUS: " . ($res2['status'] ?? 'FAIL') . "\n";
+echo "TOOL 2 SKILL NAME: " . ($res2['skill_name'] ?? 'FAIL') . "\n";
+echo "TOOL 2 CONTAINS COLOR SYSTEM: " 
+    . (strpos($res2['skill_instructions'] ?? '', 'Web & Brand Color System') !== false ? 'YES' : 'NO') 
+    . "\n";
 
-echo "PROMPT_UPDATED_SUCCESSFULLY\n";
+
+
+

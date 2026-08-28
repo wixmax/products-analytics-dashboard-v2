@@ -85,6 +85,12 @@ class McpAdminController extends BaseController
         $systemPrompt  = $this->getSetting('mcp_system_prompt', $this->getDefaultSystemPrompt());
 
         $allTools = [
+            'get_nano_banana_pro_instructions' => [
+                'name'        => 'get_nano_banana_pro_instructions',
+                'title'       => 'مهارة Nano Banana Pro (الهوية البصرية وتوليد الإعلانات)',
+                'description' => 'توليد برومبتات إعلانية احترافية، تثبيت صورة المنتج (Image Lock)، واستخراج نظام ألوان الويب (HEX/CSS).',
+                'badge'       => 'Creative Skill مهارة إبداعية',
+            ],
             'get_ai_skill_instructions' => [
                 'name'        => 'get_ai_skill_instructions',
                 'title'       => 'جلب مهارة وتوجيهات التحليل (AI Skill Instructions)',
