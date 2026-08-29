@@ -71,7 +71,8 @@ $routes->post('/api/products/sync-trpc', 'Products::syncTrpc');
 $routes->post('/api/products/import', 'Products::importJson');
 $routes->get('/api/products/similar/(:num)', 'Products::similarProducts/$1');
 $routes->get('/api/vectorize/status', 'Products::vectorizeStatus');
-$routes->post('/api/vectorize/test', 'Products::vectorizeTest');
+$routes->match(['GET', 'POST'], '/api/vectorize/test', 'Products::vectorizeTest');
+
 
 
 // Saved Ads & Bookmark Endpoints

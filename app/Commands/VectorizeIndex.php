@@ -18,11 +18,21 @@ class VectorizeIndex extends BaseCommand
         '--origin' => 'Filter by origin (winning, new, china, japan, etc.)',
         '--limit'  => 'Limit number of products to index',
         '--status' => 'Check Vectorize connection and index status only',
+        '--query'  => 'Test semantic query string against Vectorize index',
     ];
 
     public function run(array $params)
     {
         $vectorService = new CloudflareVectorService();
+
+        $queryParam = CLI::getOption('query');
+        if ($queryParam) {
+            CLI::write("Testing semantic search for: '{$queryParam}'...", 'yellow');
+            $matches = $vectorService->searchSemantic((string)$queryParam, 10);
+            CLI::write("Matches found: " . count($matches), 'cyan');
+            CLI::write(json_encode($matches, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            return;
+        }
 
         if (CLI::getOption('status')) {
             CLI::write('Checking Cloudflare Workers AI and Vectorize Index connection...', 'yellow');

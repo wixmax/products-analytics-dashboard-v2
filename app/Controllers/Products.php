@@ -38,25 +38,27 @@ class Products extends ResourceController
         // Search
         $semantic = filter_var($this->request->getVar('semantic'), FILTER_VALIDATE_BOOLEAN);
         if (!empty($search)) {
+            $appliedSemantic = false;
             if ($semantic) {
-                $vectorService = new \App\Services\CloudflareVectorService();
-                if ($vectorService->isConfigured()) {
-                    $matches = $vectorService->searchSemantic($search, 100);
-                    if (!empty($matches)) {
-                        $semanticIds = array_column($matches, 'product_id');
-                        $builder->whereIn('id', $semanticIds);
-                    } else {
-                        $builder->where('id', -1);
+                try {
+                    $vectorService = new \App\Services\CloudflareVectorService();
+                    if ($vectorService->isConfigured()) {
+                        $matches = $vectorService->searchSemantic($search, 100);
+                        if (!empty($matches)) {
+                            $semanticIds = array_column($matches, 'product_id');
+                            $semanticIds = array_filter(array_map('intval', $semanticIds));
+                            if (!empty($semanticIds)) {
+                                $builder->whereIn('id', $semanticIds);
+                                $appliedSemantic = true;
+                            }
+                        }
                     }
-                } else {
-                    $builder->groupStart()
-                            ->like('title', $search)
-                            ->orLike('ad_body', $search)
-                            ->orLike('ad_title', $search)
-                            ->orLike('product_url', $search)
-                            ->groupEnd();
+                } catch (\Throwable $e) {
+                    log_message('error', 'Semantic search error in Products::index: ' . $e->getMessage());
                 }
-            } else {
+            }
+
+            if (!$appliedSemantic) {
                 $builder->groupStart()
                         ->like('title', $search)
                         ->orLike('ad_body', $search)
@@ -65,6 +67,7 @@ class Products extends ResourceController
                         ->groupEnd();
             }
         }
+
 
 
         // Country (semicolon-separated for multiple selection)
