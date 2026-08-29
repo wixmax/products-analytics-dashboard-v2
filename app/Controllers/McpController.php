@@ -746,16 +746,45 @@ class McpController extends ResourceController
                 ]
             ],
             [
+                'name'        => 'semantic_search_products',
+                'description' => 'Perform AI-powered semantic and vector search on products using Cloudflare Vectorize. Understands multilingual queries (Arabic, English, French) and matches problem-solving concepts, ad angles, and niches.',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'query'   => ['type' => 'string', 'description' => 'The semantic search text, product idea, problem description, or marketing hook.'],
+                        'country' => ['type' => 'string', 'description' => 'Optional 2-letter country code filter (e.g. MA, SA, DZ)'],
+                        'origin'  => ['type' => 'string', 'description' => 'Optional category/origin (e.g. Winning, Local, China, Japan)'],
+                        'limit'   => ['type' => 'number', 'description' => 'Max number of products to return (default: 20)']
+                    ],
+                    'required'             => ['query'],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
+                'name'        => 'find_similar_products',
+                'description' => 'Find semantically and visually similar winning products/competitors for a given product ID using Cloudflare Vectorize vector distance.',
+                'inputSchema' => [
+                    'type'                 => 'object',
+                    'properties'           => [
+                        'product_id' => ['type' => 'number', 'description' => 'The ID of the reference product.'],
+                        'limit'      => ['type' => 'number', 'description' => 'Max similar products to return (default: 8)']
+                    ],
+                    'required'             => ['product_id'],
+                    'additionalProperties' => false
+                ]
+            ],
+            [
                 'name'        => 'get_products',
                 'description' => 'Fetch single or multiple products by IDs, or search products by name/title.',
                 'inputSchema' => [
                     'type'                 => 'object',
                     'properties'           => [
-                        'ids'     => ['type' => 'array', 'items' => ['type' => 'number']],
-                        'name'    => ['type' => 'string'],
-                        'origin'  => ['type' => 'string'],
-                        'country' => ['type' => 'string'],
-                        'limit'   => ['type' => 'number']
+                        'ids'      => ['type' => 'array', 'items' => ['type' => 'number']],
+                        'name'     => ['type' => 'string'],
+                        'semantic' => ['type' => 'boolean', 'description' => 'Enable AI semantic search for the name query'],
+                        'origin'   => ['type' => 'string'],
+                        'country'  => ['type' => 'string'],
+                        'limit'    => ['type' => 'number']
                     ],
                     'additionalProperties' => false
                 ]
@@ -1344,18 +1373,114 @@ class McpController extends ResourceController
             ];
         }
 
+        if ($name === 'semantic_search_products') {
+            $query   = $args['query'] ?? '';
+            $origin  = $args['origin'] ?? null;
+            $country = $args['country'] ?? null;
+            $limit   = intval($args['limit'] ?? 20);
+
+            if (empty(trim($query))) {
+                return ['error' => 'Query parameter is required for semantic search'];
+            }
+
+            $vectorService = new \App\Services\CloudflareVectorService();
+            if (!$vectorService->isConfigured()) {
+                return [
+                    'status'  => 'error',
+                    'message' => 'Cloudflare Vectorize is not configured on the server.'
+                ];
+            }
+
+            $matches = $vectorService->searchSemantic($query, $limit * 2);
+            if (empty($matches)) {
+                return [
+                    'status'         => 'success',
+                    'query'          => $query,
+                    'total'          => 0,
+                    'returned_count' => 0,
+                    'products'       => []
+                ];
+            }
+
+            $productIds = array_column($matches, 'product_id');
+            $scoreMap   = array_column($matches, 'score', 'product_id');
+
+            $builder = $db->table('products')->whereIn('id', $productIds);
+            if (!empty($origin)) {
+                $builder->where('origin', $origin);
+            }
+            if (!empty($country)) {
+                $builder->like('country', strtoupper($country));
+            }
+
+            $products = $builder->get()->getResultArray();
+            foreach ($products as &$p) {
+                $p['similarity_score'] = round(($scoreMap[$p['id']] ?? 0) * 100, 1);
+            }
+
+            usort($products, function ($a, $b) {
+                return ($b['similarity_score'] ?? 0) <=> ($a['similarity_score'] ?? 0);
+            });
+
+            $products = array_slice($products, 0, $limit);
+
+            return [
+                'status'         => 'success',
+                'query'          => $query,
+                'total'          => count($products),
+                'returned_count' => count($products),
+                'products'       => $products
+            ];
+        }
+
+        if ($name === 'find_similar_products') {
+            $productId = intval($args['product_id'] ?? 0);
+            $limit     = intval($args['limit'] ?? 8);
+
+            if ($productId <= 0) {
+                return ['error' => 'Valid product_id is required'];
+            }
+
+            $vectorService = new \App\Services\CloudflareVectorService();
+            if (!$vectorService->isConfigured()) {
+                return [
+                    'status'  => 'error',
+                    'message' => 'Cloudflare Vectorize is not configured on the server.'
+                ];
+            }
+
+            $similar = $vectorService->findSimilarProducts($productId, $limit);
+
+            return [
+                'status'         => 'success',
+                'product_id'     => $productId,
+                'returned_count' => count($similar),
+                'similar_products' => $similar
+            ];
+        }
+
         if ($name === 'get_products') {
             $ids       = $args['ids'] ?? [];
             $nameQuery = $args['name'] ?? null;
+            $semantic  = !empty($args['semantic']);
             $origin    = $args['origin'] ?? null;
             $country   = $args['country'] ?? null;
             $limit     = intval($args['limit'] ?? 20);
 
+            if ($semantic && !empty($nameQuery)) {
+                $vectorService = new \App\Services\CloudflareVectorService();
+                if ($vectorService->isConfigured()) {
+                    $matches = $vectorService->searchSemantic($nameQuery, $limit);
+                    if (!empty($matches)) {
+                        $ids = array_column($matches, 'product_id');
+                    }
+                }
+            }
+
             $builder = $db->table('products');
             if (!empty($ids) && is_array($ids)) {
                 $builder->whereIn('id', $ids);
-            }
-            if (!empty($nameQuery)) {
+            } elseif (!empty($nameQuery) && !$semantic) {
                 $builder->groupStart()
                         ->like('title', $nameQuery)
                         ->orLike('ad_title', $nameQuery)
@@ -1376,6 +1501,7 @@ class McpController extends ResourceController
                 'products'       => $products
             ];
         }
+
 
         if ($name === 'get_product_full_json') {
             $productId  = $args['product_id'] ?? null;

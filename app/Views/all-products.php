@@ -265,9 +265,16 @@
         <div class="filter-toolbar">
           <div class="filter-controls-grid">
             <div class="filter-group" style="grid-column: span 2;">
-              <label for="catalog-search">🔍 البحث في العنوان والوصف والرابط:</label>
-              <input type="text" id="catalog-search" placeholder="اكتب اسم المنتج أو كلمة مفتاحية..." oninput="debounceFetchProducts()" />
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                <label for="catalog-search" style="margin: 0;">🔍 البحث في المنتجات والإعلانات:</label>
+                <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #a855f7; cursor: pointer; font-weight: 700; background: rgba(168, 85, 247, 0.12); padding: 3px 10px; border-radius: 9999px; border: 1px solid rgba(168, 85, 247, 0.3); transition: all 0.2s ease;">
+                  <input type="checkbox" id="catalog-semantic-toggle" onchange="fetchCatalogProducts(1)" style="cursor: pointer; accent-color: #a855f7;" checked />
+                  <span>✨ بحث دلالي ذكي (AI Vectorize)</span>
+                </label>
+              </div>
+              <input type="text" id="catalog-search" placeholder="اكتب اسم المنتج، مشكلة يحلها، أو زاوية تسويقية..." oninput="debounceFetchProducts()" />
             </div>
+
 
             <div class="filter-group">
               <label for="catalog-origin">🏷️ التصنيف / المنشأ:</label>
@@ -466,6 +473,7 @@
         const sort = document.getElementById('catalog-sort').value;
         const search = document.getElementById('catalog-search').value.trim();
         const perPage = document.getElementById('catalog-per-page').value;
+        const semantic = document.getElementById('catalog-semantic-toggle')?.checked ? '1' : '0';
 
         const params = new URLSearchParams({
           origin: origin,
@@ -474,6 +482,7 @@
           date: date,
           sort: sort,
           search: search,
+          semantic: semantic,
           page: page,
           per_page: perPage
         });
@@ -637,12 +646,14 @@
                 </div>
               </div>
 
-              <div class="card-footer" style="gap: 6px; padding: 8px;">
-                ${productUrl && productUrl !== '#' ? `<a href="${productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">🛒 زيارة</a>` : ''}
-                <button onclick="openIndexInfoModal(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.6rem; font-size: 0.7rem;">ℹ️ معلومات</button>
-                <button onclick="openProductDetailsModal(${idx})" class="btn btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem;">📊 تفاصيل</button>
+              <div class="card-footer" style="gap: 5px; padding: 8px;">
+                ${productUrl && productUrl !== '#' ? `<a href="${productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.72rem; padding: 0.4rem 0.4rem;">🛒 زيارة</a>` : ''}
+                <button onclick="openSimilarProductsModal(${p.id || idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.5rem; font-size: 0.72rem; color: #a855f7; border-color: rgba(168, 85, 247, 0.4);" title="استكشاف منتجات وإعلانات مماثلة بالذكاء الاصطناعي">✨ مماثل</button>
+                <button onclick="openIndexInfoModal(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.5rem; font-size: 0.72rem;">ℹ️</button>
+                <button onclick="openProductDetailsModal(${idx})" class="btn btn-secondary" style="flex: 1; font-size: 0.72rem; padding: 0.4rem 0.4rem;">📊 تفاصيل</button>
                 ${saveBtnHtml}
               </div>
+
             </article>
           `;
         }).join('');
@@ -765,6 +776,73 @@
           showToast('❌ حدث خطأ أثناء التبديل في المفضلة.');
         }
       }
+
+      async function openSimilarProductsModal(productId) {
+        const modal = document.getElementById('similar-products-modal');
+        const container = document.getElementById('similar-products-container');
+        if (!modal || !container) return;
+
+        modal.style.display = 'flex';
+        container.innerHTML = '<div style="text-align: center; color: var(--color-text-muted); padding: 3rem 0;"><span style="font-size: 2rem;">✨</span><br><br>جاري تحليل المتجهات والبحث عن إعلانات ومنتجات منافسة ومماثلة...</div>';
+
+        try {
+          const res = await fetch(`/api/products/similar/${productId}?limit=6`);
+          const data = await res.json();
+
+          if (!data.success || !data.data || data.data.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: var(--color-text-muted); padding: 2.5rem 0;">ℹ️ لم يتم العثور على منتجات مطابقة كافية في الفهرس المتجهي.</div>';
+            return;
+          }
+
+          container.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem;">
+              ${data.data.map(p => {
+                const img = (p.ad_image_urls || p.thumbnail_url || '').split(';')[0];
+                const score = p.similarity_score || 0;
+                return `
+                  <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; height: 140px; background: #111;">
+                      ${img ? `<img src="${img}" style="width: 100%; height: 100%; object-fit: cover;" />` : '<div style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--color-text-muted);">📦 لا توجد صورة</div>'}
+                      <div style="position: absolute; top: 6px; left: 6px; background: rgba(168, 85, 247, 0.9); color: #fff; font-size: 0.7rem; font-weight: 800; padding: 2px 8px; border-radius: 9999px;">
+                        ✨ ${score}% تطابق
+                      </div>
+                    </div>
+                    <div style="font-weight: 700; font-size: 0.85rem; line-height: 1.3; color: var(--color-text-main); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="${p.title}">
+                      ${p.title}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--color-text-muted); margin-top: auto;">
+                      <span>🌍 ${p.country || 'MA'}</span>
+                      <span>🏆 ${p.origin || 'Winning'}</span>
+                    </div>
+                    ${p.product_url && p.product_url !== '#' ? `<a href="${p.product_url}" target="_blank" class="btn btn-primary" style="font-size: 0.75rem; padding: 0.35rem; text-align: center; margin-top: 4px;">🛒 زيارة المتجر</a>` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        } catch (err) {
+          container.innerHTML = `<div style="text-align: center; color: var(--color-error); padding: 2rem 0;">❌ فشل جلب المنتجات المماثلة: ${err.message}</div>`;
+        }
+      }
+
+      function closeSimilarProductsModal() {
+        const modal = document.getElementById('similar-products-modal');
+        if (modal) modal.style.display = 'none';
+      }
     </script>
+
+    <!-- Similar Products Modal -->
+    <div id="similar-products-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 1rem;">
+      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); width: 100%; max-width: 850px; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-xl); padding: 1.5rem; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+          <h3 style="margin: 0; font-size: 1.15rem; color: var(--color-text-main); display: flex; align-items: center; gap: 8px;">
+            <span style="color: #a855f7;">✨</span> منتجات وإعلانات مماثلة بالذكاء الاصطناعي (Vector Search)
+          </h3>
+          <button onclick="closeSimilarProductsModal()" style="background: transparent; border: none; font-size: 1.4rem; color: var(--color-text-muted); cursor: pointer; padding: 4px;">&times;</button>
+        </div>
+        <div id="similar-products-container"></div>
+      </div>
+    </div>
   </body>
 </html>
+
