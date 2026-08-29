@@ -67,3 +67,13 @@
 #--------------------------------------------------------------------
 
 # logger.threshold = 4
+
+#--------------------------------------------------------------------
+# CLOUDFLARE VECTORIZE & WORKERS AI
+#--------------------------------------------------------------------
+# CLOUDFLARE_VECTORIZE_ENABLED = true
+# CLOUDFLARE_ACCOUNT_ID = your_cloudflare_account_id_here
+# CLOUDFLARE_API_TOKEN = your_cloudflare_api_token_here
+# CLOUDFLARE_VECTORIZE_INDEX = products-index
+# CLOUDFLARE_EMBEDDING_MODEL = @cf/baai/bge-m3
+

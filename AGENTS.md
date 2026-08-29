@@ -11,8 +11,9 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
-## Code Organization & Modularity (DRY)
-- Always reuse shared view partials (`app/Views/partials/product-modals.php`) via `<?= $this->include('partials/product-modals') ?>`.
-- Always reuse shared JavaScript controllers (`public/product-modal-core.js` and `public/analysis-helper.js`) instead of writing duplicate inline modal and product logic.
-- Avoid code duplication between `index.php`, `saved-ads.php`, `all-products.php`, and `international-products.php`.
+## Safe Git Push Policy (No Automatic Push)
+- **Strictly FORBIDDEN to execute `git push` or upload code to remote repositories (GitHub/origin) automatically.**
+- All modifications, tests, and commits must remain LOCAL.
+- NEVER run `git push` unless the user explicitly commands it in their message (e.g. "ارفع التعديلات", "ارفع المشروع", "push to origin").
+- When finishing a task, only notify the user that local changes are complete and tested, and wait for their explicit push instruction.
 

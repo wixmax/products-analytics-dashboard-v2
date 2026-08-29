@@ -69,6 +69,10 @@ $routes->match(['GET', 'POST'], '/api/products/sync', 'Products::sync');
 $routes->get('/api/products/available-dates', 'Products::getAvailableDates');
 $routes->post('/api/products/sync-trpc', 'Products::syncTrpc');
 $routes->post('/api/products/import', 'Products::importJson');
+$routes->get('/api/products/similar/(:num)', 'Products::similarProducts/$1');
+$routes->get('/api/vectorize/status', 'Products::vectorizeStatus');
+$routes->post('/api/vectorize/test', 'Products::vectorizeTest');
+
 
 // Saved Ads & Bookmark Endpoints
 $routes->get('/api/products/saved', 'Products::saved');

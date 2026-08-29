@@ -36,14 +36,36 @@ class Products extends ResourceController
                 ->groupEnd();
 
         // Search
+        $semantic = filter_var($this->request->getVar('semantic'), FILTER_VALIDATE_BOOLEAN);
         if (!empty($search)) {
-            $builder->groupStart()
-                    ->like('title', $search)
-                    ->orLike('ad_body', $search)
-                    ->orLike('ad_title', $search)
-                    ->orLike('product_url', $search)
-                    ->groupEnd();
+            if ($semantic) {
+                $vectorService = new \App\Services\CloudflareVectorService();
+                if ($vectorService->isConfigured()) {
+                    $matches = $vectorService->searchSemantic($search, 100);
+                    if (!empty($matches)) {
+                        $semanticIds = array_column($matches, 'product_id');
+                        $builder->whereIn('id', $semanticIds);
+                    } else {
+                        $builder->where('id', -1);
+                    }
+                } else {
+                    $builder->groupStart()
+                            ->like('title', $search)
+                            ->orLike('ad_body', $search)
+                            ->orLike('ad_title', $search)
+                            ->orLike('product_url', $search)
+                            ->groupEnd();
+                }
+            } else {
+                $builder->groupStart()
+                        ->like('title', $search)
+                        ->orLike('ad_body', $search)
+                        ->orLike('ad_title', $search)
+                        ->orLike('product_url', $search)
+                        ->groupEnd();
+            }
         }
+
 
         // Country (semicolon-separated for multiple selection)
         if (!empty($country) && $country !== 'all') {
@@ -2720,4 +2742,66 @@ private function generateLiveStrategy($product, $activity)
             'countryCounts' => $countryCounts
         ]);
     }
+
+    /**
+     * Get semantically similar products for a given product ID
+     */
+    public function similarProducts($id = null)
+    {
+        if (empty($id)) {
+            return $this->fail('Product ID is required', 400);
+        }
+
+        $limit = intval($this->request->getVar('limit') ?? 8);
+        $vectorService = new \App\Services\CloudflareVectorService();
+
+        if (!$vectorService->isConfigured()) {
+            return $this->respond([
+                'success' => false,
+                'message' => 'Cloudflare Vectorize is not configured.',
+                'data'    => []
+            ]);
+        }
+
+        $similar = $vectorService->findSimilarProducts((int)$id, $limit);
+
+        return $this->respond([
+            'success' => true,
+            'count'   => count($similar),
+            'data'    => $similar
+        ]);
+    }
+
+    /**
+     * Get Cloudflare Vectorize status and index info
+     */
+    public function vectorizeStatus()
+    {
+        $vectorService = new \App\Services\CloudflareVectorService();
+        $status = $vectorService->testConnection();
+
+        return $this->respond($status);
+    }
+
+    /**
+     * Test semantic search or vector generation
+     */
+    public function vectorizeTest()
+    {
+        $query = $this->request->getVar('query') ?? 'kitchen accessories portable';
+        $vectorService = new \App\Services\CloudflareVectorService();
+
+        if (!$vectorService->isConfigured()) {
+            return $this->fail('Cloudflare credentials not configured', 400);
+        }
+
+        $matches = $vectorService->searchSemantic($query, 10);
+
+        return $this->respond([
+            'success' => true,
+            'query'   => $query,
+            'matches' => $matches
+        ]);
+    }
 }
+
