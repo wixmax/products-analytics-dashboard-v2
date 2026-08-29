@@ -476,6 +476,106 @@
             </div>
           </div>
 
+          <!-- Card: Cloudflare Vectorize & Semantic Indexing -->
+          <div class="settings-card" id="vectorize-settings-card" style="border-right: 4px solid #6366f1;">
+            <div class="settings-card-title" style="justify-content: space-between; flex-wrap: wrap;">
+              <span style="display: flex; align-items: center; gap: 8px; color: var(--color-primary);">
+                ⚡ فهرسة متجهات البحث الدلالي (Cloudflare Vectorize)
+              </span>
+              <span id="vec-status-badge" style="font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: rgba(99, 102, 241, 0.1); color: #6366f1; border: 1px solid rgba(99, 102, 241, 0.3);">
+                🔄 جاري فحص الاتصال...
+              </span>
+            </div>
+            <p class="settings-card-desc">
+              توليد متجهات التضمين (Embeddings) للمنتجات الجديدة لتشغيل محرك البحث الدلالي بالمعنى والبحث عن المنتجات الشبيهة والمنافسين عبر Cloudflare Workers AI و Vectorize.
+            </p>
+
+            <!-- Vectorize Index Details & Metrics -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 1.25rem;">
+              <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 4px;">📦 إجمالي المنتجات</div>
+                <div id="vec-total-count" style="font-size: 1.3rem; font-weight: 800; color: var(--color-text-main);">--</div>
+              </div>
+              <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+                <div style="font-size: 0.75rem; color: #10b981; margin-bottom: 4px;">✅ مفهرسة بالمتجهات</div>
+                <div id="vec-indexed-count" style="font-size: 1.3rem; font-weight: 800; color: #10b981;">--</div>
+              </div>
+              <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+                <div style="font-size: 0.75rem; color: #f59e0b; margin-bottom: 4px;">⏳ في انتظار الفهرسة</div>
+                <div id="vec-unindexed-count" style="font-size: 1.3rem; font-weight: 800; color: #f59e0b;">--</div>
+              </div>
+              <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+                <div style="font-size: 0.75rem; color: #6366f1; margin-bottom: 4px;">📅 منتجات اليوم غير المفهرسة</div>
+                <div id="vec-today-unindexed-count" style="font-size: 1.3rem; font-weight: 800; color: #6366f1;">--</div>
+              </div>
+            </div>
+
+            <!-- Index Meta info bar -->
+            <div id="vec-meta-info" style="font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 1.25rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; color: var(--color-text-muted);">
+              <span>🎯 اسم الفهرس: <strong id="vec-meta-index" style="color: var(--color-text-main); font-family: monospace;">products-index</strong></span>
+              <span>🧠 الموديل: <strong id="vec-meta-model" style="color: var(--color-text-main); font-family: monospace;">@cf/baai/bge-m3</strong></span>
+            </div>
+
+            <!-- Progress Bar Section (Hidden by default) -->
+            <div id="vec-progress-container" style="display: none; margin-bottom: 1.25rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.85rem;">
+                <span id="vec-progress-status" style="font-weight: 700; color: var(--color-primary);">جاري الفهرسة...</span>
+                <span id="vec-progress-percent" style="font-weight: 800; color: var(--color-text-main);">0%</span>
+              </div>
+              <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; overflow: hidden;">
+                <div id="vec-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #10b981); transition: width 0.3s ease;"></div>
+              </div>
+              <div id="vec-progress-subtext" style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 6px;"></div>
+            </div>
+
+            <!-- Action Buttons Grid -->
+            <div class="actions-grid">
+              <!-- Action 1: Index New / Unindexed -->
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">⚡ فهرسة المنتجات الجديدة</span>
+                  <span class="action-item-desc">فحص وتوليد المتجهات لكافة المنتجات الجديدة غير المفهرسة حتى الآن لتضمينها في البحث الدلالي.</span>
+                </div>
+                <button id="btn-index-unindexed" class="btn btn-primary" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; font-weight: 700;" onclick="startIndexingProcess('unindexed')">
+                  ⚡ فهرسة المنتجات الجديدة
+                </button>
+              </div>
+
+              <!-- Action 2: Index Today's Products -->
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">📅 فهرسة دفعة اليوم فقط</span>
+                  <span class="action-item-desc">فهرسة المنتجات التي تم استيرادها خلال تاريخ اليوم حصراً لتسريع التحديث اليومي.</span>
+                </div>
+                <button id="btn-index-today" class="btn btn-secondary" style="font-weight: 700;" onclick="startIndexingProcess('today')">
+                  📅 فهرسة دفعة اليوم
+                </button>
+              </div>
+
+              <!-- Action 3: Re-index All -->
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">🔄 إعادة الفهرسة الشاملة</span>
+                  <span class="action-item-desc">إعادة توليد وتحديث متجهات كافة منتجات قاعدة البيانات بالكامل.</span>
+                </div>
+                <button id="btn-index-all" class="btn btn-secondary" style="font-weight: 700; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);" onclick="startIndexingProcess('all')">
+                  🔄 إعادة فهرسة الكل
+                </button>
+              </div>
+
+              <!-- Action 4: Refresh Status -->
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">🔍 فحص الاتصال والإحصائيات</span>
+                  <span class="action-item-desc">إعادة اختبار الاتصال بـ Cloudflare Workers AI وتحديث عدادات المنتجات المفهرسة.</span>
+                </div>
+                <button class="btn btn-secondary" style="font-weight: 700;" onclick="loadVectorizeStats(true)">
+                  🔄 تحديث الحالة
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Card 2: Database Operations (Admin Only) -->
           <div class="settings-card">
             <div class="settings-card-title">
@@ -914,6 +1014,7 @@
         }
 
         await loadFacebookSettings();
+        await loadVectorizeStats(false);
       }
 
       // Load Facebook Token Setting
@@ -954,6 +1055,178 @@
         } catch (err) {
           console.error("Error saving Facebook token:", err);
           showToast("خطأ في الاتصال بالسيرفر.", "error");
+        }
+      }
+
+      // Vectorize & Semantic Search State & Handlers
+      let isVectorizing = false;
+
+      async function loadVectorizeStats(showToastAlert = false) {
+        const badge = document.getElementById('vec-status-badge');
+        const totalEl = document.getElementById('vec-total-count');
+        const indexedEl = document.getElementById('vec-indexed-count');
+        const unindexedEl = document.getElementById('vec-unindexed-count');
+        const todayUnindexedEl = document.getElementById('vec-today-unindexed-count');
+        const indexMeta = document.getElementById('vec-meta-index');
+        const modelMeta = document.getElementById('vec-meta-model');
+
+        if (!badge) return;
+
+        if (showToastAlert) {
+          badge.innerHTML = `🔄 جاري الفحص...`;
+          badge.style.color = `#6366f1`;
+          badge.style.borderColor = `rgba(99, 102, 241, 0.3)`;
+          badge.style.background = `rgba(99, 102, 241, 0.1)`;
+        }
+
+        try {
+          const res = await fetch('/api/vectorize/stats');
+          if (res.ok) {
+            const data = await res.json();
+            const stats = data.stats || {};
+            const conn = data.connection || {};
+
+            if (totalEl) totalEl.innerText = Number(stats.total_products || 0).toLocaleString();
+            if (indexedEl) indexedEl.innerText = Number(stats.indexed_products || 0).toLocaleString();
+            if (unindexedEl) unindexedEl.innerText = Number(stats.unindexed_products || 0).toLocaleString();
+            if (todayUnindexedEl) todayUnindexedEl.innerText = Number(stats.today_unindexed || 0).toLocaleString();
+            if (indexMeta && stats.index_name) indexMeta.innerText = stats.index_name;
+            if (modelMeta && stats.embedding_model) modelMeta.innerText = stats.embedding_model;
+
+            if (conn.success) {
+              badge.innerHTML = `🟢 متصل وجاهز (${conn.dimensions || 1024}d)`;
+              badge.style.color = `#10b981`;
+              badge.style.borderColor = `rgba(16, 185, 129, 0.3)`;
+              badge.style.background = `rgba(16, 185, 129, 0.1)`;
+              if (showToastAlert) {
+                showToast("الاتصال بـ Cloudflare Vectorize يعمل بنجاح! 🟢", "success");
+              }
+            } else {
+              badge.innerHTML = `⚠️ خطأ بالربط`;
+              badge.style.color = `#ef4444`;
+              badge.style.borderColor = `rgba(239, 68, 68, 0.3)`;
+              badge.style.background = `rgba(239, 68, 68, 0.1)`;
+              if (showToastAlert) {
+                showToast(conn.message || "تعذر الاتصال بـ Cloudflare Vectorize.", "error");
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error loading vectorize stats:", err);
+          if (badge) {
+            badge.innerHTML = `🔴 خطأ اتصال`;
+            badge.style.color = `#ef4444`;
+          }
+        }
+      }
+
+      async function startIndexingProcess(mode) {
+        if (isVectorizing) {
+          showToast("عملية الفهرسة جارية بالفعل حالياً ⏳", "warning");
+          return;
+        }
+
+        if (mode === 'all') {
+          if (!confirm("⚠️ هل أنت متأكد من رغبتك في إعادة فهرسة كافة منتجات قاعدة البيانات بالكامل؟")) {
+            return;
+          }
+        }
+
+        const progressContainer = document.getElementById('vec-progress-container');
+        const progressBar = document.getElementById('vec-progress-bar');
+        const progressStatus = document.getElementById('vec-progress-status');
+        const progressPercent = document.getElementById('vec-progress-percent');
+        const progressSubtext = document.getElementById('vec-progress-subtext');
+        const btnUnindexed = document.getElementById('btn-index-unindexed');
+        const btnToday = document.getElementById('btn-index-today');
+        const btnAll = document.getElementById('btn-index-all');
+
+        isVectorizing = true;
+        if (btnUnindexed) btnUnindexed.disabled = true;
+        if (btnToday) btnToday.disabled = true;
+        if (btnAll) btnAll.disabled = true;
+
+        if (progressContainer) progressContainer.style.display = 'block';
+        if (progressBar) progressBar.style.width = '5%';
+        if (progressStatus) progressStatus.innerText = '🚀 بدء تشغيل الفهرسة...';
+        if (progressPercent) progressPercent.innerText = '0%';
+        if (progressSubtext) progressSubtext.innerText = 'جاري تحضير وتوليد المتجهات عبر Cloudflare Workers AI...';
+
+        let totalProcessed = 0;
+        let totalIndexed = 0;
+        let batchCount = 0;
+        let isDone = false;
+
+        try {
+          while (!isDone) {
+            batchCount++;
+            if (progressStatus) progressStatus.innerText = `⚙️ معالجة الدفعة رقم ${batchCount}...`;
+            
+            const res = await fetch('/api/vectorize/run', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ mode: mode, limit: 50, batch_size: 25 })
+            });
+
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              throw new Error(errData.message || 'فشل الطلب من السيرفر');
+            }
+
+            const data = await res.json();
+            const stats = data.stats || {};
+            const batchIndexed = stats.indexed || 0;
+            const remaining = typeof stats.remaining !== 'undefined' ? stats.remaining : 0;
+            
+            totalProcessed += (stats.total || 0);
+            totalIndexed += batchIndexed;
+
+            if (stats.summary) {
+              const s = stats.summary;
+              const totalItems = s.total_products || 1;
+              const currentIndexed = s.indexed_products || 0;
+              const pct = Math.min(100, Math.round((currentIndexed / totalItems) * 100));
+              if (progressBar) progressBar.style.width = `${pct}%`;
+              if (progressPercent) progressPercent.innerText = `${pct}%`;
+              if (progressSubtext) progressSubtext.innerText = `تمت معالجة ${totalIndexed} منتج بنجاح (المتبقي غير المفهرس: ${remaining})`;
+            }
+
+            // If 0 items processed or no more remaining for unindexed/today or batch returned total == 0
+            if ((stats.total || 0) === 0 || (mode !== 'all' && remaining === 0)) {
+              isDone = true;
+            }
+
+            // Update counters live
+            await loadVectorizeStats(false);
+
+            // Small delay between batches
+            await new Promise(r => setTimeout(r, 600));
+
+            // Safety break after 30 batches in single session
+            if (batchCount >= 30) {
+              isDone = true;
+            }
+          }
+
+          if (progressBar) progressBar.style.width = '100%';
+          if (progressPercent) progressPercent.innerText = '100%';
+          if (progressStatus) progressStatus.innerText = '✅ اكتملت عملية الفهرسة بنجاح!';
+          showToast(`اكتملت الفهرسة بنجاح! تمت معالجة وتحديث المتجهات. 🎉`, "success");
+
+          setTimeout(() => {
+            if (progressContainer) progressContainer.style.display = 'none';
+          }, 4500);
+
+        } catch (err) {
+          console.error("Vectorize process error:", err);
+          if (progressStatus) progressStatus.innerText = '❌ حدث خطأ أثناء الفهرسة';
+          showToast(err.message || "حدث خطأ أثناء الاتصال وتوليد المتجهات.", "error");
+        } finally {
+          isVectorizing = false;
+          if (btnUnindexed) btnUnindexed.disabled = false;
+          if (btnToday) btnToday.disabled = false;
+          if (btnAll) btnAll.disabled = false;
+          await loadVectorizeStats(false);
         }
       }
 

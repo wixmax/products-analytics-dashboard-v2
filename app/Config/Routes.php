@@ -71,6 +71,8 @@ $routes->post('/api/products/sync-trpc', 'Products::syncTrpc');
 $routes->post('/api/products/import', 'Products::importJson');
 $routes->get('/api/products/similar/(:num)', 'Products::similarProducts/$1');
 $routes->get('/api/vectorize/status', 'Products::vectorizeStatus');
+$routes->get('/api/vectorize/stats', 'Products::vectorizeStats');
+$routes->post('/api/vectorize/run', 'Products::vectorizeRun');
 $routes->post('/api/vectorize/test', 'Products::vectorizeTest');
 
 

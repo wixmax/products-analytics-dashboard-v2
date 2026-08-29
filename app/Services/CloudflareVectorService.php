@@ -186,11 +186,18 @@ class CloudflareVectorService
             'title'      => mb_substr((string)($product['title'] ?? ''), 0, 100),
         ];
 
-        return $this->upsertVectors([[
+        $saved = $this->upsertVectors([[
             'id'       => (string)$productId,
             'values'   => $vector,
             'metadata' => $metadata,
         ]]);
+
+        if ($saved) {
+            $this->productModel->update($productId, ['vector_indexed_at' => date('Y-m-d H:i:s')]);
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -239,12 +246,120 @@ class CloudflareVectorService
 
             if ($this->upsertVectors($vectorsToUpsert)) {
                 $stats['indexed'] += count($vectorsToUpsert);
+                $upsertedIds = array_column($validProducts, 'id');
+                if (!empty($upsertedIds)) {
+                    $this->productModel->whereIn('id', $upsertedIds)->set(['vector_indexed_at' => date('Y-m-d H:i:s')])->update();
+                }
             } else {
                 $stats['failed'] += count($chunk);
             }
         }
 
         return $stats;
+    }
+
+    /**
+     * Get indexing statistics from local database
+     */
+    public function getIndexingStats(): array
+    {
+        $total = $this->productModel->countAllResults(false);
+        
+        $indexed = (clone $this->productModel)
+            ->where('vector_indexed_at IS NOT NULL')
+            ->countAllResults(false);
+            
+        $unindexed = (clone $this->productModel)
+            ->where('vector_indexed_at IS NULL')
+            ->countAllResults(false);
+            
+        $todayDate = date('Y-m-d');
+        $todayTotal = (clone $this->productModel)
+            ->where("DATE(created_at) = '{$todayDate}'")
+            ->countAllResults(false);
+
+        $todayUnindexed = (clone $this->productModel)
+            ->where("DATE(created_at) = '{$todayDate}'")
+            ->where('vector_indexed_at IS NULL')
+            ->countAllResults(false);
+
+        return [
+            'total_products'     => $total,
+            'indexed_products'   => $indexed,
+            'unindexed_products' => $unindexed,
+            'today_total'        => $todayTotal,
+            'today_unindexed'    => $todayUnindexed,
+            'is_configured'      => $this->isConfigured(),
+            'index_name'         => $this->config->vectorizeIndex ?? '',
+            'embedding_model'    => $this->config->embeddingModel ?? '',
+        ];
+    }
+
+    /**
+     * Index a batch of products based on selected mode
+     *
+     * @param string $mode 'unindexed' | 'today' | 'all'
+     * @param int $limit Total limit for this run
+     * @param int $batchSize Batch chunk size
+     * @return array Results stats
+     */
+    public function indexBatch(string $mode = 'unindexed', int $limit = 50, int $batchSize = 25): array
+    {
+        if (!$this->isConfigured()) {
+            return [
+                'success' => false,
+                'message' => 'Cloudflare Vectorize credentials are not configured.',
+                'stats'   => ['total' => 0, 'indexed' => 0, 'failed' => 0, 'remaining' => 0]
+            ];
+        }
+
+        $builder = $this->productModel->select('id, title, ad_title, ad_body, country, origin, created_at');
+
+        if ($mode === 'unindexed') {
+            $builder->where('vector_indexed_at IS NULL');
+        } elseif ($mode === 'today') {
+            $todayDate = date('Y-m-d');
+            $builder->where("DATE(created_at) = '{$todayDate}'")
+                    ->where('vector_indexed_at IS NULL');
+        }
+        // 'all' doesn't filter by vector_indexed_at
+
+        $builder->orderBy('id', 'DESC');
+        if ($limit > 0) {
+            $builder->limit($limit);
+        }
+
+        $products = $builder->findAll();
+        $totalFound = count($products);
+
+        if ($totalFound === 0) {
+            $stats = $this->getIndexingStats();
+            return [
+                'success' => true,
+                'message' => 'جميع المنتجات المحددة مفهرسة مسبقاً بنجاح.',
+                'stats'   => [
+                    'total'     => 0,
+                    'indexed'   => 0,
+                    'failed'    => 0,
+                    'remaining' => $mode === 'today' ? $stats['today_unindexed'] : $stats['unindexed_products']
+                ]
+            ];
+        }
+
+        $result = $this->bulkIndexProducts($products, $batchSize);
+        $updatedStats = $this->getIndexingStats();
+
+        return [
+            'success' => true,
+            'message' => "تمت فهرسة {$result['indexed']} منتج بنجاح.",
+            'stats'   => [
+                'total'     => $result['total'],
+                'indexed'   => $result['indexed'],
+                'failed'    => $result['failed'],
+                'remaining' => $mode === 'today' ? $updatedStats['today_unindexed'] : $updatedStats['unindexed_products'],
+                'summary'   => $updatedStats
+            ]
+        ];
     }
 
     /**
