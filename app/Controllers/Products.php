@@ -2787,6 +2787,49 @@ private function generateLiveStrategy($product, $activity)
     }
 
     /**
+     * Get Cloudflare Vectorize status and local indexing statistics
+     */
+    public function vectorizeStats()
+    {
+        $vectorService = new \App\Services\CloudflareVectorService();
+        $stats = $vectorService->getIndexingStats();
+        $connection = $vectorService->testConnection();
+
+        return $this->respond([
+            'success'    => true,
+            'stats'      => $stats,
+            'connection' => $connection,
+        ]);
+    }
+
+    /**
+     * Run batch indexing from web UI
+     */
+    public function vectorizeRun()
+    {
+        $json = $this->request->getJSON(true) ?? [];
+        $mode = $json['mode'] ?? $this->request->getVar('mode') ?? 'unindexed';
+        $limit = intval($json['limit'] ?? $this->request->getVar('limit') ?? 50);
+        $batchSize = intval($json['batch_size'] ?? $this->request->getVar('batch_size') ?? 25);
+
+        if ($limit <= 0 || $limit > 500) {
+            $limit = 50;
+        }
+        if ($batchSize <= 0 || $batchSize > 50) {
+            $batchSize = 25;
+        }
+
+        $vectorService = new \App\Services\CloudflareVectorService();
+        if (!$vectorService->isConfigured()) {
+            return $this->fail('Cloudflare credentials not configured in .env or app/Config/Cloudflare.php', 400);
+        }
+
+        $result = $vectorService->indexBatch($mode, $limit, $batchSize);
+
+        return $this->respond($result);
+    }
+
+    /**
      * Test semantic search or vector generation
      */
     public function vectorizeTest()
