@@ -156,6 +156,18 @@ class McpAdminController extends BaseController
                 'description' => 'فلترة متقدمة للمنتجات الرابحة حسب عدد الإعلانات، السعر، والدولة.',
                 'badge'       => 'تحليل متقدم',
             ],
+            'semantic_search_products' => [
+                'name'        => 'semantic_search_products',
+                'title'       => 'البحث الدلالي الذكي بالمتجهات (Semantic Vector Search)',
+                'description' => 'أداة للبحث الدلالي المتقدم وفهم معاني ونوايا الإعلانات والمنتجات متعددة اللغات عبر Cloudflare Vectorize.',
+                'badge'       => 'بحث ذكاء اصطناعي Vectorize',
+            ],
+            'find_similar_products' => [
+                'name'        => 'find_similar_products',
+                'title'       => 'استكشاف المنتجات والإعلانات المشابهة (Find Similar Products)',
+                'description' => 'أداة لاستخراج أقرب المنتجات المنافسة والمشابهة لمنتج معين بدقة التشابه المتجهي (Cosine Distance).',
+                'badge'       => 'مطابقة متجهات',
+            ],
             'get_products' => [
                 'name'        => 'get_products',
                 'title'       => 'البحث عن المنتجات بالمعرف أو الاسم',
