@@ -507,7 +507,7 @@
 
       function updateMetrics(totalMatching, products) {
         document.getElementById('metric-total-products').textContent = totalMatching.toLocaleString('ar-EG');
-        const activeCount = products.filter(p => p.active_ads == 1 || p.active_ads === true || p.is_active).length;
+        const activeCount = products.filter(p => p.active_ads === true || p.active_ads === 't' || p.active_ads === 'true' || p.active_ads == 1 || p.is_active === true || p.is_active === 't').length;
         document.getElementById('metric-active-ads').textContent = activeCount.toLocaleString('ar-EG');
         
         const countries = new Set();
@@ -554,7 +554,7 @@
             domain = productUrl || 'رابط غير معروف';
           }
 
-          const isActive = p.active_ads == 1 || p.active_ads === true || p.is_active;
+          const isActive = p.active_ads === true || p.active_ads === 't' || p.active_ads === 'true' || p.active_ads == 1 || p.is_active === true || p.is_active === 't';
           const safeId = p.id || idx;
 
           // Time ago calculation
