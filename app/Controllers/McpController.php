@@ -472,20 +472,116 @@ class McpController extends ResourceController
         $skills = $this->getDynamicSkills();
         $content = $skills['nano-banana-pro-consistent-ads']['instructions'] ?? '';
 
-        if (!empty($content)) {
-            $content = str_replace('{{ask_user_product_image}}', $productImage, $content);
-            $content = str_replace('{{LANGUAGE}}', $lang, $content);
-            if ($productName !== '{{PRODUCT_NAME}}') {
-                $content = "# Target Product: {$productName}\n\n" . $content;
-            }
-            return $content;
+        if (empty($content) || strlen($content) < 50) {
+            $content = $this->getDefaultNanoPrompt();
         }
 
-        return "# Nano Banana Pro Ad & Web Color Pipeline\n\n"
-             . "Product: {$productName}\n"
-             . "Reference Asset: {$productImage}\n"
-             . "Target Language: {$lang}\n";
+        $content = str_replace('{{ask_user_product_image}}', $productImage, $content);
+        $content = str_replace('{{LANGUAGE}}', $lang, $content);
+        if ($productName !== '{{PRODUCT_NAME}}') {
+            $content = "# Target Product: {$productName}\n\n" . $content;
+        }
+        return $content;
     }
+
+    public function getDefaultNanoPrompt(): string
+    {
+        return <<<'SKILL'
+---
+name: nano-banana-pro-consistent-ads
+title: Nano Banana Pro Image-to-Image Ad Generator with Web Color System
+version: 3.2.0
+description: Generates high-converting visual prompts, strictly locked products, and explicit CSS/HEX color systems for web integration.
+---
+
+# Nano Banana Pro Ad & Web Color Pipeline
+
+## Core Instructions for Nano Banana Pro
+When processing input image `{{ask_user_product_image}}`:
+1. **Color Extraction & Web System Design:** 
+   - Analyze the product tones and generate a complete **Web Design Color System** with exact HEX values to be used both inside the ad imagery and on the web landing page (CSS/Tailwind).
+2. **Zero-Modification Rule:** Treat the uploaded product as an immutable asset. Maintain exact shapes, materials, tool alignments, colors, and branding badges.
+3. **Context-Only Editing:** Only modify the surrounding environment, lighting reflections, human models, and graphic overlays.
+4. **Typography Engine:** Render all text strings strictly in `{{LANGUAGE}}` with crisp vector-like edges, high contrast, and correct reading alignment. Do NOT translate to English under any circumstances. Never render the technical tag "RTL" as visible text.
+
+---
+
+## 1. Global Brand & Web Color Palette Output
+
+Before generating the sections, the model must output this structured color block:
+
+```markdown
+## 🎨 Web & Brand Color System (CSS Variables)
+
+| Role | Color Name | HEX Code | Usage on Web / Landing Page |
+| :--- | :--- | :--- | :--- |
+| **Primary** | Terracotta Deep | `#A45A3E` | Main Headlines, Primary CTA Buttons, Key Badges |
+| **Secondary** | Muted Clay | `#D28C70` | Subheadings, Icons, Secondary Highlights |
+| **Accent / Action** | Gold / Warm Amber | `#E5A842` | Star Ratings, Limited-time Offer Tags, Badges |
+| **Background Light** | Warm Cream / Beige | `#F7F2EB` | Main Page Sections, Cards Background |
+| **Background Dark** | Espresso / Deep Slate | `#2B1D18` | Dark Mode Sections, High-contrast Trust Banners |
+| **Surface / Card** | Pure Neutral White | `#FFFFFF` | Review Cards, Feature Containers, Form Fields |
+| **Text Dark** | Deep Charcoal | `#1F1A18` | Main Body Text, Paragraphs, FAQ Answers |
+| **Text Light** | Off-White | `#FDFBF7` | Text over Primary / Dark CTA buttons |
+```
+
+```css
+/* CSS Custom Properties for Direct-Response Landing Page */
+:root {
+  --color-primary: #A45A3E;
+  --color-secondary: #D28C70;
+  --color-accent: #E5A842;
+  --color-bg-main: #F7F2EB;
+  --color-surface: #FFFFFF;
+  --color-text-main: #1F1A18;
+  --color-text-muted: #6E625D;
+}
+```
+
+---
+
+## 2. Mandatory Section Prompt Format
+
+For EACH of the 7 sections below, the model MUST strictly generate the prompt following this exact template structure:
+
+### 🏷️ [Section Number]. [Section Name] ([slug_id])
+- **Language & Direction:** {{LANGUAGE}} / Right-aligned
+- **Aspect Ratio:** [1:1 or 4:5]
+- **Section Dominant Colors:** [HEX codes extracted from palette]
+
+**Nano Banana Pro Prompt:**
+```text
+[IMAGE-TO-IMAGE REFERENCE LOCK]
+[Detailed description locking the exact product geometry, materials, color, buttons, and tools from input image to be 100% frozen and unmodified. Do NOT redesign or replace the product with generic items.]
+
+[SCENE COMPOSITION & COLOR HARMONY]
+[Describe the realistic context, background surface, environment, lighting reflections, and color harmony with the palette (#HEX, #HEX)]
+
+[IN-IMAGE TYPOGRAPHY - {{LANGUAGE}} ONLY - DO NOT TRANSLATE]
+Render all visible text overlays strictly in {{LANGUAGE}} using clear modern typography (right-aligned layout):
+- Top Trust Badges: "[Badge 1 in {{LANGUAGE}}]" | "[Badge 2 in {{LANGUAGE}}]"
+- Main Headline (Bold): "[Headline in {{LANGUAGE}}]"
+- Features List: "• [Point 1 in {{LANGUAGE}}] • [Point 2 in {{LANGUAGE}}]"
+- Offer / Price Tag (Highlight Box): "[Price/Offer in {{LANGUAGE}}]"
+
+[OUTPUT QUALITY]
+Flawless photorealistic advertising poster, commercial catalog photography, sharp vector-like text rendering, 8k resolution.
+```
+
+---
+
+## 3. The 7 Required Sections Breakdown
+
+1. **Hero Offer (`hero_offer`)**: Complete open/active locked product on a premium contextual backdrop + localized trust bar & 4 bullet points.
+2. **Before / After (`before_after`)**: Split layout with identical locked product styling and localized problem/solution labels.
+3. **Authority / Social Validation (`authority_social_validation`)**: Locked product in focus foreground with soft background expert/workshop + star rating badge.
+4. **Tools Breakdown (`ingredients_mechanism`)**: Exploded / organized knolling view of the exact tools with pointing arrows and localized labels.
+5. **Customer Reviews (`customer_reviews`)**: Local target audience user holding the exact reference product + review card overlay.
+6. **FAQ Section (`faq_section`)**: Minimal clean background with locked reference product + 3 localized Q&A blocks.
+7. **Social Feed Creative (`social_ad_creative`)**: Dynamic vertical feed ad (4:5) featuring hand using the exact product + promo badge.
+SKILL;
+    }
+
 
     private function getSystemPrompt(): string
     {
@@ -538,7 +634,7 @@ class McpController extends ResourceController
 - تنفيذ تعليمات المهارة البصرية بالكامل:
   1. استخراج وتحليل درجات الألوان وتوليد نظام ألوان الويب الكامل (Web Design Color System) بجدول أكواد HEX وخصائص CSS Custom Properties لتطبيقها على المتجر وصفحة الهبوط.
   2. تطبيق قاعدة تثبيت المنتج الصارمة (Zero-Modification Rule): الحفاظ على شكل المنتج الأصلي، خاماته، تفاصيله، وشعاراته بنسبة 100% دون أي تغيير.
-  3. توليد برومبتات الأقسام الـ 7 لصفحة الهبوط والإعلانات (Hero Offer, Before/After, Authority, Tools Breakdown, Reviews, FAQ, Social Feed Creative) بنصوص تايبوغرافي عربية واضحة.
+  3. توليد برومبتات الأقسام الـ 7 لصفحة الهبوط والإعلانات كاملة بالصيغة والقالب الإلزامي المحدد لكل قسم (مع تحديد كود الألوان، كتل [IMAGE-TO-IMAGE REFERENCE LOCK]، [SCENE COMPOSITION & COLOR HARMONY]، [IN-IMAGE TYPOGRAPHY]، و [OUTPUT QUALITY]).
 
 ---
 

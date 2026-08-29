@@ -86,7 +86,7 @@ class McpAdminController extends BaseController
 - تنفيذ تعليمات المهارة البصرية بالكامل:
   1. استخراج وتحليل درجات الألوان وتوليد نظام ألوان الويب الكامل (Web Design Color System) بجدول أكواد HEX وخصائص CSS Custom Properties لتطبيقها على المتجر وصفحة الهبوط.
   2. تطبيق قاعدة تثبيت المنتج الصارمة (Zero-Modification Rule): الحفاظ على شكل المنتج الأصلي، خاماته، تفاصيله، وشعاراته بنسبة 100% دون أي تغيير.
-  3. توليد برومبتات الأقسام الـ 7 لصفحة الهبوط والإعلانات (Hero Offer, Before/After, Authority, Tools Breakdown, Reviews, FAQ, Social Feed Creative) بنصوص تايبوغرافي عربية واضحة.
+  3. توليد برومبتات الأقسام الـ 7 لصفحة الهبوط والإعلانات كاملة بالصيغة والقالب الإلزامي المحدد لكل قسم (مع تحديد كود الألوان، كتل [IMAGE-TO-IMAGE REFERENCE LOCK]، [SCENE COMPOSITION & COLOR HARMONY]، [IN-IMAGE TYPOGRAPHY]، و [OUTPUT QUALITY]).
 
 ---
 
@@ -345,17 +345,48 @@ Before generating the sections, the model must output this structured color bloc
 
 ---
 
-## 2. Sections Breakdown
+## 2. Mandatory Section Prompt Format
 
-1. **Hero Offer (`hero_offer`)**: Complete open + closed case lock on a premium backdrop + localized trust bar & 4 bullet points.
+For EACH of the 7 sections below, the model MUST strictly generate the prompt following this exact template structure:
+
+### 🏷️ [Section Number]. [Section Name] ([slug_id])
+- **Language & Direction:** {{LANGUAGE}} / Right-aligned
+- **Aspect Ratio:** [1:1 or 4:5]
+- **Section Dominant Colors:** [HEX codes extracted from palette]
+
+**Nano Banana Pro Prompt:**
+```text
+[IMAGE-TO-IMAGE REFERENCE LOCK]
+[Detailed description locking the exact product geometry, materials, color, buttons, and tools from input image to be 100% frozen and unmodified. Do NOT redesign or replace the product with generic items.]
+
+[SCENE COMPOSITION & COLOR HARMONY]
+[Describe the realistic context, background surface, environment, lighting reflections, and color harmony with the palette (#HEX, #HEX)]
+
+[IN-IMAGE TYPOGRAPHY - {{LANGUAGE}} ONLY - DO NOT TRANSLATE]
+Render all visible text overlays strictly in {{LANGUAGE}} using clear modern typography (right-aligned layout):
+- Top Trust Badges: "[Badge 1 in {{LANGUAGE}}]" | "[Badge 2 in {{LANGUAGE}}]"
+- Main Headline (Bold): "[Headline in {{LANGUAGE}}]"
+- Features List: "• [Point 1 in {{LANGUAGE}}] • [Point 2 in {{LANGUAGE}}]"
+- Offer / Price Tag (Highlight Box): "[Price/Offer in {{LANGUAGE}}]"
+
+[OUTPUT QUALITY]
+Flawless photorealistic advertising poster, commercial catalog photography, sharp vector-like text rendering, 8k resolution.
+```
+
+---
+
+## 3. The 7 Required Sections Breakdown
+
+1. **Hero Offer (`hero_offer`)**: Complete open/active locked product on a premium contextual backdrop + localized trust bar & 4 bullet points.
 2. **Before / After (`before_after`)**: Split layout with identical locked product styling and localized problem/solution labels.
-3. **Authority / Social Validation (`authority_social_validation`)**: Locked product in focus foreground with soft background salon/expert + star rating badge.
-4. **Tools Breakdown (`ingredients_mechanism`)**: Exploded / organized view of the exact tools from the case with pointing arrows and localized labels.
-5. **Customer Reviews (`customer_reviews`)**: Local target audience user holding the exact reference kit + review card overlay.
-6. **FAQ Section (`faq_section`)**: Minimal clean background with closed reference case + 3 localized Q&A blocks.
-7. **Social Feed Creative (`social_ad_creative`)**: Dynamic feed ad (4:5) featuring hand using the exact clipper from the kit + promo badge.
+3. **Authority / Social Validation (`authority_social_validation`)**: Locked product in focus foreground with soft background expert/workshop + star rating badge.
+4. **Tools Breakdown (`ingredients_mechanism`)**: Exploded / organized knolling view of the exact tools with pointing arrows and localized labels.
+5. **Customer Reviews (`customer_reviews`)**: Local target audience user holding the exact reference product + review card overlay.
+6. **FAQ Section (`faq_section`)**: Minimal clean background with locked reference product + 3 localized Q&A blocks.
+7. **Social Feed Creative (`social_ad_creative`)**: Dynamic vertical feed ad (4:5) featuring hand using the exact product + promo badge.
 SKILL;
     }
+
 
     /**
      * Reset and restore all default system skills in database.
