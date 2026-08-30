@@ -263,25 +263,39 @@ class CloudflareVectorService
      */
     public function getIndexingStats(): array
     {
-        $total = $this->productModel->countAllResults(false);
+        $total = (new ProductModel())->countAllResults(true);
         
-        $indexed = (clone $this->productModel)
+        $indexed = (new ProductModel())
             ->where('vector_indexed_at IS NOT NULL')
-            ->countAllResults(false);
+            ->countAllResults(true);
             
-        $unindexed = (clone $this->productModel)
+        $unindexed = (new ProductModel())
             ->where('vector_indexed_at IS NULL')
-            ->countAllResults(false);
+            ->countAllResults(true);
             
         $todayDate = date('Y-m-d');
-        $todayTotal = (clone $this->productModel)
+        $todayTotal = (new ProductModel())
             ->where("DATE(created_at) = '{$todayDate}'")
-            ->countAllResults(false);
+            ->countAllResults(true);
 
-        $todayUnindexed = (clone $this->productModel)
+        $todayUnindexed = (new ProductModel())
             ->where("DATE(created_at) = '{$todayDate}'")
             ->where('vector_indexed_at IS NULL')
-            ->countAllResults(false);
+            ->countAllResults(true);
+
+        // If todayUnindexed is 0, check latest snapshot to see if new data arrived recently
+        if ($todayUnindexed === 0) {
+            $latestSnapshot = (new \App\Models\SnapshotModel())->orderBy('id', 'DESC')->first();
+            if ($latestSnapshot && !empty($latestSnapshot['id'])) {
+                $snapUnindexed = (new ProductModel())
+                    ->where('snapshot_id', $latestSnapshot['id'])
+                    ->where('vector_indexed_at IS NULL')
+                    ->countAllResults(true);
+                if ($snapUnindexed > 0) {
+                    $todayUnindexed = $snapUnindexed;
+                }
+            }
+        }
 
         return [
             'total_products'     => $total,
@@ -313,14 +327,29 @@ class CloudflareVectorService
             ];
         }
 
-        $builder = $this->productModel->select('id, title, ad_title, ad_body, country, origin, created_at');
+        $builder = (new ProductModel())->select('id, title, ad_title, ad_body, country, origin, created_at');
 
         if ($mode === 'unindexed') {
             $builder->where('vector_indexed_at IS NULL');
         } elseif ($mode === 'today') {
             $todayDate = date('Y-m-d');
-            $builder->where("DATE(created_at) = '{$todayDate}'")
-                    ->where('vector_indexed_at IS NULL');
+            $todayCount = (new ProductModel())
+                ->where("DATE(created_at) = '{$todayDate}'")
+                ->where('vector_indexed_at IS NULL')
+                ->countAllResults(true);
+
+            if ($todayCount > 0) {
+                $builder->where("DATE(created_at) = '{$todayDate}'")
+                        ->where('vector_indexed_at IS NULL');
+            } else {
+                $latestSnapshot = (new \App\Models\SnapshotModel())->orderBy('id', 'DESC')->first();
+                if ($latestSnapshot && !empty($latestSnapshot['id'])) {
+                    $builder->where('snapshot_id', $latestSnapshot['id'])
+                            ->where('vector_indexed_at IS NULL');
+                } else {
+                    $builder->where('vector_indexed_at IS NULL');
+                }
+            }
         }
         // 'all' doesn't filter by vector_indexed_at
 
