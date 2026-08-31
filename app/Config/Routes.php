@@ -73,7 +73,7 @@ $routes->get('/api/products/similar/(:num)', 'Products::similarProducts/$1');
 $routes->get('/api/vectorize/status', 'Products::vectorizeStatus');
 $routes->get('/api/vectorize/stats', 'Products::vectorizeStats');
 $routes->post('/api/vectorize/run', 'Products::vectorizeRun');
-$routes->post('/api/vectorize/test', 'Products::vectorizeTest');
+$routes->match(['GET', 'POST'], '/api/vectorize/test', 'Products::vectorizeTest');
 
 
 // Saved Ads & Bookmark Endpoints
@@ -122,6 +122,10 @@ $routes->post('/api/products/ai_deep_analyze', 'Products::aiDeepAnalyze');
 $routes->get('/api/ai/history', 'Products::aiHistory');
 $routes->get('/api/ai/history/(:num)', 'Products::aiHistoryDetail/$1');
 $routes->post('/api/ai/history/(:num)/delete', 'Products::aiDeleteHistory/$1');
+
+// Semantic Product Search REST API for Automation Bots (n8n, WhatsApp, etc.)
+$routes->match(['GET', 'POST', 'OPTIONS'], '/api/products/semantic-search', 'Products::semanticSearch');
+
 // Model Context Protocol (MCP) Endpoints
 $routes->match(['GET', 'POST', 'OPTIONS'], '/api/mcp', 'McpController::handleMcp');
 $routes->match(['GET', 'POST', 'OPTIONS'], '/api/mcp/(:segment)', 'McpController::handleMcp/$1');
