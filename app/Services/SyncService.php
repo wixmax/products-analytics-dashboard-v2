@@ -511,7 +511,7 @@ class SyncService
                 ->first();
             if ($existingVersion) {
                 // Merge new rawJson into existing raw_json
-                $existingRawJson = $existingVersion['raw_json'];
+                $existingRawJson = \App\Libraries\Storage\SnapshotStorageHelper::decompress($existingVersion['raw_json'] ?? '');
                 $mergedJson = $this->mergeRawJsonSnapshots($existingRawJson, $rawJson);
 
                 $decodedMerged = json_decode($mergedJson, true);
@@ -523,7 +523,7 @@ class SyncService
                 $newHash = md5($mergedJson);
 
                 $this->snapshotModel->update($existingVersion['id'], [
-                    'raw_json'      => $mergedJson,
+                    'raw_json'      => \App\Libraries\Storage\SnapshotStorageHelper::compress($mergedJson),
                     'product_count' => $newProductCount,
                     'data_hash'     => $newHash,
                 ]);
@@ -562,7 +562,7 @@ class SyncService
         $data = [
             'origin'        => $origin,
             'api_version'   => $apiVersion,
-            'raw_json'      => $rawJson,
+            'raw_json'      => \App\Libraries\Storage\SnapshotStorageHelper::compress($rawJson),
             'product_count' => $productCount,
             'data_hash'     => $dataHash,
         ];
@@ -578,6 +578,7 @@ class SyncService
 
     private function mergeRawJsonSnapshots(string $existingRawJson, string $newRawJson): string
     {
+        $existingRawJson = \App\Libraries\Storage\SnapshotStorageHelper::decompress($existingRawJson);
         $existingDecoded = json_decode($existingRawJson, true);
         $newDecoded = json_decode($newRawJson, true);
 

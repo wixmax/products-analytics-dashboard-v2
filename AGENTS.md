@@ -1,3 +1,12 @@
+## Clean Modular Architecture & Project Standards
+
+This project enforces strict clean architecture principles:
+1. **Modular Controllers (< 400 lines):** Never bloat controllers (e.g. `Products.php`, `McpController.php`). Group domain endpoints into dedicated Traits under `app/Controllers/Traits/` (e.g. `SavedAdsTrait`, `SnapshotTrait`, `AiAnalysisTrait`, `VectorizeTrait`, `SyncTrait`, `SettingsTrait`).
+2. **MCP Tool Subsystem:** All MCP tools must implement `App\Libraries\Mcp\ToolInterface` and be registered in `App\Libraries\Mcp\ToolRegistry`. Keep dynamic prompts in `App\Libraries\Ai\PromptBuilder.php`.
+3. **Multi-Tenancy & Quotas:** Always scope user data using `App\Libraries\TenantContext` / `App\Models\TenantModel` and check usage via `App\Libraries\SaaS\QuotaManager`.
+4. **Data Compression & Async Jobs:** Use `App\Libraries\Storage\SnapshotStorageHelper` for Gzip `raw_json` compression. Run heavy CLI operations via `App\Libraries\Queue\BackgroundTaskRunner` or `php spark task:async`.
+5. **View Modularity & Shared JS:** Extract shared modals into `app/Views/partials/` and centralized JS in `public/`.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
@@ -16,4 +25,3 @@ Rules:
 - All modifications, tests, and commits must remain LOCAL.
 - NEVER run `git push` unless the user explicitly commands it in their message (e.g. "ارفع التعديلات", "ارفع المشروع", "push to origin").
 - When finishing a task, only notify the user that local changes are complete and tested, and wait for their explicit push instruction.
-
