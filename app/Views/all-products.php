@@ -345,6 +345,21 @@
           </div>
         </div>
 
+        <!-- Similar Search Active Banner -->
+        <div id="similar-search-banner" style="display: none; background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(99, 102, 241, 0.12)); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.5rem; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--shadow-sm);">
+          <div>
+            <h4 style="margin: 0; color: #a855f7; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+              <span>✨</span> نتائج البحث عن المنتجات والإعلانات المماثلة لـ: <span id="similar-target-title" style="color: var(--color-text-main); font-weight: 800;"></span>
+            </h4>
+            <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 4px;">
+              تم استخراج النتائج الدلالية عبر الذكاء الاصطناعي (Vector Similarity Index)
+            </div>
+          </div>
+          <button onclick="clearSimilarFilter()" class="btn btn-secondary" style="background: var(--bg-card); font-size: 0.85rem; font-weight: 700; border-color: var(--border-color); display: flex; align-items: center; gap: 6px;">
+            <span>✕</span> إلغاء والعودة لكافة المنتجات
+          </button>
+        </div>
+
         <!-- Product Grid Container -->
         <div class="products-grid" id="catalog-products-container">
           <div style="grid-column: 1 / -1; text-align: center; color: var(--color-text-muted); padding: 3rem 0;">
@@ -630,6 +645,11 @@
             <article class="product-card index-product-card" id="product-${safeId}">
               <div class="product-media">
                 ${mediaHtml}
+                ${p.similarity_score ? `
+                  <div style="position: absolute; top: 10px; left: 10px; z-index: 6; background: linear-gradient(135deg, #a855f7, #6366f1); color: #ffffff; font-size: 0.72rem; font-weight: 800; padding: 4px 8px; border-radius: 6px; box-shadow: var(--shadow-sm); border: 1px solid rgba(255, 255, 255, 0.25);">
+                    ✨ ${p.similarity_score}% تطابق
+                  </div>
+                ` : ''}
                 <div class="status-badge ${isActive ? 'active' : 'inactive'}">
                   ${isActive ? '🟢 نشط' : '🔴 متوقف'}
                 </div>
@@ -652,7 +672,7 @@
 
               <div class="card-footer" style="gap: 5px; padding: 8px;">
                 ${productUrl && productUrl !== '#' ? `<a href="${productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.72rem; padding: 0.4rem 0.4rem;">🛒 زيارة</a>` : ''}
-                <button onclick="openSimilarProductsModal(${p.id || idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.5rem; font-size: 0.72rem; color: #a855f7; border-color: rgba(168, 85, 247, 0.4);" title="استكشاف منتجات وإعلانات مماثلة بالذكاء الاصطناعي">✨ مماثل</button>
+                <button onclick="filterSimilarProducts(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.5rem; font-size: 0.72rem; color: #a855f7; border-color: rgba(168, 85, 247, 0.4);" title="استكشاف منتجات وإعلانات مماثلة بالذكاء الاصطناعي في نفس الصفحة">✨ مماثل</button>
                 <button onclick="openIndexInfoModal(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.5rem; font-size: 0.72rem;">ℹ️</button>
                 <button onclick="openProductDetailsModal(${idx})" class="btn btn-secondary" style="flex: 1; font-size: 0.72rem; padding: 0.4rem 0.4rem;">📊 تفاصيل</button>
                 ${saveBtnHtml}
@@ -903,72 +923,75 @@
         }
       }
 
-      async function openSimilarProductsModal(productId) {
-        const modal = document.getElementById('similar-products-modal');
-        const container = document.getElementById('similar-products-container');
-        if (!modal || !container) return;
+      async function filterSimilarProducts(idx) {
+        const target = (typeof idx === 'number' && typeof catalogProducts !== 'undefined') ? catalogProducts[idx] : null;
+        if (!target) return;
 
-        modal.style.display = 'flex';
-        container.innerHTML = '<div style="text-align: center; color: var(--color-text-muted); padding: 3rem 0;"><span style="font-size: 2rem;">✨</span><br><br>جاري تحليل المتجهات والبحث عن إعلانات ومنتجات منافسة ومماثلة...</div>';
+        const targetId = target.id || target.product_id;
+        if (!targetId) {
+          if (typeof showToast === 'function') showToast('❌ لا يتوفر معرف للمنتج المطلوب للبحث المتجهي.', 'warning');
+          return;
+        }
+
+        const banner = document.getElementById('similar-search-banner');
+        const targetTitleEl = document.getElementById('similar-target-title');
+        if (banner) banner.style.display = 'flex';
+        if (targetTitleEl) targetTitleEl.textContent = target.title || 'المنتج المحدد';
+
+        const container = document.getElementById('catalog-products-container');
+        container.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; color: var(--color-text-muted); padding: 4rem 0;">
+            <div style="font-size: 2.5rem; margin-bottom: 12px;">✨</div>
+            <div style="font-size: 1.1rem; font-weight: 700; color: var(--color-text-main);">جاري تحليل المتجهات والبحث الدلالي عن إعلانات ومنتجات منافسة ومماثلة...</div>
+            <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 6px;">يتم الاستعلام مباشرة عبر Cloudflare Vectorize</div>
+          </div>
+        `;
+
+        const paginationBar = document.getElementById('catalog-pagination-bar');
+        if (paginationBar) paginationBar.style.display = 'none';
+
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
         try {
-          const res = await fetch(`/api/products/similar/${productId}?limit=6`);
+          const res = await fetch(`/api/products/similar/${targetId}?limit=24`);
           const data = await res.json();
 
           if (!data.success || !data.data || data.data.length === 0) {
-            container.innerHTML = '<div style="text-align: center; color: var(--color-text-muted); padding: 2.5rem 0;">ℹ️ لم يتم العثور على منتجات مطابقة كافية في الفهرس المتجهي.</div>';
+            container.innerHTML = `
+              <div style="grid-column: 1 / -1; text-align: center; color: var(--color-text-muted); padding: 4rem 0;">
+                <div style="font-size: 2.2rem; margin-bottom: 10px;">📭</div>
+                <div style="font-size: 1.1rem; font-weight: 700; margin-bottom: 8px;">لم يتم العثور على إعلانات أو منتجات مطابقة كافية في الفهرس المتجهي لهذا المنتج.</div>
+                <button onclick="clearSimilarFilter()" class="btn btn-primary" style="margin-top: 12px; font-weight: 700;">🔙 العودة للدليل الكامل</button>
+              </div>
+            `;
             return;
           }
 
+          catalogProducts = data.data;
+          const totalEl = document.getElementById('metric-total-products');
+          if (totalEl) totalEl.textContent = catalogProducts.length.toLocaleString('ar-EG');
+          
+          renderProductCards(catalogProducts);
+          if (typeof showToast === 'function') {
+            showToast(`✨ تم العثور على ${catalogProducts.length} منتج وإعلان مماثل بنجاح!`, 'success');
+          }
+        } catch (err) {
+          console.error("Similar products search error:", err);
           container.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem;">
-              ${data.data.map(p => {
-                const img = (p.ad_image_urls || p.thumbnail_url || '').split(';')[0];
-                const score = p.similarity_score || 0;
-                return `
-                  <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; height: 140px; background: #111;">
-                      ${img ? `<img src="${img}" style="width: 100%; height: 100%; object-fit: cover;" />` : '<div style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--color-text-muted);">📦 لا توجد صورة</div>'}
-                      <div style="position: absolute; top: 6px; left: 6px; background: rgba(168, 85, 247, 0.9); color: #fff; font-size: 0.7rem; font-weight: 800; padding: 2px 8px; border-radius: 9999px;">
-                        ✨ ${score}% تطابق
-                      </div>
-                    </div>
-                    <div style="font-weight: 700; font-size: 0.85rem; line-height: 1.3; color: var(--color-text-main); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="${p.title}">
-                      ${p.title}
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--color-text-muted); margin-top: auto;">
-                      <span>🌍 ${p.country || 'MA'}</span>
-                      <span>🏆 ${p.origin || 'Winning'}</span>
-                    </div>
-                    ${p.product_url && p.product_url !== '#' ? `<a href="${p.product_url}" target="_blank" class="btn btn-primary" style="font-size: 0.75rem; padding: 0.35rem; text-align: center; margin-top: 4px;">🛒 زيارة المتجر</a>` : ''}
-                  </div>
-                `;
-              }).join('')}
+            <div style="grid-column: 1 / -1; text-align: center; color: var(--color-error); padding: 3rem 0;">
+              ❌ فشل جلب المنتجات المماثلة: ${err.message}<br><br>
+              <button onclick="clearSimilarFilter()" class="btn btn-secondary">🔙 العودة للدليل الكامل</button>
             </div>
           `;
-        } catch (err) {
-          container.innerHTML = `<div style="text-align: center; color: var(--color-error); padding: 2rem 0;">❌ فشل جلب المنتجات المماثلة: ${err.message}</div>`;
         }
       }
 
-      function closeSimilarProductsModal() {
-        const modal = document.getElementById('similar-products-modal');
-        if (modal) modal.style.display = 'none';
+      function clearSimilarFilter() {
+        const banner = document.getElementById('similar-search-banner');
+        if (banner) banner.style.display = 'none';
+        fetchCatalogProducts(1);
       }
     </script>
-
-    <!-- Similar Products Modal -->
-    <div id="similar-products-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 1rem;">
-      <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); width: 100%; max-width: 850px; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-xl); padding: 1.5rem; display: flex; flex-direction: column;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
-          <h3 style="margin: 0; font-size: 1.15rem; color: var(--color-text-main); display: flex; align-items: center; gap: 8px;">
-            <span style="color: #a855f7;">✨</span> منتجات وإعلانات مماثلة بالذكاء الاصطناعي (Vector Search)
-          </h3>
-          <button onclick="closeSimilarProductsModal()" style="background: transparent; border: none; font-size: 1.4rem; color: var(--color-text-muted); cursor: pointer; padding: 4px;">&times;</button>
-        </div>
-        <div id="similar-products-container"></div>
-      </div>
-    </div>
   </body>
 </html>
 
