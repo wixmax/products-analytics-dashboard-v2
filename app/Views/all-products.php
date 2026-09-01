@@ -371,15 +371,16 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
-    <script src="<?= base_url('analysis-helper.js') ?>?v=5.0"></script>
-    <script src="<?= base_url('product-modal-core.js') ?>?v=5.0"></script>
-    <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=5.0"></script>
+    <script src="<?= base_url('analysis-helper.js') ?>?v=5.1"></script>
+    <script src="<?= base_url('product-modal-core.js') ?>?v=5.1"></script>
+    <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=5.1"></script>
     <script>
       let currentPage = 1;
       let totalPages = 1;
       let debounceTimer = null;
       let catalogProducts = [];
       let savedProductIds = new Set();
+      let savedProductUrls = new Set();
       let savedProducts = [];
       let collections = ["عامة"];
       let watchedStores = [];
@@ -433,8 +434,10 @@
           if (res.ok) {
             const data = await res.json();
             savedProducts = data.saved_products || data.products || (Array.isArray(data) ? data : []);
-            savedProductIds = new Set((Array.isArray(savedProducts) ? savedProducts : []).map(p => String(p.id || p.product_id)));
-            document.getElementById('metric-saved-count').textContent = savedProductIds.size;
+            savedProductIds = new Set((Array.isArray(savedProducts) ? savedProducts : []).map(p => String(p.id || p.product_id)).filter(Boolean));
+            savedProductUrls = new Set((Array.isArray(savedProducts) ? savedProducts : []).map(p => p.product_url || p.productUrl).filter(Boolean));
+            const countEl = document.getElementById('metric-saved-count');
+            if (countEl) countEl.textContent = savedProducts.length;
           }
         } catch (e) {
           console.error("Failed to fetch saved products list:", e);
@@ -527,9 +530,10 @@
         }
 
         container.innerHTML = products.map((p, idx) => {
-          const isSaved = savedProductIds.has(String(p.id));
-          const title = p.title || p.product_title || 'بدون عنوان';
           const productUrl = p.product_url || p.productUrl || '#';
+          const isSaved = (p.id && savedProductIds.has(String(p.id))) || 
+                          (productUrl && productUrl !== '#' && savedProductUrls.has(productUrl));
+          const title = p.title || p.product_title || 'بدون عنوان';
 
           // Extract Images & Videos safely
           const imageUrls = (p.ad_image_urls || p.thumbnail_url || p.image_url || p.media_url || '')
@@ -613,7 +617,7 @@
           }
 
           const saveBtnHtml = `
-            <button onclick="toggleSaveProduct('${p.id}', this)" 
+            <button onclick="toggleSaveProduct(${idx}, this)" 
                     class="btn ${isSaved ? 'btn-success' : 'btn-secondary'}" 
                     id="save-btn-${safeId}"
                     title="${isSaved ? 'محفوظ' : 'حفظ المنتج'}"
@@ -745,35 +749,157 @@
         btns.innerHTML = btnsHtml;
       }
 
-      async function toggleSaveProduct(productId, btnElem) {
+      async function toggleSaveProduct(param, btnElem) {
+        let productObj = null;
+        let productId = null;
+        let productUrl = null;
+
+        if (typeof param === 'number' && typeof catalogProducts !== 'undefined' && catalogProducts[param]) {
+          productObj = catalogProducts[param];
+          productId = productObj.id || productObj.product_id;
+          productUrl = productObj.product_url || productObj.productUrl;
+        } else if (typeof param === 'object' && param !== null) {
+          productObj = param;
+          productId = param.id || param.product_id;
+          productUrl = param.product_url || param.productUrl;
+        } else if (typeof param === 'string' || typeof param === 'number') {
+          productId = param;
+          if (typeof catalogProducts !== 'undefined') {
+            productObj = catalogProducts.find(p => p && (String(p.id) === String(productId) || p.product_url === productId || p.productUrl === productId));
+          }
+          if (productObj) {
+            productId = productObj.id || productObj.product_id;
+            productUrl = productObj.product_url || productObj.productUrl;
+          }
+        }
+
+        if (!productObj && typeof currentProductForDetails !== 'undefined' && currentProductForDetails) {
+          productObj = currentProductForDetails;
+          productUrl = currentProductForDetails.product_url || currentProductForDetails.productUrl;
+          productId = currentProductForDetails.id;
+        }
+
+        if (!productObj) {
+          if (typeof showToast === 'function') showToast('❌ تعذر تحديد بيانات المنتج لحفظه.');
+          return;
+        }
+
+        const safeId = productObj.id || (typeof param === 'number' ? param : idxOrDefault(productObj));
+        const cardBtn = btnElem || document.getElementById(`save-btn-${safeId}`);
+
+        const payload = {
+          product_id: productId,
+          product_url: productUrl && productUrl !== '#' ? productUrl : (productId ? `#product-${productId}` : ''),
+          title: productObj.title || productObj.product_title || 'بدون عنوان',
+          country: productObj.country || 'MA',
+          algorithm: productObj.algo || productObj.algorithm || 'winning',
+          ad_start_date: productObj.ad_start_date || '',
+          ads_count: productObj.ads_count || 1,
+          unique_image_count: productObj.unique_image_count || 0,
+          unique_video_count: productObj.unique_video_count || 0,
+          avg_creatives: productObj.avg_creatives || 1,
+          ad_title: productObj.ad_title || productObj.title || '',
+          ad_body: productObj.ad_body || '',
+          ad_image_urls: productObj.ad_image_urls || '',
+          ad_video_urls: productObj.ad_video_urls || '',
+          actualPrice: productObj.actualPrice || productObj.price_1 || '0',
+          active_ads: productObj.active_ads !== undefined ? productObj.active_ads : true,
+          origin: productObj.origin || 'Winning',
+          collection: productObj.collection || 'عامة',
+          api_version: productObj.api_version || ''
+        };
+
         try {
           const res = await fetch('/api/products/saved/toggle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ product_id: productId })
+            body: JSON.stringify(payload)
           });
           const data = await res.json();
-          if (data.status === 'success' || data.saved !== undefined) {
-            if (data.saved) {
-              savedProductIds.add(String(productId));
-              if (btnElem) btnElem.classList.add('btn-success');
-              if (btnElem) btnElem.classList.remove('btn-secondary');
-              if (btnElem) btnElem.textContent = '⭐';
-              showToast('✅ تم حفظ المنتج للمفضلة بنجاح!');
+          if (res.ok && (data.success || data.action || data.is_saved !== undefined || data.saved !== undefined)) {
+            const isNowSaved = data.is_saved === true || data.saved === true || data.action === 'saved';
+            
+            if (isNowSaved) {
+              if (productId) savedProductIds.add(String(productId));
+              if (productUrl && productUrl !== '#') savedProductUrls.add(productUrl);
+              if (!savedProducts.some(sp => (productUrl && productUrl !== '#' && (sp.product_url === productUrl || sp.productUrl === productUrl)) || (productId && String(sp.id) === String(productId)))) {
+                savedProducts.push(productObj);
+              }
+              if (typeof showToast === 'function') showToast('✅ ' + (data.message || 'تم حفظ المنتج بنجاح! ⭐'));
             } else {
-              savedProductIds.delete(String(productId));
-              if (btnElem) btnElem.classList.remove('btn-success');
-              if (btnElem) btnElem.classList.add('btn-secondary');
-              if (btnElem) btnElem.textContent = '☆';
-              showToast('🗑️ تم إزالة المنتج من المفضلة.');
+              if (productId) savedProductIds.delete(String(productId));
+              if (productUrl) savedProductUrls.delete(productUrl);
+              savedProducts = savedProducts.filter(sp => {
+                const spUrl = sp.product_url || sp.productUrl;
+                const spId = String(sp.id || sp.product_id);
+                if (productUrl && productUrl !== '#' && spUrl === productUrl) return false;
+                if (productId && spId === String(productId)) return false;
+                return true;
+              });
+              if (typeof showToast === 'function') showToast('🗑️ ' + (data.message || 'تمت إزالة المنتج من المفضلة.'));
             }
+
+            if (cardBtn) {
+              if (isNowSaved) {
+                cardBtn.classList.add('btn-success');
+                cardBtn.classList.remove('btn-secondary');
+                cardBtn.textContent = '⭐';
+                cardBtn.title = 'محفوظ';
+              } else {
+                cardBtn.classList.remove('btn-success');
+                cardBtn.classList.add('btn-secondary');
+                cardBtn.textContent = '☆';
+                cardBtn.title = 'حفظ المنتج';
+              }
+            }
+
             const countEl = document.getElementById('metric-saved-count');
-            if (countEl) countEl.textContent = savedProductIds.size;
+            if (countEl) countEl.textContent = savedProducts.length;
+            
             updateModalSaveState();
+          } else {
+            if (typeof showToast === 'function') showToast('❌ ' + (data.messages?.error || data.message || 'فشل في حفظ المنتج'));
           }
         } catch (err) {
           console.error("Save toggle error:", err);
-          showToast('❌ حدث خطأ أثناء التبديل في المفضلة.');
+          if (typeof showToast === 'function') showToast('❌ حدث خطأ أثناء التبديل في المفضلة.');
+        }
+      }
+
+      function idxOrDefault(p) {
+        if (!p || typeof catalogProducts === 'undefined') return '';
+        const idx = catalogProducts.indexOf(p);
+        return idx !== -1 ? idx : '';
+      }
+
+      function updateModalSaveState() {
+        if (!currentProductForDetails) return;
+        const pId = String(currentProductForDetails.id || '');
+        const pUrl = currentProductForDetails.product_url || currentProductForDetails.productUrl || '';
+        const isSaved = (pId && savedProductIds.has(pId)) ||
+                        (pUrl && pUrl !== '#' && savedProductUrls.has(pUrl)) ||
+                        savedProducts.some(p => (pId && String(p.id || p.product_id) === pId) || (pUrl && pUrl !== '#' && (p.product_url === pUrl || p.productUrl === pUrl)));
+        
+        const saveBtn = document.getElementById("details-save-btn");
+        const collectionSelect = document.getElementById("details-collection-select");
+
+        if (saveBtn) {
+          if (isSaved) {
+            saveBtn.textContent = "⭐ محفوظ";
+            saveBtn.style.background = "var(--color-success)";
+            saveBtn.style.color = "white";
+          } else {
+            saveBtn.textContent = "احفظ المنتج";
+            saveBtn.style.background = "transparent";
+            saveBtn.style.color = "var(--color-success)";
+          }
+        }
+
+        if (collectionSelect) {
+          collectionSelect.style.display = "inline-block";
+          const productInSaved = savedProducts.find(p => (pId && String(p.id || p.product_id) === pId) || (pUrl && pUrl !== '#' && (p.product_url === pUrl || p.productUrl === pUrl)));
+          const savedCol = productInSaved ? (productInSaved.collection || "عامة") : "عامة";
+          collectionSelect.innerHTML = (collections || ["عامة"]).map(c => `<option value="${c}" ${savedCol === c ? "selected" : ""}>📁 ${c}</option>`).join("");
         }
       }
 

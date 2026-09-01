@@ -76,24 +76,69 @@ trait SavedAdsTrait
         $model = new ProductModel();
         
         $json = $this->request->getJSON(true);
-        if (!empty($json)) {
+        if (!empty($json) && is_array($json)) {
             $productUrl = $json['product_url'] ?? $json['productUrl'] ?? null;
+            $productId = $json['product_id'] ?? $json['id'] ?? null;
             $product = $json;
         } else {
-            $productUrl = $this->request->getVar('product_url');
-            $product = $this->request->getPost();
+            $productUrl = $this->request->getVar('product_url') ?? $this->request->getVar('productUrl');
+            $productId = $this->request->getVar('product_id') ?? $this->request->getVar('id');
+            $product = $this->request->getPost() ?: ($this->request->getRawInput() ?: []);
         }
 
-        if (empty($productUrl)) {
-            return $this->fail('Product URL is required');
+        // Sanitize string literals from JavaScript
+        if ($productId === 'undefined' || $productId === 'null' || $productId === '') {
+            $productId = null;
+        }
+        if ($productUrl === 'undefined' || $productUrl === 'null' || $productUrl === '' || $productUrl === '#') {
+            $productUrl = null;
         }
 
         $context = TenantContext::getInstance();
         $tenantId = $context->getTenantId();
 
-        $existing = $model->where('product_url', $productUrl)
-                          ->where('tenant_id', $tenantId)
-                          ->first();
+        $targetProduct = null;
+        if (!empty($productId) && is_numeric($productId)) {
+            $targetProduct = $model->bypassTenant()->find($productId);
+            if ($targetProduct) {
+                if (empty($productUrl)) {
+                    $productUrl = $targetProduct['product_url'] ?? null;
+                }
+                $product = array_merge($targetProduct, (array)$product);
+            }
+        }
+
+        if (empty($productUrl) && $targetProduct && !empty($targetProduct['product_url']) && $targetProduct['product_url'] !== '#') {
+            $productUrl = $targetProduct['product_url'];
+        }
+
+        // If product_url is still empty, fallback so saving never errors
+        if (empty($productUrl)) {
+            if (!empty($productId)) {
+                $productUrl = '#product-' . $productId;
+            } elseif (!empty($product['title']) && $product['title'] !== 'undefined') {
+                $productUrl = '#product-' . md5($product['title'] . microtime());
+            } else {
+                $productUrl = '#product-' . uniqid();
+            }
+        }
+
+        $existing = null;
+        if (!empty($productUrl) && $productUrl !== '#') {
+            $query = $model->where('product_url', $productUrl);
+            if ($context->hasTenant()) {
+                $query->where('tenant_id', $tenantId);
+            }
+            $existing = $query->first();
+        }
+
+        if (!$existing && !empty($productId) && is_numeric($productId)) {
+            $query = $model->where('id', $productId);
+            if ($context->hasTenant()) {
+                $query->where('tenant_id', $tenantId);
+            }
+            $existing = $query->first();
+        }
 
         if ($existing) {
             $currentlySaved = ($existing['is_saved'] === true || $existing['is_saved'] === 't' || $existing['is_saved'] === 1 || $existing['is_saved'] === '1' || $existing['is_saved'] === 'true');
@@ -147,14 +192,18 @@ trait SavedAdsTrait
             }
             
             $model->update($existing['id'], $updateData);
+            $existing = array_merge($existing, $updateData);
             return $this->respond([
                 'success' => true,
+                'status' => 'success',
+                'saved' => $newSavedState,
                 'is_saved' => $newSavedState,
                 'action' => $newSavedState ? 'saved' : 'unsaved',
                 'message' => $newSavedState ? 'تم حفظ المنتج بنجاح! ⭐' : 'تمت إزالة المنتج من المحفوظات.',
+                'product' => $existing
             ]);
         } else {
-            $globalProduct = $model->where('product_url', $productUrl)->first();
+            $globalProduct = $targetProduct ?? $model->bypassTenant()->where('product_url', $productUrl)->first();
             $origin = $product['origin'] ?? $globalProduct['origin'] ?? 'Winning';
 
             $dataToInsert = [
@@ -188,13 +237,17 @@ trait SavedAdsTrait
             if ($origin === 'Winning') {
                 $dataToInsert['badge_algorithm'] = $product['badge_algorithm'] ?? $globalProduct['badge_algorithm'] ?? 'winning';
             }
-            $model->insert($dataToInsert);
+            $insertedId = $model->insert($dataToInsert);
+            $dataToInsert['id'] = $insertedId;
 
             return $this->respond([
                 'success' => true,
+                'status' => 'success',
+                'saved' => true,
                 'is_saved' => true,
                 'action' => 'saved',
-                'message' => 'تم حفظ المنتج بنجاح! ⭐'
+                'message' => 'تم حفظ المنتج بنجاح! ⭐',
+                'product' => $dataToInsert
             ]);
         }
     }

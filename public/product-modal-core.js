@@ -232,7 +232,7 @@ async function openDetailsModal(productOrIdx) {
   if (saveBtn) {
     saveBtn.onclick = () => {
       if (typeof toggleSaveProduct === 'function') {
-        toggleSaveProduct(p.id, null);
+        toggleSaveProduct(p, null);
       }
     };
   }
@@ -280,8 +280,10 @@ var openProductDetailsModal = openDetailsModal;
 function updateModalSaveState() {
   if (!currentProductForDetails) return;
   const pId = String(currentProductForDetails.id || '');
+  const pUrl = currentProductForDetails.productUrl || currentProductForDetails.product_url || '';
   const isSaved = (typeof savedProductIds !== 'undefined' && savedProductIds.has(pId)) ||
-                  (typeof savedProducts !== 'undefined' && savedProducts.some(p => String(p.id || p.product_id) === pId || (p.productUrl && p.productUrl === currentProductForDetails.productUrl)));
+                  (typeof savedProductUrls !== 'undefined' && pUrl && savedProductUrls.has(pUrl)) ||
+                  (typeof savedProducts !== 'undefined' && savedProducts.some(p => String(p.id || p.product_id) === pId || (pUrl && (p.productUrl === pUrl || p.product_url === pUrl))));
   const saveBtn = document.getElementById("details-save-btn");
   const collectionSelect = document.getElementById("details-collection-select");
 
@@ -300,7 +302,7 @@ function updateModalSaveState() {
   if (collectionSelect) {
     collectionSelect.style.display = "inline-block";
     const sList = typeof savedProducts !== 'undefined' ? savedProducts : [];
-    const productInSaved = sList.find(p => String(p.id || p.product_id) === pId || (p.productUrl && p.productUrl === currentProductForDetails.productUrl));
+    const productInSaved = sList.find(p => String(p.id || p.product_id) === pId || (pUrl && (p.productUrl === pUrl || p.product_url === pUrl)));
     const savedCol = productInSaved ? (productInSaved.collection || "عامة") : "عامة";
     const cList = typeof collections !== 'undefined' ? collections : ["عامة"];
     collectionSelect.innerHTML = cList.map(c => `<option value="${c}" ${savedCol === c ? "selected" : ""}>📁 ${c}</option>`).join("");

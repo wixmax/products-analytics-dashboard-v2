@@ -1020,9 +1020,9 @@
     </script>
     <script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="<?= base_url('analysis-helper.js') ?>?v=5.0"></script>
-    <script src="<?= base_url('product-modal-core.js') ?>?v=5.0"></script>
-    <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=5.0"></script>
+    <script src="<?= base_url('analysis-helper.js') ?>?v=5.1"></script>
+    <script src="<?= base_url('product-modal-core.js') ?>?v=5.1"></script>
+    <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=5.1"></script>
     <script src="<?= base_url('index.js') ?>?v=5.0"></script>
   </body>
 </html>
