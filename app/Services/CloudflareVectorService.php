@@ -13,7 +13,7 @@ class CloudflareVectorService
 
     public function __construct(?Cloudflare $config = null)
     {
-        $this->config = $config ?? config('Cloudflare');
+        $this->config = $config ?? new \Config\Cloudflare();
         $this->client = \Config\Services::curlrequest([
             'timeout' => 30,
             'http_errors' => false
