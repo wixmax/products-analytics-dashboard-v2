@@ -251,6 +251,30 @@ class McpAdminController extends BaseController
                 'description' => 'تصدير بيانات الإعلانات والتحليلات بتنسيقات متعددة (JSON, CSV, Markdown).',
                 'badge'       => 'تصدير البيانات',
             ],
+            'choufliya_search_products' => [
+                'name'        => 'choufliya_search_products',
+                'title'       => 'البحث في سوق الجملة المغربي (Choufliya Wholesale Search)',
+                'description' => 'البحث في سوق الجملة المغربي (شوفلي بالجملة) عن منتجات وموردين بالكلمات المفتاحية والاسم مع أسعار الجملة وأرقام الواتساب.',
+                'badge'       => 'توريد بالجملة Choufliya',
+            ],
+            'choufliya_search_by_image' => [
+                'name'        => 'choufliya_search_by_image',
+                'title'       => 'البحث العكسي بالصور عن الموردين (Choufliya Image Search)',
+                'description' => 'البحث العكسي بالصور في سوق الجملة المغربي باستخدام رابط صورة المنتج للعثور على الموردين الذين يوفرون نفس السلعة.',
+                'badge'       => 'مطابقة صور الجملة',
+            ],
+            'choufliya_find_suppliers' => [
+                'name'        => 'choufliya_find_suppliers',
+                'title'       => 'استكشاف موردي المنتجات وهوامش الربح (Find Suppliers & Margins)',
+                'description' => 'استخراج الموردين وأسعار الجملة لمنتج معين مع حساب هامش الربح التقديري (سعر البيع - سعر الجملة).',
+                'badge'       => 'تحليل هوامش الربح',
+            ],
+            'choufliya_export_suppliers' => [
+                'name'        => 'choufliya_export_suppliers',
+                'title'       => 'تصدير قائمة الموردين (Export Choufliya Suppliers)',
+                'description' => 'تصدير بيانات الموردين وأسعار الجملة وتاريخ النشر وروابط الواتساب بصيغة CSV أو JSON.',
+                'badge'       => 'تصدير الموردين',
+            ],
         ];
 
         foreach ($allTools as $toolKey => &$toolMeta) {

@@ -75,6 +75,12 @@ $routes->get('/api/vectorize/stats', 'Products::vectorizeStats');
 $routes->post('/api/vectorize/run', 'Products::vectorizeRun');
 $routes->match(['GET', 'POST'], '/api/vectorize/test', 'Products::vectorizeTest');
 
+// Choufliya Wholesale Sourcing Endpoints
+$routes->get('/api/choufliya/search', 'Products::choufliyaSearch');
+$routes->post('/api/choufliya/search-image', 'Products::choufliyaSearchImage');
+$routes->match(['GET', 'POST'], '/api/choufliya/suppliers', 'Products::choufliyaSuppliers');
+$routes->get('/api/choufliya/proxy-image', 'Products::choufliyaProxyImage');
+
 
 // Saved Ads & Bookmark Endpoints
 $routes->get('/api/products/saved', 'Products::saved');

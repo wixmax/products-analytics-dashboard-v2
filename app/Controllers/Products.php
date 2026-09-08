@@ -12,6 +12,7 @@ use App\Controllers\Traits\AiAnalysisTrait;
 use App\Controllers\Traits\VectorizeTrait;
 use App\Controllers\Traits\SyncTrait;
 use App\Controllers\Traits\SettingsTrait;
+use App\Controllers\Traits\ChoufliyaTrait;
 
 class Products extends ResourceController
 {
@@ -21,6 +22,7 @@ class Products extends ResourceController
     use VectorizeTrait;
     use SyncTrait;
     use SettingsTrait;
+    use ChoufliyaTrait;
 
     protected $format = 'json';
 

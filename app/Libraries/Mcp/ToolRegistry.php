@@ -8,6 +8,7 @@ use App\Libraries\Mcp\Tools\SnapshotTools;
 use App\Libraries\Mcp\Tools\ProductFilterTool;
 use App\Libraries\Mcp\Tools\VectorSearchTool;
 use App\Libraries\Mcp\Tools\FacebookAdsTools;
+use App\Libraries\Mcp\Tools\ChoufliyaTools;
 
 class ToolRegistry
 {
@@ -50,6 +51,12 @@ class ToolRegistry
         $this->register(new FacebookAdsTools('facebook_competitive_analysis'));
         $this->register(new FacebookAdsTools('facebook_intelligence_report'));
         $this->register(new FacebookAdsTools('facebook_export_ads'));
+
+        // Choufliya Wholesale & Supplier Sourcing Suite
+        $this->register(new ChoufliyaTools('choufliya_search_products'));
+        $this->register(new ChoufliyaTools('choufliya_search_by_image'));
+        $this->register(new ChoufliyaTools('choufliya_find_suppliers'));
+        $this->register(new ChoufliyaTools('choufliya_export_suppliers'));
     }
 
     public function register(ToolInterface $tool): void
@@ -224,6 +231,17 @@ class ToolRegistry
             'fb_intelligence_report'                => 'facebook_intelligence_report',
             'export_facebook_ads_data'              => 'facebook_export_ads',
             'fb_export_ads'                         => 'facebook_export_ads',
+
+            // ChoufLens / Choufliya Wholesale Aliases
+            'search_choufliya_text'                 => 'choufliya_search_products',
+            'search_choufliya_wholesale'            => 'choufliya_search_products',
+            'choufliya_search'                      => 'choufliya_search_products',
+            'search_choufliya_image'                => 'choufliya_search_by_image',
+            'choufliya_image_search'                => 'choufliya_search_by_image',
+            'find_product_alternatives'             => 'choufliya_find_suppliers',
+            'find_supplier_alternatives'            => 'choufliya_find_suppliers',
+            'export_suppliers_csv'                  => 'choufliya_export_suppliers',
+            'export_choufliya_suppliers'            => 'choufliya_export_suppliers',
         ];
 
         $resolvedName = $aliases[$name] ?? $name;

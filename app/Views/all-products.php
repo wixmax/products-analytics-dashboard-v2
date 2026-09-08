@@ -382,6 +382,7 @@
 
     <!-- Include Shared Product & AI Modals -->
     <?= $this->include('partials/product-modals') ?>
+    <?= $this->include('partials/choufliya-modal') ?>
 
     <!-- Toast Notifications Container -->
     <div class="toast-container" id="toast-container"></div>
@@ -674,6 +675,7 @@
               <div class="card-footer" style="gap: 5px; padding: 8px;">
                 ${productUrl && productUrl !== '#' ? `<a href="${productUrl}" target="_blank" class="btn btn-primary" style="flex: 1; font-size: 0.72rem; padding: 0.4rem 0.4rem;">🛒 زيارة</a>` : ''}
                 <button onclick="filterSimilarProducts(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.5rem; font-size: 0.72rem; color: #a855f7; border-color: rgba(168, 85, 247, 0.4);" title="استكشاف منتجات وإعلانات مماثلة بالذكاء الاصطناعي في نفس الصفحة">✨ مماثل</button>
+                <button onclick="openChoufliyaModal(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.5rem; font-size: 0.72rem; color: #10b981; border-color: rgba(16, 185, 129, 0.4); font-weight: 700;" title="البحث عن موردي الجملة في المغرب (شوفلي بالجملة) ومقارنة الأسعار">📦 بالجملة</button>
                 <button onclick="openIndexInfoModal(${idx})" class="btn btn-secondary" style="flex: 0 0 auto; padding: 0.4rem 0.5rem; font-size: 0.72rem;">ℹ️</button>
                 <button onclick="openProductDetailsModal(${idx})" class="btn btn-secondary" style="flex: 1; font-size: 0.72rem; padding: 0.4rem 0.4rem;">📊 تفاصيل</button>
                 ${saveBtnHtml}
