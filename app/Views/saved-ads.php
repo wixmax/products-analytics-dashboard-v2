@@ -561,7 +561,7 @@
     <script src="<?= base_url('analysis-helper.js') ?>?v=5.1"></script>
     <script src="<?= base_url('product-modal-core.js') ?>?v=5.1"></script>
     <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=5.1"></script>
-    <script src="<?= base_url('chouflens-video-capture.js') ?>?v=1.0"></script>
+    <script src="<?= base_url('chouflens-video-capture.js') ?>?v=2.5"></script>
     <script src="<?= base_url('saved-ads.js') ?>?v=5.0"></script>
   </body>
 </html>

@@ -333,7 +333,9 @@ const ChoufLensVideoCapture = (function () {
       if (parent && !parent.querySelector('.btn-chouflens-video-capture')) {
         const prodId = parent.getAttribute('data-product-id');
         let prod = null;
-        if (typeof allProducts !== 'undefined' && Array.isArray(allProducts)) {
+        if (typeof catalogProducts !== 'undefined' && Array.isArray(catalogProducts)) {
+          prod = catalogProducts.find((p) => String(p.id) === String(prodId));
+        } else if (typeof allProducts !== 'undefined' && Array.isArray(allProducts)) {
           prod = allProducts.find((p) => String(p.id) === String(prodId));
         } else if (typeof savedProducts !== 'undefined' && Array.isArray(savedProducts)) {
           prod = savedProducts.find((p) => String(p.id) === String(prodId));
