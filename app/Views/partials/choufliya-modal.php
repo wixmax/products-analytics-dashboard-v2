@@ -707,7 +707,7 @@
                 </button>
 
                 ${hasTg ? `
-                  <a href="${tgUrl}" target="_blank" class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; display: inline-flex; align-items: center; justify-content: center;" title="فتح الإعلان في قناة تليجرام المورد">
+                  <a href="${tgUrl}" class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; display: inline-flex; align-items: center; justify-content: center;" title="فتح الإعلان في تطبيق تليجرام مباشرة">
                     ✈️
                   </a>
                 ` : ''}
