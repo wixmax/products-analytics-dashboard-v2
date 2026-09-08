@@ -611,6 +611,7 @@
 
     <!-- Include Shared Product & AI Modals -->
     <?= $this->include('partials/product-modals') ?>
+    <?= $this->include('partials/choufliya-modal') ?>
 
     <!-- Analytics Explanation Modal -->
     <div class="modal-overlay" id="analytics-help-modal" style="display: none; z-index: 10000;">
@@ -1023,6 +1024,7 @@
     <script src="<?= base_url('analysis-helper.js') ?>?v=5.1"></script>
     <script src="<?= base_url('product-modal-core.js') ?>?v=5.1"></script>
     <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=5.1"></script>
+    <script src="<?= base_url('chouflens-video-capture.js') ?>?v=1.0"></script>
     <script src="<?= base_url('index.js') ?>?v=5.0"></script>
   </body>
 </html>

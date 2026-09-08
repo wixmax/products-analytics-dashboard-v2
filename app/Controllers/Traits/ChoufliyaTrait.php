@@ -113,19 +113,27 @@ trait ChoufliyaTrait
     }
 
     /**
-     * Proxy CDN images to bypass BunnyCDN hotlink protection (HTTP 403)
+     * Proxy CDN images and video media to bypass BunnyCDN hotlink protection (HTTP 403) and CORS
      */
     public function choufliyaProxyImage()
     {
+        if ($this->request->getMethod() === 'options') {
+            return $this->response
+                ->setHeader('Access-Control-Allow-Origin', '*')
+                ->setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+                ->setHeader('Access-Control-Allow-Headers', '*')
+                ->setStatusCode(200);
+        }
+
         $url = $this->request->getVar('url');
         if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL)) {
-            return $this->response->setStatusCode(400)->setBody('Invalid image URL');
+            return $this->response->setStatusCode(400)->setBody('Invalid media URL');
         }
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 25);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Referer: https://choufliya.ma/',
@@ -138,11 +146,14 @@ trait ChoufliyaTrait
         curl_close($ch);
 
         if ($httpCode !== 200 || empty($data)) {
-            return $this->response->setStatusCode(404)->setBody('Image not found');
+            return $this->response->setStatusCode(404)->setBody('Media not found');
         }
 
         return $this->response
             ->setHeader('Content-Type', $contentType)
+            ->setHeader('Access-Control-Allow-Origin', '*')
+            ->setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            ->setHeader('Access-Control-Allow-Headers', '*')
             ->setHeader('Cache-Control', 'public, max-age=86400')
             ->setBody($data);
     }

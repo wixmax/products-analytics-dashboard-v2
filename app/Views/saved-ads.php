@@ -155,6 +155,7 @@
 
     <!-- Include Shared Product & AI Modals -->
     <?= $this->include('partials/product-modals') ?>
+    <?= $this->include('partials/choufliya-modal') ?>
 
     <!-- Collections Management Modal -->
     <div class="modal-overlay" id="collections-modal" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 200;">
@@ -560,6 +561,7 @@
     <script src="<?= base_url('analysis-helper.js') ?>?v=5.1"></script>
     <script src="<?= base_url('product-modal-core.js') ?>?v=5.1"></script>
     <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=5.1"></script>
+    <script src="<?= base_url('chouflens-video-capture.js') ?>?v=1.0"></script>
     <script src="<?= base_url('saved-ads.js') ?>?v=5.0"></script>
   </body>
 </html>

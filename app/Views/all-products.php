@@ -391,6 +391,7 @@
     <script src="<?= base_url('analysis-helper.js') ?>?v=5.1"></script>
     <script src="<?= base_url('product-modal-core.js') ?>?v=5.1"></script>
     <script src="<?= base_url('video-thumbnail-generator.js') ?>?v=5.1"></script>
+    <script src="<?= base_url('chouflens-video-capture.js') ?>?v=1.0"></script>
     <script>
       let currentPage = 1;
       let totalPages = 1;
@@ -713,6 +714,11 @@
             vidEl.style.objectFit = "cover";
             ph.innerHTML = "";
             ph.appendChild(vidEl);
+            if (typeof ChoufLensVideoCapture !== 'undefined') {
+              const prodId = ph.getAttribute("data-product-id");
+              const prod = catalogProducts.find(p => String(p.id) === String(prodId));
+              ChoufLensVideoCapture.attachButton(ph, vidEl, prod);
+            }
             return vidEl;
           };
 

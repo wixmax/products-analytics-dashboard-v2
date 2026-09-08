@@ -148,6 +148,8 @@ async function openDetailsModal(productOrIdx) {
       `<div style="text-align: center; padding: 10px; color: var(--color-text-muted);">لا توجد بيانات إضافية</div>`;
   }
 
+  window.currentDetailsProduct = p;
+
   // Populate Media Items (Videos & Images)
   const mediaContainer = document.getElementById('details-media');
   if (mediaContainer) {
@@ -170,10 +172,13 @@ async function openDetailsModal(productOrIdx) {
     if (videoUrls.length > 0) {
       videoUrls.forEach((vUrl) => {
         mediaHtml += `
-          <div class="details-media-item">
+          <div class="details-media-item" style="position: relative;">
             <video class="video-js vjs-big-play-centered" controls autoplay muted loop playsinline>
               <source src="${vUrl}" type="video/mp4">
             </video>
+            <button type="button" class="btn-chouflens-video-capture" onclick="ChoufLensVideoCapture.captureFromElement(this)" title="البحث بالجملة عن السلعة الظاهرة في هذا التوقيت من الفيديو (ChoufLens)">
+              <span>📸 فريم الجملة</span>
+            </button>
             <div class="details-media-overlay-text">${overlayText}</div>
           </div>
         `;

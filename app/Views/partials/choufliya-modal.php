@@ -75,8 +75,75 @@
         <button onclick="document.getElementById('choufliya-file-upload-input').click()" class="btn btn-secondary" style="padding: 0.45rem 0.75rem; font-size: 0.8rem; white-space: nowrap; font-weight: 700; color: #10b981; border-color: rgba(16, 185, 129, 0.4); display: inline-flex; align-items: center; gap: 4px;" title="رفع صورة من جهازك للبحث العكسي عنها في سوق الجملة">
           <span>📁 رفع صورة</span>
         </button>
+
+        <!-- Video Frame Extractor (Mediabunny / WebCodecs) Button -->
+        <button onclick="toggleChoufliyaVideoExtractor()" class="btn btn-secondary" style="padding: 0.45rem 0.75rem; font-size: 0.8rem; white-space: nowrap; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); display: inline-flex; align-items: center; gap: 4px;" title="استخراج إطار من أي فيديو بدقة ثانية والبحث بالجملة (Mediabunny & WebCodecs)">
+          <span>🎬 فريم من فيديو</span>
+        </button>
       </div>
 
+    </div>
+
+    <!-- Video Frame Extractor (Mediabunny / WebCodecs) Panel -->
+    <div id="choufliya-video-extractor-bar" style="display: none; background: rgba(56, 189, 248, 0.08); border-bottom: 1px solid rgba(56, 189, 248, 0.25); padding: 12px 1.5rem; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.2rem;">🎬</span>
+          <div>
+            <div style="font-size: 0.85rem; font-weight: 800; color: #0284c7;">
+              استخراج إطار من الفيديو للبحث عن الجملة (Mediabunny & WebCodecs)
+            </div>
+            <div style="font-size: 0.72rem; color: var(--color-text-muted);">
+              أوقف الفيديو عند اللحظة التي يظهر فيها المنتج بوضوح، ثم اضغط على "التقاط هذا الإطار" للبحث العكسي عنه فوراً.
+            </div>
+          </div>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <input type="file" id="chouf-local-video-input" accept="video/mp4,video/webm,video/ogg" style="display: none;" onchange="handleChoufliyaVideoSelected(this.files)" />
+          <button onclick="document.getElementById('chouf-local-video-input').click()" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">
+            📂 اختيار فيديو من الجهاز
+          </button>
+          <button onclick="toggleChoufliyaVideoExtractor(false)" class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;">
+            ✕ إغلاق
+          </button>
+        </div>
+      </div>
+
+      <!-- Video URL input -->
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <input type="url" id="chouf-video-url-input" placeholder="أو ضع رابط فيديو MP4/CDN مباشرة..." style="flex: 1; font-size: 0.78rem; padding: 0.4rem 0.7rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-card); color: var(--color-text-main);" onkeydown="if(event.key==='Enter') loadChoufliyaVideoFromUrl();" />
+        <button onclick="loadChoufliyaVideoFromUrl()" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.78rem; font-weight: 700; white-space: nowrap;">
+          تحميل
+        </button>
+      </div>
+
+      <!-- Video Player & Scrubber Area -->
+      <div id="chouf-video-player-container" style="display: none; flex-direction: column; gap: 8px; background: rgba(0, 0, 0, 0.3); padding: 10px; border-radius: var(--radius-md); border: 1px solid rgba(56, 189, 248, 0.2);">
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div style="position: relative; width: 220px; aspect-ratio: 16/9; background: #000; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0;">
+            <video id="chouf-scrubber-video" style="width: 100%; height: 100%; object-fit: contain;" playsinline crossorigin="anonymous"></video>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 250px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="chouf-video-time-display" style="font-family: var(--font-mono); font-size: 0.82rem; font-weight: 700; color: #38bdf8;">00:00.0 / 00:00.0</span>
+              <span style="font-size: 0.7rem; color: var(--color-text-muted);">تحكم بالثواني بالأسهم أو الشريط</span>
+            </div>
+            
+            <input type="range" id="chouf-video-scrub-slider" min="0" max="100" step="0.05" value="0" style="width: 100%; cursor: pointer; accent-color: #38bdf8;" oninput="onChoufVideoScrub(this.value)" />
+
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+              <button onclick="stepChoufVideo(-1)" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.72rem;">⏪ -1 ثانية</button>
+              <button onclick="toggleChoufVideoPlay()" id="chouf-video-play-btn" class="btn btn-secondary" style="padding: 0.3rem 0.8rem; font-size: 0.72rem; font-weight: 700;">⏯️ تشغيل / إيقاف</button>
+              <button onclick="stepChoufVideo(1)" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.72rem;">+1 ثانية ⏩</button>
+              
+              <button onclick="captureAndSearchFromScrubber()" class="btn btn-primary" style="margin-right: auto; padding: 0.35rem 1rem; font-size: 0.78rem; font-weight: 800; background: #10b981; border-color: #10b981; color: white; display: inline-flex; align-items: center; gap: 6px;" title="التقاط هذا الإطار والبحث الفوري عن موردي الجملة في المغرب">
+                <span>📸 التقاط هذا الإطار والبحث بالجملة</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Uploaded Image Active Preview Bar -->
@@ -313,6 +380,141 @@
     const previewBar = document.getElementById('choufliya-uploaded-preview-bar');
     if (previewBar) previewBar.style.display = 'none';
     reSearchChoufliya(false);
+  }
+
+  // Open ChoufLens modal with a pre-captured file or frame from video
+  window.openChoufliyaModalWithFile = function(file, product = null, timestamp = null) {
+    const modal = document.getElementById('choufliya-modal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    if (product) {
+      activeChoufliyaProduct = product;
+      const title = product.title || product.product_title || '';
+      if (title) {
+        document.getElementById('choufliya-custom-query').value = title;
+      }
+    }
+
+    const timeBadge = timestamp !== null ? ` (إطار عند ${typeof ChoufLensVideoCapture !== 'undefined' ? ChoufLensVideoCapture.formatTimestamp(timestamp) : timestamp + 's'})` : '';
+    document.getElementById('choufliya-modal-subtitle').textContent = `البحث العكسي بإطار الفيديو: ${file.name || 'إطار فيديو'}${timeBadge}`;
+
+    handleChoufliyaFileSelected([file]);
+  };
+
+  // Video Scrubber & Mediabunny Extractor Controller
+  let activeScrubberVideo = null;
+
+  function toggleChoufliyaVideoExtractor(forceState = null) {
+    const bar = document.getElementById('choufliya-video-extractor-bar');
+    if (!bar) return;
+    const isVisible = bar.style.display === 'flex';
+    const nextState = forceState !== null ? forceState : !isVisible;
+    bar.style.display = nextState ? 'flex' : 'none';
+
+    if (!nextState && activeScrubberVideo) {
+      activeScrubberVideo.pause();
+    }
+  }
+
+  function handleChoufliyaVideoSelected(files) {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (!file.type.startsWith('video/')) {
+      if (typeof showToast === 'function') showToast('يرجى اختيار ملف فيديو صالح (MP4, WebM).', 'warning');
+      return;
+    }
+    const videoUrl = URL.createObjectURL(file);
+    initScrubberVideo(videoUrl, file.name);
+  }
+
+  function loadChoufliyaVideoFromUrl() {
+    const input = document.getElementById('chouf-video-url-input');
+    const url = input ? input.value.trim() : '';
+    if (!url) return;
+    initScrubberVideo(url, 'رابط فيديو خارجي');
+  }
+
+  function initScrubberVideo(src, label) {
+    const container = document.getElementById('chouf-video-player-container');
+    const video = document.getElementById('chouf-scrubber-video');
+    const slider = document.getElementById('chouf-video-scrub-slider');
+    if (!video || !container) return;
+
+    activeScrubberVideo = video;
+    video.src = src;
+    container.style.display = 'flex';
+
+    video.onloadedmetadata = () => {
+      slider.max = video.duration || 100;
+      slider.value = 0;
+      updateScrubberTimeDisplay();
+      if (typeof showToast === 'function') {
+        showToast(`🎥 تم تجهيز الفيديو: ${label} - حرك المؤشر أو أوقف الفيديو عند اللحظة المناسبة`, 'info');
+      }
+    };
+
+    video.ontimeupdate = () => {
+      slider.value = video.currentTime;
+      updateScrubberTimeDisplay();
+    };
+  }
+
+  function updateScrubberTimeDisplay() {
+    const video = document.getElementById('chouf-scrubber-video');
+    const timeDisplay = document.getElementById('chouf-video-time-display');
+    if (video && timeDisplay) {
+      const cur = typeof ChoufLensVideoCapture !== 'undefined' ? ChoufLensVideoCapture.formatTimestamp(video.currentTime) : video.currentTime.toFixed(1) + 's';
+      const dur = typeof ChoufLensVideoCapture !== 'undefined' ? ChoufLensVideoCapture.formatTimestamp(video.duration || 0) : (video.duration || 0).toFixed(1) + 's';
+      timeDisplay.textContent = `${cur} / ${dur}`;
+    }
+  }
+
+  function onChoufVideoScrub(val) {
+    const video = document.getElementById('chouf-scrubber-video');
+    if (video) {
+      video.pause();
+      video.currentTime = parseFloat(val);
+      updateScrubberTimeDisplay();
+    }
+  }
+
+  function stepChoufVideo(deltaSeconds) {
+    const video = document.getElementById('chouf-scrubber-video');
+    if (video) {
+      video.pause();
+      video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + deltaSeconds));
+      updateScrubberTimeDisplay();
+    }
+  }
+
+  function toggleChoufVideoPlay() {
+    const video = document.getElementById('chouf-scrubber-video');
+    const btn = document.getElementById('chouf-video-play-btn');
+    if (!video) return;
+    if (video.paused) {
+      video.play();
+      if (btn) btn.textContent = '⏸️ إيقاف مؤقت';
+    } else {
+      video.pause();
+      if (btn) btn.textContent = '▶️ تشغيل';
+    }
+  }
+
+  async function captureAndSearchFromScrubber() {
+    const video = document.getElementById('chouf-scrubber-video');
+    if (!video || !video.src) {
+      if (typeof showToast === 'function') showToast('يرجى اختيار أو تحميل فيديو أولاً.', 'warning');
+      return;
+    }
+    video.pause();
+    if (typeof ChoufLensVideoCapture !== 'undefined') {
+      await ChoufLensVideoCapture.searchFromVideo(video, activeChoufliyaProduct);
+    } else {
+      console.error('ChoufLensVideoCapture not found');
+    }
   }
 
   function updateChoufliyaModalMetrics(data) {
