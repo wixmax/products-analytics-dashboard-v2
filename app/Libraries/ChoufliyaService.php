@@ -44,18 +44,27 @@ class ChoufliyaService
         $mimeType = 'image/jpeg';
         $fileName = 'query.jpg';
 
-        if (filter_var($imageSource, FILTER_VALIDATE_URL)) {
-            $imageContent = $this->downloadImageFast($imageSource);
-            if ($imageContent === null) {
-                throw new \Exception("تعذر تحميل الصورة من الرابط أو استغرق وقتاً طويلاً.");
+        if (filter_var($imageSource, FILTER_VALIDATE_URL) || str_starts_with($imageSource, '/')) {
+            $parsedUrl = parse_url($imageSource);
+            $path = $parsedUrl['path'] ?? '';
+            $localCandidate = defined('FCPATH') ? FCPATH . ltrim($path, '/') : null;
+
+            if ($localCandidate && file_exists($localCandidate) && is_file($localCandidate)) {
+                $fileToUpload = $localCandidate;
+                $fileName = basename($localCandidate);
+            } else {
+                $imageContent = $this->downloadImageFast($imageSource);
+                if ($imageContent === null) {
+                    throw new \Exception("تعذر تحميل الصورة من الرابط أو استغرق وقتاً طويلاً.");
+                }
+                $tempFilePath = tempnam(sys_get_temp_dir(), 'chouf_img_');
+                file_put_contents($tempFilePath, $imageContent);
+                $fileToUpload = $tempFilePath;
             }
-            $tempFilePath = tempnam(sys_get_temp_dir(), 'chouf_img_');
-            file_put_contents($tempFilePath, $imageContent);
-            $fileToUpload = $tempFilePath;
 
             // Determine mime type
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $detectedMime = finfo_file($finfo, $tempFilePath);
+            $detectedMime = finfo_file($finfo, $fileToUpload);
             finfo_close($finfo);
             if (!empty($detectedMime)) {
                 $mimeType = $detectedMime;
