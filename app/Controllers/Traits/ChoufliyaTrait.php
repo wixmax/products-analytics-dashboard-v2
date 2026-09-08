@@ -130,31 +130,62 @@ trait ChoufliyaTrait
             return $this->response->setStatusCode(400)->setBody('Invalid media URL');
         }
 
+        $parsed = parse_url($url);
+        $host = strtolower($parsed['host'] ?? '');
+
+        $headers = [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ];
+
+        if (str_contains($host, 'choufliya.ma')) {
+            $headers[] = 'Referer: https://choufliya.ma/';
+            $headers[] = 'Origin: https://choufliya.ma';
+        } elseif (str_contains($host, 'fbcdn.net') || str_contains($host, 'facebook.com')) {
+            $headers[] = 'Referer: https://www.facebook.com/';
+        }
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 25);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Referer: https://choufliya.ma/',
-            'Origin: https://choufliya.ma',
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        ]);
-        $data = curl_exec($ch);
+        curl_setopt($ch, CURLOPT_HEADER, true);
+
+        // Forward Range header if requested by WebCodecs / Mediabunny
+        $clientRange = $this->request->getHeaderLine('Range');
+        if (!empty($clientRange)) {
+            $headers[] = 'Range: ' . $clientRange;
+        }
+
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $response = curl_exec($ch);
+        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: 'image/jpeg';
         curl_close($ch);
 
-        if ($httpCode !== 200 || empty($data)) {
-            return $this->response->setStatusCode(404)->setBody('Media not found');
+        $rawHeaders = substr($response, 0, $headerSize);
+        $data = substr($response, $headerSize);
+
+        if (($httpCode !== 200 && $httpCode !== 206) || empty($data)) {
+            return $this->response->setStatusCode($httpCode ?: 404)->setBody('Media not found or inaccessible');
         }
 
-        return $this->response
+        $res = $this->response
             ->setHeader('Content-Type', $contentType)
             ->setHeader('Access-Control-Allow-Origin', '*')
             ->setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
             ->setHeader('Access-Control-Allow-Headers', '*')
+            ->setHeader('Accept-Ranges', 'bytes')
             ->setHeader('Cache-Control', 'public, max-age=86400')
-            ->setBody($data);
+            ->setStatusCode($httpCode);
+
+        // Forward Content-Range header for 206 partial responses
+        if ($httpCode === 206 && preg_match('/Content-Range:\s*(.+)/i', $rawHeaders, $matches)) {
+            $res->setHeader('Content-Range', trim($matches[1]));
+        }
+
+        return $res->setBody($data);
     }
 }

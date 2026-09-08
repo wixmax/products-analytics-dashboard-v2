@@ -115,9 +115,17 @@ const ChoufLensVideoCapture = (function () {
     canvas.width = sample.displayWidth;
     canvas.height = sample.displayHeight;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('فشل إنشاء سياق رسم Canvas.');
+    if (!ctx) {
+      if (typeof sample.close === 'function') sample.close();
+      throw new Error('فشل إنشاء سياق رسم Canvas.');
+    }
 
     sample.draw(ctx, 0, 0);
+
+    // Free WebCodecs VideoFrame resources immediately
+    if (typeof sample.close === 'function') {
+      sample.close();
+    }
 
     return new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -141,6 +149,83 @@ const ChoufLensVideoCapture = (function () {
   }
 
   /**
+   * Captures frame by loading video through local proxy with crossOrigin="anonymous"
+   */
+  function captureViaProxiedVideo(proxiedUrl, timestampSeconds) {
+    return new Promise((resolve, reject) => {
+      const v = document.createElement('video');
+      v.crossOrigin = 'anonymous';
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+
+      let done = false;
+      const timeout = setTimeout(() => {
+        if (!done) {
+          done = true;
+          cleanup();
+          reject(new Error('استغرق استخراج الإطار وقتاً طويلاً.'));
+        }
+      }, 8000);
+
+      function cleanup() {
+        v.onloadedmetadata = null;
+        v.onseeked = null;
+        v.onerror = null;
+        v.pause();
+        v.removeAttribute('src');
+        v.load();
+      }
+
+      v.onloadedmetadata = () => {
+        v.currentTime = Math.max(0, Math.min(v.duration || timestampSeconds, timestampSeconds));
+      };
+
+      v.onseeked = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timeout);
+
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = v.videoWidth || 640;
+          canvas.height = v.videoHeight || 360;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+
+          canvas.toBlob((blob) => {
+            cleanup();
+            if (!blob) return reject(new Error('فشل تصدير صورة الإطار.'));
+            const fileName = `chouflens_frame_${Math.floor(timestampSeconds)}s_${Date.now()}.jpg`;
+            const file = new File([blob], fileName, { type: 'image/jpeg' });
+            resolve({
+              blob,
+              file,
+              dataUrl: canvas.toDataURL('image/jpeg', 0.95),
+              timestamp: timestampSeconds,
+              width: canvas.width,
+              height: canvas.height,
+            });
+          }, 'image/jpeg', 0.95);
+        } catch (err) {
+          cleanup();
+          reject(err);
+        }
+      };
+
+      v.onerror = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timeout);
+        cleanup();
+        reject(new Error('تعذر تحميل الفيديو عبر البروكسي.'));
+      };
+
+      v.src = proxiedUrl;
+    });
+  }
+
+  /**
    * Main Action: Captures frame from current paused video and triggers ChoufLens modal search
    */
   async function searchFromVideo(videoEl, productContext = null) {
@@ -157,14 +242,21 @@ const ChoufLensVideoCapture = (function () {
       try {
         result = await captureCanvasFrame(videoEl);
       } catch (canvasErr) {
-        console.warn('Canvas frame capture hit CORS/taint, attempting proxy fallback:', canvasErr);
+        console.info('Direct canvas capture hit CORS taint, resolving via same-origin stream:', canvasErr.message);
         const rawSrc = videoEl.currentSrc || videoEl.src;
         if (rawSrc && rawSrc.startsWith('http')) {
           const proxiedUrl = `/api/choufliya/proxy-image?url=${encodeURIComponent(rawSrc)}`;
           try {
-            result = await captureMediabunnyFrame(proxiedUrl, currentTime);
-          } catch (mbErr) {
-            throw new Error('تعذر تصدير الفريم بسبب حماية CORS من المصدر الخارجي. يمكنك أخذ لقطة شاشة بـ Win+Shift+S ولصقها بـ Ctrl+V داخل نافذة ChoufLens.');
+            // Tier 2: Try Proxied HTML5 video (same-origin CORS)
+            result = await captureViaProxiedVideo(proxiedUrl, currentTime);
+          } catch (proxiedErr) {
+            console.warn('Proxied canvas failed, falling back to Mediabunny WebCodecs:', proxiedErr);
+            // Tier 3: Try Mediabunny WebCodecs
+            try {
+              result = await captureMediabunnyFrame(proxiedUrl, currentTime);
+            } catch (mbErr) {
+              throw new Error('تعذر استخراج الفريم مباشرة بسبب حماية الفيديو. يمكنك أخذ لقطة شاشة ولصقها بـ Ctrl+V داخل نافذة ChoufLens.');
+            }
           }
         } else {
           throw canvasErr;
