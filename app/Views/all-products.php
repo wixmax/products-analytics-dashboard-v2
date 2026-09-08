@@ -325,6 +325,7 @@
             <div class="filter-group">
               <label for="catalog-sort">🔃 الترتيب حسب:</label>
               <select id="catalog-sort" onchange="fetchCatalogProducts(1)">
+                <option value="relevance">🎯 الأكثر صلة (AI Relevance)</option>
                 <option value="ads-desc" selected>الأكثر إعلانات (Desc)</option>
                 <option value="ads-asc">الأقل إعلانات (Asc)</option>
                 <option value="date-desc">الأحدث تاريخاً</option>

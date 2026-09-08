@@ -43,25 +43,38 @@ class Products extends ResourceController
         }
 
         // Exclude tenant-saved copies from the main list so we only query master synced/imported rows
-        $builder->groupStart()
-                    ->where('is_saved', false)
-                    ->orWhere('tenant_id IS NULL')
-                ->groupEnd();
+        // (Only apply when not searching, so search results include saved items)
+        if (empty($search)) {
+            $builder->groupStart()
+                        ->where('is_saved', false)
+                        ->orWhere('tenant_id IS NULL')
+                    ->groupEnd();
+        }
 
         // Search
         $semantic = filter_var($this->request->getVar('semantic'), FILTER_VALIDATE_BOOLEAN);
+        $semanticIds = [];
         if (!empty($search)) {
             $appliedSemantic = false;
             if ($semantic) {
                 try {
                     $vectorService = new \App\Services\CloudflareVectorService();
                     if ($vectorService->isConfigured()) {
-                        $matches = $vectorService->searchSemantic($search, 100);
+                        $matches = $vectorService->searchSemantic($search, 50);
                         if (!empty($matches)) {
-                            $semanticIds = array_column($matches, 'product_id');
-                            $semanticIds = array_filter(array_map('intval', $semanticIds));
+                            $rawIds = array_column($matches, 'product_id');
+                            $semanticIds = array_values(array_filter(array_map('intval', $rawIds)));
                             if (!empty($semanticIds)) {
-                                $builder->whereIn('id', $semanticIds);
+                                // Hybrid Search: match by AI semantic vectors OR exact keyword match in title/ad
+                                $builder->groupStart()
+                                            ->whereIn('id', $semanticIds)
+                                            ->orGroupStart()
+                                                ->like('title', $search)
+                                                ->orLike('ad_title', $search)
+                                                ->orLike('ad_body', $search)
+                                                ->orLike('product_url', $search)
+                                            ->groupEnd()
+                                        ->groupEnd();
                                 $appliedSemantic = true;
                             }
                         }
@@ -121,7 +134,28 @@ class Products extends ResourceController
 
         // Sorting
         switch ($sort) {
+            case 'relevance':
+                if (!empty($semanticIds)) {
+                    $caseParts = [];
+                    foreach ($semanticIds as $idx => $sId) {
+                        $order = $idx + 1;
+                        $caseParts[] = "WHEN id = " . intval($sId) . " THEN $order";
+                    }
+                    $caseSql = "CASE " . implode(" ", $caseParts) . " ELSE 9999 END ASC";
+                    $builder->orderBy($caseSql, '', false);
+                }
+                $builder->orderBy('ads_count', 'DESC');
+                break;
             case 'ads-desc':
+                if (!empty($semanticIds) && !empty($search)) {
+                    $caseParts = [];
+                    foreach ($semanticIds as $idx => $sId) {
+                        $order = $idx + 1;
+                        $caseParts[] = "WHEN id = " . intval($sId) . " THEN $order";
+                    }
+                    $caseSql = "CASE " . implode(" ", $caseParts) . " ELSE 9999 END ASC";
+                    $builder->orderBy($caseSql, '', false);
+                }
                 $builder->orderBy('ads_count', 'DESC');
                 break;
             case 'ads-asc':
@@ -137,6 +171,15 @@ class Products extends ResourceController
                 $builder->orderBy('title', 'ASC');
                 break;
             default:
+                if (!empty($semanticIds) && !empty($search)) {
+                    $caseParts = [];
+                    foreach ($semanticIds as $idx => $sId) {
+                        $order = $idx + 1;
+                        $caseParts[] = "WHEN id = " . intval($sId) . " THEN $order";
+                    }
+                    $caseSql = "CASE " . implode(" ", $caseParts) . " ELSE 9999 END ASC";
+                    $builder->orderBy($caseSql, '', false);
+                }
                 $builder->orderBy('ads_count', 'DESC');
                 break;
         }

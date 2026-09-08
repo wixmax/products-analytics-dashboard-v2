@@ -169,8 +169,8 @@ trait VectorizeTrait
             ], 500);
         }
 
-        // Fetch top candidates from Vectorize
-        $fetchK = max($limit * 4, 20);
+        // Fetch top candidates from Vectorize (clamped to 50 max)
+        $fetchK = min(max($limit * 4, 20), 50);
         $matches = $vectorService->searchSemantic($query, $fetchK);
 
         if (empty($matches)) {

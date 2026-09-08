@@ -420,6 +420,11 @@ class CloudflareVectorService
     {
         $endpoint = "https://api.cloudflare.com/client/v4/accounts/{$this->config->accountId}/vectorize/v2/indexes/{$this->config->vectorizeIndex}/query";
 
+        // Cloudflare Vectorize v2 limits topK to 50 when returnMetadata is 'all'
+        if ($topK > 50) {
+            $topK = 50;
+        }
+
         $payload = [
             'vector'         => $vector,
             'topK'           => $topK,
