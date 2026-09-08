@@ -44,14 +44,24 @@ class ChoufliyaService
         $mimeType = 'image/jpeg';
         $fileName = 'query.jpg';
 
-        if (filter_var($imageSource, FILTER_VALIDATE_URL) || str_starts_with($imageSource, '/')) {
+        // 1. Check if it is an existing local file on the filesystem (e.g. uploaded file in /tmp or writable/):
+        if (file_exists($imageSource) && is_file($imageSource)) {
+            $fileToUpload = $imageSource;
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $detectedMime = finfo_file($finfo, $imageSource);
+            finfo_close($finfo);
+            if (!empty($detectedMime)) {
+                $mimeType = $detectedMime;
+            }
+        }
+        // 2. Otherwise check if it is a URL or relative web path:
+        elseif (filter_var($imageSource, FILTER_VALIDATE_URL) || str_starts_with($imageSource, '/')) {
             $parsedUrl = parse_url($imageSource);
             $path = $parsedUrl['path'] ?? '';
             $localCandidate = defined('FCPATH') ? FCPATH . ltrim($path, '/') : null;
 
             if ($localCandidate && file_exists($localCandidate) && is_file($localCandidate)) {
                 $fileToUpload = $localCandidate;
-                $fileName = basename($localCandidate);
             } else {
                 $imageContent = $this->downloadImageFast($imageSource);
                 if ($imageContent === null) {
@@ -69,20 +79,22 @@ class ChoufliyaService
             if (!empty($detectedMime)) {
                 $mimeType = $detectedMime;
             }
-        } elseif (file_exists($imageSource)) {
-            $fileToUpload = $imageSource;
-            $fileName = basename($imageSource);
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $detectedMime = finfo_file($finfo, $imageSource);
-            finfo_close($finfo);
-            if (!empty($detectedMime)) {
-                $mimeType = $detectedMime;
-            }
         } else {
             throw new \Exception("مصدر الصورة غير صالح أو الملف غير موجود.");
         }
 
-        $cfile = new \CURLFile($fileToUpload, $mimeType, $fileName);
+        // Determine correct filename extension for multipart upload
+        $ext = 'jpg';
+        if (str_contains($mimeType, 'png')) {
+            $ext = 'png';
+        } elseif (str_contains($mimeType, 'webp')) {
+            $ext = 'webp';
+        } elseif (str_contains($mimeType, 'gif')) {
+            $ext = 'gif';
+        }
+        $postFileName = 'search_' . time() . '.' . $ext;
+
+        $cfile = new \CURLFile($fileToUpload, $mimeType, $postFileName);
 
         $postFields = [
             'image'           => $cfile,
@@ -115,9 +127,10 @@ class ChoufliyaService
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 6);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ]);
@@ -134,17 +147,19 @@ class ChoufliyaService
     public function findSupplierAlternatives(string $productTitle, ?float $retailPrice = null, int $limit = 20, ?string $imageUrl = null, bool $preferImage = false): array
     {
         $wholesaleItems = [];
+        $imageSearchError = null;
 
         // Try image search if explicitly preferred
         if ($preferImage && !empty($imageUrl)) {
             try {
                 $wholesaleItems = $this->searchByImage($imageUrl, $limit);
             } catch (\Throwable $e) {
-                // Fallback to text
+                $imageSearchError = $e->getMessage();
+                log_message('error', 'Choufliya image search failed: ' . $e->getMessage());
             }
         }
 
-        // Fast text search (primary, response in <1s)
+        // Fast text search (fallback or primary)
         if (empty($wholesaleItems)) {
             $cleanTitle = $this->extractCoreKeywords($productTitle);
             $wholesaleItems = $this->searchByText($cleanTitle ?: $productTitle, $limit);
@@ -182,6 +197,8 @@ class ChoufliyaService
         return [
             'searched_product'   => $productTitle,
             'retail_price'       => $retailPrice,
+            'search_mode'        => (!empty($wholesaleItems) && $preferImage && empty($imageSearchError)) ? 'image' : 'text',
+            'image_search_error' => $imageSearchError,
             'suppliers_count'    => count($suppliersSummary),
             'items_count'        => count($wholesaleItems),
             'min_wholesale_price'=> $minWholesalePrice,
@@ -202,7 +219,9 @@ class ChoufliyaService
         curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 25);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Referer: https://choufliya.ma/',
             'Origin: https://choufliya.ma',

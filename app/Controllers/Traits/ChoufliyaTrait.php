@@ -57,9 +57,22 @@ trait ChoufliyaTrait
             'sortBy'       => $this->request->getVar('sort_by') ?? 'match'
         ];
 
+        $tempSavedPath = null;
+        if ($uploadedFile && $uploadedFile->isValid() && !$uploadedFile->hasMoved()) {
+            $tempDir = WRITEPATH . 'uploads/temp';
+            if (!is_dir($tempDir)) {
+                @mkdir($tempDir, 0777, true);
+            }
+            $newName = $uploadedFile->getRandomName();
+            $uploadedFile->move($tempDir, $newName);
+            $imageSource = $tempDir . DIRECTORY_SEPARATOR . $newName;
+            $tempSavedPath = $imageSource;
+        } else {
+            $imageSource = (string)$imageUrl;
+        }
+
         try {
             $service = new ChoufliyaService();
-            $imageSource = !empty($imageUrl) ? (string)$imageUrl : $uploadedFile->getTempName();
             $results = $service->searchByImage($imageSource, $limit, $options);
 
             return $this->response->setJSON([
@@ -69,6 +82,10 @@ trait ChoufliyaTrait
             ]);
         } catch (\Throwable $e) {
             return $this->response->setJSON(['status' => 'error', 'error' => $e->getMessage()])->setStatusCode(500);
+        } finally {
+            if ($tempSavedPath && file_exists($tempSavedPath)) {
+                @unlink($tempSavedPath);
+            }
         }
     }
 
@@ -85,8 +102,16 @@ trait ChoufliyaTrait
         $preferImage = filter_var($this->request->getVar('prefer_image'), FILTER_VALIDATE_BOOLEAN);
 
         $imageSource = null;
+        $tempSavedPath = null;
         if ($uploadedFile && $uploadedFile->isValid() && !$uploadedFile->hasMoved()) {
-            $imageSource = $uploadedFile->getTempName();
+            $tempDir = WRITEPATH . 'uploads/temp';
+            if (!is_dir($tempDir)) {
+                @mkdir($tempDir, 0777, true);
+            }
+            $newName = $uploadedFile->getRandomName();
+            $uploadedFile->move($tempDir, $newName);
+            $imageSource = $tempDir . DIRECTORY_SEPARATOR . $newName;
+            $tempSavedPath = $imageSource;
             $preferImage = true;
         } elseif (!empty($imageUrl)) {
             $imageSource = (string)$imageUrl;
@@ -109,6 +134,10 @@ trait ChoufliyaTrait
             return $this->response->setJSON(array_merge(['status' => 'success'], $data));
         } catch (\Throwable $e) {
             return $this->response->setJSON(['status' => 'error', 'error' => $e->getMessage()])->setStatusCode(500);
+        } finally {
+            if ($tempSavedPath && file_exists($tempSavedPath)) {
+                @unlink($tempSavedPath);
+            }
         }
     }
 
