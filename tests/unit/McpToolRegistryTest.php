@@ -53,6 +53,37 @@ final class McpToolRegistryTest extends CIUnitTestCase
         $this->assertArrayHasKey('skill_instructions', $res);
     }
 
+    public function testExecuteGeminiFacebookProductAdsVoiceoverTool(): void
+    {
+        $res = $this->registry->execute('get_gemini_facebook_product_ads_voiceover_instructions', [
+            'product_name'      => 'Mini Wireless Car Vacuum',
+            'product_image_url' => 'https://example.com/vacuum.jpg',
+            'language'          => 'Moroccan Darija'
+        ]);
+
+        $this->assertIsArray($res);
+        $this->assertEquals('success', $res['status']);
+        $this->assertArrayHasKey('skill_instructions', $res);
+        $instructions = $res['skill_instructions'];
+        $this->assertStringContainsString('Mini Wireless Car Vacuum', $instructions);
+        $this->assertStringContainsString('https://example.com/vacuum.jpg', $instructions);
+        $this->assertStringContainsString('gemini-3.1-flash-tts-preview', $instructions);
+        $this->assertStringContainsString('Silent Video', $instructions);
+        $this->assertStringContainsString('#### TRANSCRIPT', $instructions);
+    }
+
+    public function testExecuteGeminiFacebookSilentAdsVoiceoverAlias(): void
+    {
+        $res = $this->registry->execute('get_gemini_facebook_silent_ads_voiceover_instructions', [
+            'product_name' => 'Hair Styler Pro'
+        ]);
+
+        $this->assertIsArray($res);
+        $this->assertEquals('success', $res['status']);
+        $this->assertArrayHasKey('skill_instructions', $res);
+        $this->assertStringContainsString('Hair Styler Pro', $res['skill_instructions']);
+    }
+
     public function testExecuteUnknownToolThrowsException(): void
     {
         $this->expectException(\Exception::class);

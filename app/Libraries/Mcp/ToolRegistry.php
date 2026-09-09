@@ -102,6 +102,24 @@ class ToolRegistry
                 'instructions' => '',
                 'enabled'      => true,
             ],
+            'gemini-facebook-product-ads' => [
+                'id'           => 'gemini-facebook-product-ads',
+                'title'        => 'مهارة Gemini Facebook Product Ads (إعلانات فيديو وصور UGC)',
+                'description'  => 'إنشاء حزمة إعلانية كاملة لمنتجات التجارة الإلكترونية لـ Facebook & Instagram في المغرب.',
+                'badge'        => 'Video & UGC Ads',
+                'tool_name'    => 'get_gemini_facebook_product_ads_instructions',
+                'instructions' => \App\Libraries\Mcp\SkillTemplates::getGeminiAdsPrompt(),
+                'enabled'      => true,
+            ],
+            'gemini-facebook-product-ads-voiceover' => [
+                'id'           => 'gemini-facebook-product-ads-voiceover',
+                'title'        => 'مهارة Gemini Facebook Silent Ads & Voice-Over (فيديو صامت + تعليق TTS)',
+                'description'  => 'إنشاء حزمة إعلانية بفيديوهات صامتة (بدون حوار أو موسيقى) + برومبتات تعليق صوتي TTS مستقلة لـ Gemini 3.1 Flash TTS بالدارجة المغربية.',
+                'badge'        => 'Silent Video & TTS Voice-Over',
+                'tool_name'    => 'get_gemini_facebook_product_ads_voiceover_instructions',
+                'instructions' => \App\Libraries\Mcp\SkillTemplates::getGeminiAdsVoiceoverPrompt(),
+                'enabled'      => true,
+            ],
         ];
     }
 
@@ -199,23 +217,10 @@ class ToolRegistry
             ];
         }
 
-        // Check dynamic skills
-        $skills = $this->getDynamicSkills();
-        foreach ($skills as $sId => $skill) {
-            $tool = new DynamicSkillTool($skill, $this->getSystemPrompt());
-            $toolName = $tool->getName();
-            $legacyName = 'get_' . str_replace('-', '_', $sId) . '_instructions';
-
-            if ($name === $toolName || $name === $legacyName) {
-                if ($tenantId !== null) {
-                    $quotaManager->recordUsage($tenantId, 'mcp_calls');
-                }
-                return $tool->execute($args, $context);
-            }
-        }
-
         // Aliases mapping
         $aliases = [
+            'get_gemini_facebook_silent_ads_voiceover_instructions' => 'get_gemini_facebook_product_ads_voiceover_instructions',
+            'get_gemini_video_voiceover_instructions'               => 'get_gemini_facebook_product_ads_voiceover_instructions',
             'save_ad'                               => 'save_product',
             'search_facebook_ads'                   => 'facebook_search_ads',
             'fb_search_ads'                         => 'facebook_search_ads',
@@ -245,6 +250,21 @@ class ToolRegistry
         ];
 
         $resolvedName = $aliases[$name] ?? $name;
+
+        // Check dynamic skills
+        $skills = $this->getDynamicSkills();
+        foreach ($skills as $sId => $skill) {
+            $tool = new DynamicSkillTool($skill, $this->getSystemPrompt());
+            $toolName = $tool->getName();
+            $legacyName = 'get_' . str_replace('-', '_', $sId) . '_instructions';
+
+            if ($resolvedName === $toolName || $resolvedName === $legacyName) {
+                if ($tenantId !== null) {
+                    $quotaManager->recordUsage($tenantId, 'mcp_calls');
+                }
+                return $tool->execute($args, $context);
+            }
+        }
 
         if (isset($this->tools[$resolvedName])) {
             if ($tenantId !== null) {

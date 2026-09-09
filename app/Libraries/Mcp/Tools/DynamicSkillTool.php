@@ -74,8 +74,15 @@ class DynamicSkillTool implements ToolInterface
             }
         } else {
             $instructions = $this->skill['instructions'] ?? $this->systemPrompt;
+            $header = '';
             if (!empty($args['product_name'])) {
-                $instructions = "# Target Product: {$args['product_name']}\n\n" . $instructions;
+                $header .= "# Target Product: {$args['product_name']}\n";
+            }
+            if (!empty($args['product_image_url'])) {
+                $header .= "# Reference Asset: {$args['product_image_url']}\n";
+            }
+            if (!empty($header)) {
+                $instructions = $header . "\n" . $instructions;
             }
         }
 

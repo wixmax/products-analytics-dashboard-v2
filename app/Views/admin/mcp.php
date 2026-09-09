@@ -869,6 +869,7 @@
       window.DEFAULT_COD_PROMPT = <?= json_encode($defaultSystemPrompt, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
       window.DEFAULT_NANO_PROMPT = <?= json_encode($defaultNanoPrompt, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
       window.DEFAULT_GEMINI_PROMPT = <?= json_encode($defaultGeminiPrompt ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+      window.DEFAULT_GEMINI_VOICEOVER_PROMPT = <?= json_encode($defaultGeminiVoiceoverPrompt ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
 
       document.addEventListener("DOMContentLoaded", async () => {
         await setupTheme();
@@ -883,6 +884,10 @@
         } else if (skillId === 'gemini-facebook-product-ads') {
           if (confirm('هل تريد استبدال النص الحالي بنص مهارة Gemini Facebook Product Ads الافتراضي؟')) {
             document.getElementById('modal_instructions').value = window.DEFAULT_GEMINI_PROMPT;
+          }
+        } else if (skillId === 'gemini-facebook-product-ads-voiceover') {
+          if (confirm('هل تريد استبدال النص الحالي بنص مهارة Gemini Facebook Silent Ads & Voice-Over الافتراضي؟')) {
+            document.getElementById('modal_instructions').value = window.DEFAULT_GEMINI_VOICEOVER_PROMPT;
           }
         } else {
           if (confirm('هل تريد استبدال النص الحالي بنص مهارة COD Assistant (المراحل الثلاث) الافتراضي؟')) {

@@ -94,7 +94,9 @@ class McpAdminController extends BaseController
 
 المرحلة الرابعة: حزمة إعلانات الفيديو وصور UGC (Gemini Facebook Product Ads)
 عند موافقة المستخدم واعتماد المرحلة الثالثة:
-- يتم تفعيل واستدعاء أداة الـ MCP: `get_gemini_facebook_product_ads_instructions` مع تمرير اسم المنتج ورابط صورته المرجعية.
+- يتم تفعيل أداة الـ MCP المناسبة حسب نوع الإعلان المطلوب:
+  * الخيار المتقدم (فيديوهات صامتة بدون حوار أو موسيقى + برومبتات تعليق صوتي TTS مستقلة لـ Gemini 3.1 Flash TTS): يتم استدعاء أداة الـ MCP: `get_gemini_facebook_product_ads_voiceover_instructions` مع تمرير اسم المنتج ورابط صورته المرجعية.
+  * خيار الحوار المدمج والموسيقى داخل الفيديو: يتم استدعاء أداة الـ MCP: `get_gemini_facebook_product_ads_instructions`.
 - تنفيذ تعليمات المهارة الإعلانية بالكامل لإنتاج حزمة إعلانية متكاملة لـ Facebook Ads و Instagram Reels بالسوق المغربي:
   1. خطة ظهور المنتج (Product Visibility Plan): تحديد وضعية الظهور لكل فيديو (hidden, hinted, visible, hero) مع تطبيق شرط تثبيت هوية المنتج المرجعي الصارم (Product Identity Lock) عند ظهوره، ومنعه تماماً في مشاهد المشكلة (Product Absence Requirement).
   2. بناء الشخصية الثابتة (Character Reference & Character Bible): توليد برومبت الشخصية UGC المغربية الموثوقة وتثبيت ملامحها، ملابسها، نبرتها، وأسلوبها عبر جميع المشاهد لضمان التناسق.
@@ -103,7 +105,8 @@ class McpAdminController extends BaseController
      - Video 1 (0.0s–10.0s): مشكلة العميل والـ Hook بدون كشف المنتج (hidden أو hinted).
      - Video 2 (10.0s–20.0s): كشف الحل والاستعمال الطبيعي للمنتج المرجعي (visible).
      - Video 3 (20.0s–30.0s): النتيجة، العرض، والدعوة للشراء CTA بالدارجة (hero).
-  5. التقسيم الزمني الدقيق (Timeline 0.0s to 10.0s): تقسيم كل فيديو إلى 3 أو 4 لقطات محددة بالثواني، متضمنة التعليق الصوتي المنطوق بالدارجة المغربية بحروف عربية والمتطابق مع كل لقطة، ونبرة الثقة بدون ادعاءات مضللة.
+  5. برومبتات التعليق الصوتي TTS المستقلة (عند اختيار أداة voiceover): وضع برومبت صوتي مستقل أسفل كل فيديو لنموذج Gemini 3.1 Flash TTS مع التوقيت والوسوم الصوتية والسكربت بالدارجة المغربية، بالإضافة لبرومبت صوتي مجمع 30 ثانية.
+  6. التقسيم الزمني الدقيق (Timeline 0.0s to 10.0s): تقسيم كل فيديو إلى 3 أو 4 لقطات محددة بالثواني، متطابقة مع كل لقطة، ونبرة الثقة بدون ادعاءات مضللة.
 
 ---
 
@@ -137,6 +140,18 @@ class McpAdminController extends BaseController
         $systemPrompt  = $this->getSetting('mcp_system_prompt', $this->getDefaultSystemPrompt());
 
         $allTools = [
+            'get_gemini_facebook_product_ads_voiceover_instructions' => [
+                'name'        => 'get_gemini_facebook_product_ads_voiceover_instructions',
+                'title'       => 'مهارة Gemini Facebook Silent Ads & Voice-Over (فيديو صامت + تعليق TTS)',
+                'description' => 'توليد حزمة إعلانية بفيديوهات صامتة (بدون حوار أو موسيقى) + برومبتات تعليق صوتي TTS مستقلة لـ Gemini 3.1 Flash TTS بالدارجة المغربية.',
+                'badge'       => 'Silent Video & TTS Voice-Over مهارة فيديو صامت وتوليد صوتي',
+            ],
+            'get_gemini_facebook_product_ads_instructions' => [
+                'name'        => 'get_gemini_facebook_product_ads_instructions',
+                'title'       => 'مهارة Gemini Facebook Product Ads (إعلانات فيديو وصور UGC بحوار كامل)',
+                'description' => 'إنشاء حزمة إعلانية كاملة لـ Facebook & Instagram (فيديوهات UGC 10s بحوار مدمج، صور افتتاحية، وسكربت بالدارجة).',
+                'badge'       => 'Video & UGC Ads مهارة فيديو وإعلانات',
+            ],
             'get_nano_banana_pro_instructions' => [
                 'name'        => 'get_nano_banana_pro_instructions',
                 'title'       => 'مهارة Nano Banana Pro (الهوية البصرية وتوليد الإعلانات)',
@@ -315,9 +330,10 @@ class McpAdminController extends BaseController
             'globalEnabled'        => $globalEnabled,
             'systemPrompt'         => $systemPrompt,
             'defaultSystemPrompt'  => $this->getDefaultSystemPrompt(),
-            'defaultNanoPrompt'    => $defaultNanoPrompt,
-            'defaultGeminiPrompt'  => $this->getDefaultGeminiAdsPrompt(),
-            'tools'                => $allTools,
+            'defaultNanoPrompt'            => $defaultNanoPrompt,
+            'defaultGeminiPrompt'          => $this->getDefaultGeminiAdsPrompt(),
+            'defaultGeminiVoiceoverPrompt' => $this->getDefaultGeminiAdsVoiceoverPrompt(),
+            'tools'                        => $allTools,
             'skills'               => $skills,
             'users'                => $users,
             'totalUsers'           => $totalUsers,
@@ -1148,6 +1164,14 @@ These must be added manually after generation, never generated inside Gemini:
 SKILL;
     }
 
+    /**
+     * Get default Gemini Facebook Silent Ads & Voice-Over Skill instructions Markdown
+     */
+    public function getDefaultGeminiAdsVoiceoverPrompt(): string
+    {
+        return \App\Libraries\Mcp\SkillTemplates::getGeminiAdsVoiceoverPrompt();
+    }
+
 
     /**
      * Reset and restore all default system skills in database.
@@ -1162,6 +1186,7 @@ SKILL;
         $codPrompt    = $this->getDefaultSystemPrompt();
         $nanoPrompt   = $this->getDefaultNanoPrompt();
         $geminiPrompt = $this->getDefaultGeminiAdsPrompt();
+        $geminiVoiceoverPrompt = $this->getDefaultGeminiAdsVoiceoverPrompt();
 
         $defaults = [
             'cod-assistant' => [
@@ -1200,6 +1225,18 @@ SKILL;
                 'is_system'    => true,
                 'updated_at'   => $now,
             ],
+            'gemini-facebook-product-ads-voiceover' => [
+                'id'           => 'gemini-facebook-product-ads-voiceover',
+                'name'         => 'gemini-facebook-product-ads-voiceover',
+                'title'        => 'مهارة Gemini Facebook Silent Ads & Voice-Over (فيديو صامت + تعليق TTS)',
+                'description'  => 'إنشاء حزمة إعلانية بفيديوهات UGC صامتة (بدون حوار أو موسيقى) + برومبتات تعليق صوتي TTS مستقلة لـ Gemini 3.1 Flash TTS بالدارجة المغربية.',
+                'badge'        => 'Silent Video & TTS Voice-Over مهارة فيديو صامت وتوليد صوتي',
+                'tool_name'    => 'get_gemini_facebook_product_ads_voiceover_instructions',
+                'instructions' => $geminiVoiceoverPrompt,
+                'enabled'      => true,
+                'is_system'    => true,
+                'updated_at'   => $now,
+            ],
         ];
 
         $this->setSetting('mcp_system_prompt', $codPrompt);
@@ -1217,6 +1254,7 @@ SKILL;
         if (!empty($raw)) {
             $decoded = json_decode($raw, true);
             if (is_array($decoded) && !empty($decoded)) {
+                $hasNewSkill = false;
                 // Ensure new default system skills are merged if missing
                 if (!isset($decoded['gemini-facebook-product-ads'])) {
                     $decoded['gemini-facebook-product-ads'] = [
@@ -1230,6 +1268,23 @@ SKILL;
                         'enabled'      => true,
                         'is_system'    => true,
                     ];
+                    $hasNewSkill = true;
+                }
+                if (!isset($decoded['gemini-facebook-product-ads-voiceover'])) {
+                    $decoded['gemini-facebook-product-ads-voiceover'] = [
+                        'id'           => 'gemini-facebook-product-ads-voiceover',
+                        'name'         => 'gemini-facebook-product-ads-voiceover',
+                        'title'        => 'مهارة Gemini Facebook Silent Ads & Voice-Over (فيديو صامت + تعليق TTS)',
+                        'description'  => 'إنشاء حزمة إعلانية بفيديوهات UGC صامتة (بدون حوار أو موسيقى) + برومبتات تعليق صوتي TTS مستقلة لـ Gemini 3.1 Flash TTS بالدارجة المغربية.',
+                        'badge'        => 'Silent Video & TTS Voice-Over مهارة فيديو صامت وتوليد صوتي',
+                        'tool_name'    => 'get_gemini_facebook_product_ads_voiceover_instructions',
+                        'instructions' => $this->getDefaultGeminiAdsVoiceoverPrompt(),
+                        'enabled'      => true,
+                        'is_system'    => true,
+                    ];
+                    $hasNewSkill = true;
+                }
+                if ($hasNewSkill) {
                     $this->setSetting('mcp_skills_list', json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
                 }
                 return $decoded;
@@ -1237,9 +1292,10 @@ SKILL;
         }
 
         // Initialize default skills
-        $codInstructions    = $this->getDefaultSystemPrompt();
-        $nanoInstructions   = $this->getDefaultNanoPrompt();
-        $geminiInstructions = $this->getDefaultGeminiAdsPrompt();
+        $codInstructions             = $this->getDefaultSystemPrompt();
+        $nanoInstructions            = $this->getDefaultNanoPrompt();
+        $geminiInstructions          = $this->getDefaultGeminiAdsPrompt();
+        $geminiVoiceoverInstructions = $this->getDefaultGeminiAdsVoiceoverPrompt();
 
         $defaults = [
             'cod-assistant' => [
@@ -1272,6 +1328,17 @@ SKILL;
                 'badge'        => 'Video & UGC Ads مهارة فيديو وإعلانات',
                 'tool_name'    => 'get_gemini_facebook_product_ads_instructions',
                 'instructions' => $geminiInstructions,
+                'enabled'      => true,
+                'is_system'    => true,
+            ],
+            'gemini-facebook-product-ads-voiceover' => [
+                'id'           => 'gemini-facebook-product-ads-voiceover',
+                'name'         => 'gemini-facebook-product-ads-voiceover',
+                'title'        => 'مهارة Gemini Facebook Silent Ads & Voice-Over (فيديو صامت + تعليق TTS)',
+                'description'  => 'إنشاء حزمة إعلانية بفيديوهات UGC صامتة (بدون حوار أو موسيقى) + برومبتات تعليق صوتي TTS مستقلة لـ Gemini 3.1 Flash TTS بالدارجة المغربية.',
+                'badge'        => 'Silent Video & TTS Voice-Over مهارة فيديو صامت وتوليد صوتي',
+                'tool_name'    => 'get_gemini_facebook_product_ads_voiceover_instructions',
+                'instructions' => $geminiVoiceoverInstructions,
                 'enabled'      => true,
                 'is_system'    => true,
             ],
