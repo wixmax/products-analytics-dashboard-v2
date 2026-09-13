@@ -13,6 +13,7 @@ use App\Controllers\Traits\VectorizeTrait;
 use App\Controllers\Traits\SyncTrait;
 use App\Controllers\Traits\SettingsTrait;
 use App\Controllers\Traits\ChoufliyaTrait;
+use App\Controllers\Traits\CronTrait;
 
 class Products extends ResourceController
 {
@@ -23,6 +24,7 @@ class Products extends ResourceController
     use SyncTrait;
     use SettingsTrait;
     use ChoufliyaTrait;
+    use CronTrait;
 
     protected $format = 'json';
 

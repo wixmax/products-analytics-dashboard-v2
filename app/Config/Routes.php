@@ -75,6 +75,11 @@ $routes->get('/api/vectorize/stats', 'Products::vectorizeStats');
 $routes->post('/api/vectorize/run', 'Products::vectorizeRun');
 $routes->match(['GET', 'POST'], '/api/vectorize/test', 'Products::vectorizeTest');
 
+// Daily Cron & Webhook Endpoints
+$routes->match(['GET', 'POST'], '/api/cron/daily', 'Products::dailyCron');
+$routes->get('/api/cron/status', 'Products::getCronStatus');
+$routes->post('/api/cron/regenerate-secret', 'Products::regenerateCronSecret');
+
 // Choufliya Wholesale Sourcing Endpoints
 $routes->get('/api/choufliya/search', 'Products::choufliyaSearch');
 $routes->post('/api/choufliya/search-image', 'Products::choufliyaSearchImage');

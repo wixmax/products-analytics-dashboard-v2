@@ -576,6 +576,100 @@
             </div>
           </div>
 
+          <!-- Card Cron: Scheduled Daily Tasks (Admin Only) -->
+          <div class="settings-card" id="cron-settings-card">
+            <div class="settings-card-title">
+              🕒 أتمتة الجلب اليومي للبيانات (Daily Cron Job)
+            </div>
+            <p class="settings-card-desc">
+              جدولة جلب وتحديث المنتجات الفائزة والإحصائيات المحلية والدولية تلقائياً وحفظ لقطات البيانات (Snapshots) مع إمكانية الفهرسة بالذكاء الاصطناعي.
+            </p>
+
+            <!-- Cron Status Banner -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.25rem;">
+              <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 4px;">⏰ آخر تشغيل للـ Cron</div>
+                <div id="cron-last-run-time" style="font-size: 0.85rem; font-weight: 800; color: var(--color-text-main); font-family: monospace;">جارٍ الفحص...</div>
+              </div>
+              <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+                <div style="font-size: 0.75rem; color: #10b981; margin-bottom: 4px;">📥 منتجات جديدة مضافة</div>
+                <div id="cron-last-inserted" style="font-size: 1.3rem; font-weight: 800; color: #10b981;">--</div>
+              </div>
+              <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+                <div style="font-size: 0.75rem; color: #6366f1; margin-bottom: 4px;">🔄 منتجات تم تحديثها</div>
+                <div id="cron-last-updated" style="font-size: 1.3rem; font-weight: 800; color: #6366f1;">--</div>
+              </div>
+              <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 4px;">🎯 حالة التنفيذ</div>
+                <div id="cron-status-badge" style="font-size: 0.85rem; font-weight: 800;">--</div>
+              </div>
+            </div>
+
+            <!-- Action Buttons Grid -->
+            <div class="actions-grid" style="margin-bottom: 1.25rem;">
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">⚡ تشغيل الجلب اليومي فوراً</span>
+                  <span class="action-item-desc">تنفيذ أمر الجلب اليومي مباشرة وحفظ البيانات في قاعدة البيانات وتحديث اللقطات.</span>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button id="btn-run-cron-now" class="btn btn-primary" style="font-weight: 700; background: linear-gradient(135deg, #10b981, #059669); border: none;" onclick="runDailyCron(false)">
+                    ⚡ تشغيل فوري الآن
+                  </button>
+                  <button id="btn-run-cron-async" class="btn btn-secondary" style="font-weight: 700;" onclick="runDailyCron(true)">
+                    🚀 تشغيل في الخلفية (Async)
+                  </button>
+                </div>
+              </div>
+
+              <div class="action-item">
+                <div class="action-item-info">
+                  <span class="action-item-title">📋 تفاصيل السجلات والمراقبة</span>
+                  <span class="action-item-desc">فحص سجلات آخر العمليات المنفذة والتحقق من سلامة الجدولة وسرعة الاستجابة.</span>
+                </div>
+                <button class="btn btn-secondary" style="font-weight: 700;" onclick="loadCronStatus(true)">
+                  🔄 تحديث الحالة والسجلات
+                </button>
+              </div>
+            </div>
+
+            <!-- Deployment & Scheduling Commands -->
+            <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+              <div>
+                <label style="font-weight: 700; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span>🐧 سطر Crontab لسيرفر Linux / cPanel (تشغيل يومياً 02:00 صباحاً):</span>
+                  <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 0.75rem;" onclick="copyToClipboard('cron-crontab-input')">📋 نسخ</button>
+                </label>
+                <input type="text" id="cron-crontab-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="0 2 * * * cd <?= realpath(ROOTPATH) ?> && php spark cron:daily --vectorize >> <?= WRITEPATH ?>logs/cron_daily.log 2>&1" />
+              </div>
+
+              <div>
+                <label style="font-weight: 700; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span>🌐 رابط Webhook الخارجي (لخدمات Cron-Job.org أو Cloudflare Workers أو Curl):</span>
+                  <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 0.75rem;" onclick="regenerateCronSecretToken()">🔑 تجديد الرمز</button>
+                    <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 0.75rem;" onclick="copyToClipboard('cron-webhook-input')">📋 نسخ</button>
+                  </div>
+                </label>
+                <input type="text" id="cron-webhook-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="جارٍ التحميل..." />
+              </div>
+
+              <div>
+                <label style="font-weight: 700; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span>🪟 تشغيل محلي في بيئة Windows (Task Scheduler أو PowerShell):</span>
+                  <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 0.75rem;" onclick="copyToClipboard('cron-windows-input')">📋 نسخ</button>
+                </label>
+                <input type="text" id="cron-windows-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="php spark cron:daily --vectorize" />
+              </div>
+            </div>
+
+            <!-- Last Log Tail Preview -->
+            <div id="cron-log-container" style="margin-top: 1rem; display: none;">
+              <strong style="font-size: 0.8rem; color: var(--color-text-muted); display: block; margin-bottom: 4px;">📜 آخر أسطر من سجل الـ Cron:</strong>
+              <pre id="cron-log-tail" style="margin: 0; padding: 10px; background: #0f172a; color: #38bdf8; border-radius: 6px; font-family: monospace; font-size: 0.75rem; max-height: 140px; overflow-y: auto; direction: ltr; text-align: left;"></pre>
+            </div>
+          </div>
+
           <!-- Card 2: Database Operations (Admin Only) -->
           <div class="settings-card">
             <div class="settings-card-title">
@@ -678,6 +772,7 @@
         }
         await setupTheme();
         await loadSettings();
+        await loadCronStatus();
       });
 
       // Toast Notifications
@@ -1423,6 +1518,137 @@
             btn.style.opacity = "1";
             btn.innerHTML = originalHtml;
           }
+        }
+      }
+
+      // ==========================================
+      // Daily Cron & Webhook Functions
+      // ==========================================
+      function copyToClipboard(inputId) {
+        const el = document.getElementById(inputId);
+        if (!el) return;
+        el.select();
+        el.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(el.value).then(() => {
+          showToast("تم النسخ إلى الحافظة بنجاح 📋", "success");
+        }).catch(() => {
+          document.execCommand("copy");
+          showToast("تم النسخ بنجاح 📋", "success");
+        });
+      }
+
+      async function loadCronStatus(showMessage = false) {
+        try {
+          const res = await fetch('/api/cron/status');
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data.success) return;
+
+          const lastRun = data.last_run;
+          const timeEl = document.getElementById('cron-last-run-time');
+          const insEl = document.getElementById('cron-last-inserted');
+          const updEl = document.getElementById('cron-last-updated');
+          const badgeEl = document.getElementById('cron-status-badge');
+          const webhookInput = document.getElementById('cron-webhook-input');
+          const logContainer = document.getElementById('cron-log-container');
+          const logTail = document.getElementById('cron-log-tail');
+
+          if (data.cron_url && webhookInput) {
+            webhookInput.value = data.cron_url;
+          }
+
+          if (lastRun) {
+            if (timeEl) timeEl.textContent = lastRun.timestamp || '--';
+            if (insEl) insEl.textContent = lastRun.total_inserted ?? '--';
+            if (updEl) updEl.textContent = lastRun.total_updated ?? '--';
+            if (badgeEl) {
+              const isSuccess = lastRun.status === 'success';
+              badgeEl.textContent = isSuccess ? 'ناجح ✅' : 'تحذير ⚠️';
+              badgeEl.style.color = isSuccess ? '#10b981' : '#f59e0b';
+            }
+          } else {
+            if (timeEl) timeEl.textContent = 'لم ينفذ بعد';
+            if (insEl) insEl.textContent = '0';
+            if (updEl) updEl.textContent = '0';
+            if (badgeEl) {
+              badgeEl.textContent = 'بانتظار التشغيل ⏳';
+              badgeEl.style.color = 'var(--color-text-muted)';
+            }
+          }
+
+          if (data.recent_logs && logTail && logContainer) {
+            logTail.textContent = data.recent_logs;
+            logContainer.style.display = 'block';
+          }
+
+          if (showMessage) {
+            showToast("تم تحديث حالة الـ Cron بنجاح 🕒", "info");
+          }
+        } catch (err) {
+          console.error("Error loading cron status:", err);
+        }
+      }
+
+      async function runDailyCron(isAsync = false) {
+        const btnId = isAsync ? 'btn-run-cron-async' : 'btn-run-cron-now';
+        const btn = document.getElementById(btnId);
+        const originalText = btn ? btn.innerHTML : '';
+
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = isAsync ? '⏳ جارٍ الجدولة...' : '⏳ جارٍ الجلب...';
+        }
+
+        showToast(isAsync ? "جارٍ إطلاق مهمة الـ Cron بالخلفية..." : "جارٍ جلب البيانات وحفظ اللقطات...", "info");
+
+        try {
+          const url = `/api/cron/daily?async=${isAsync ? 1 : 0}`;
+          const res = await fetch(url, { method: 'POST' });
+          const data = await res.json();
+
+          if (res.ok && data.success) {
+            if (isAsync) {
+              showToast(`تم إطلاق المهمة بنجاح (المعرف: ${data.task_id}) 🚀`, "success");
+            } else {
+              const inserted = data.summary?.total_inserted ?? 0;
+              const updated = data.summary?.total_updated ?? 0;
+              showToast(`اكتمل الجلب بنجاح! تم إدخال ${inserted} وتحديث ${updated} منتج 🎉`, "success");
+            }
+            await loadCronStatus();
+          } else {
+            showToast("❌ " + (data.messages?.error || data.message || "فشل تنفيذ الجلب"), "error");
+          }
+        } catch (err) {
+          console.error("Cron execution error:", err);
+          showToast("❌ تعذر الاتصال بالسيرفر لتنفيذ الـ Cron", "error");
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+          }
+        }
+      }
+
+      async function regenerateCronSecretToken() {
+        if (!confirm("هل أنت متأكد من رغبتك في تجديد رمز الأمان؟ سيتطلب ذلك تحديث الرابط في أي خدمة خارجية تستخدمه.")) {
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/cron/regenerate-secret', { method: 'POST' });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            const webhookInput = document.getElementById('cron-webhook-input');
+            if (webhookInput && data.cron_url) {
+              webhookInput.value = data.cron_url;
+            }
+            showToast(data.message || "تم تجديد رمز الأمان بنجاح 🔑", "success");
+          } else {
+            showToast("❌ فشل تجديد رمز الأمان", "error");
+          }
+        } catch (err) {
+          console.error("Error regenerating cron token:", err);
+          showToast("❌ خطأ أثناء الاتصال بالسيرفر", "error");
         }
       }
     </script>

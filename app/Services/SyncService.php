@@ -18,8 +18,10 @@ class SyncService
         $this->snapshotModel = new SnapshotModel();
     }
 
-    public function run(): array
+    public function run(?string $date = null, string $trigger = 'manual'): array
     {
+        $targetDate = $date ?: date('Y-m-d');
+
         $stats = [
             'Local' => ['inserted' => 0, 'updated' => 0, 'failed' => false],
             'Winning' => ['inserted' => 0, 'updated' => 0, 'failed' => false],
@@ -30,14 +32,17 @@ class SyncService
         // 1. Fetch Insights (Local Products)
         $stats['Local'] = $this->syncInsights();
 
-        // 2. Fetch Winning Products
-        $stats['Winning'] = $this->syncWinningProducts();
+        // 2. Fetch Winning Products for targeted date
+        $stats['Winning'] = $this->syncWinningProducts($targetDate);
 
         // 3. Fetch China Products
         $stats['China'] = $this->syncInternationalProducts('China');
 
         // 4. Fetch Japan Products
         $stats['Japan'] = $this->syncInternationalProducts('Japan');
+
+        // Record execution stats
+        $this->recordSyncRun($stats, $trigger, $targetDate);
 
         return $stats;
     }
@@ -143,15 +148,18 @@ class SyncService
         return $stats;
     }
 
-    private function syncWinningProducts(): array
+    private function syncWinningProducts(?string $date = null): array
     {
         $stats = ['inserted' => 0, 'updated' => 0, 'failed' => false];
+        $targetDate = $date ?: date('Y-m-d');
+        $winningVersion = '1.10-1' . $targetDate;
+
         $input = [
             "0" => [
                 "json" => [
                     "category" => "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler",
                     "country" => "DZ;TN;MA;LY;EG;SA;QA;EA;OM;BH;KW;GB;IE;FR;BE;LU;CH;DE;AT;ES;IT;NL;PT;NG;CI;SN;KE",
-                    "v" => "1.10-12026-05-15"
+                    "v" => $winningVersion
                 ]
             ]
         ];
@@ -695,5 +703,91 @@ class SyncService
         }
         $timestamp = strtotime($dateStr);
         return $timestamp ? date('Y-m-d', $timestamp) : null;
+    }
+
+    /**
+     * Record execution stats to settings and cron log file
+     */
+    public function recordSyncRun(array $stats, string $trigger = 'manual', ?string $date = null): void
+    {
+        try {
+            $totalInserted = 0;
+            $totalUpdated = 0;
+            $hasFailure = false;
+            foreach ($stats as $st) {
+                $totalInserted += ($st['inserted'] ?? 0);
+                $totalUpdated += ($st['updated'] ?? 0);
+                if (!empty($st['failed'])) {
+                    $hasFailure = true;
+                }
+            }
+
+            $targetDate = $date ?: date('Y-m-d');
+            $status = $hasFailure ? 'partial_failure' : 'success';
+
+            $logData = [
+                'timestamp'      => date('Y-m-d H:i:s'),
+                'target_date'    => $targetDate,
+                'trigger'        => $trigger,
+                'status'         => $status,
+                'total_inserted' => $totalInserted,
+                'total_updated'  => $totalUpdated,
+                'details'        => $stats,
+            ];
+
+            $settingModel = new \App\Models\SettingModel();
+            $existing = $settingModel->where('key', 'daily_cron_last_run')->first();
+            $payload = json_encode($logData, JSON_UNESCAPED_UNICODE);
+
+            if ($existing) {
+                $settingModel->update($existing['id'], [
+                    'value'      => $payload,
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+            } else {
+                $settingModel->insert([
+                    'key'        => 'daily_cron_last_run',
+                    'value'      => $payload,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+            }
+
+            // Write to dedicated cron log
+            $cronLogDir = WRITEPATH . 'logs' . DIRECTORY_SEPARATOR . 'cron' . DIRECTORY_SEPARATOR;
+            if (!is_dir($cronLogDir)) {
+                @mkdir($cronLogDir, 0777, true);
+            }
+            $cronLogFile = $cronLogDir . 'daily_sync_' . date('Y-m') . '.log';
+            $logLine = sprintf(
+                "[%s] Trigger: %-7s | Date: %s | Status: %-15s | +%d inserted, ~%d updated\n",
+                date('Y-m-d H:i:s'),
+                strtoupper($trigger),
+                $targetDate,
+                strtoupper($status),
+                $totalInserted,
+                $totalUpdated
+            );
+            @file_put_contents($cronLogFile, $logLine, FILE_APPEND);
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed to record sync run: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Retrieve the last sync run metadata
+     */
+    public static function getLastSyncRun(): ?array
+    {
+        try {
+            $settingModel = new \App\Models\SettingModel();
+            $row = $settingModel->where('key', 'daily_cron_last_run')->first();
+            if ($row && !empty($row['value'])) {
+                return json_decode($row['value'], true) ?: null;
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed to get last sync run: ' . $e->getMessage());
+        }
+        return null;
     }
 }
