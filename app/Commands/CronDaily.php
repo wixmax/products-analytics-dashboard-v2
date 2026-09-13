@@ -12,12 +12,11 @@ class CronDaily extends BaseCommand
 {
     protected $group       = 'Cron';
     protected $name        = 'cron:daily';
-    protected $description = 'Automated daily data synchronization for products, snapshots, and optional vector indexing';
+    protected $description = 'Automated daily data synchronization for winning products (المنتجات الرابحة)';
     protected $usage       = 'cron:daily [options]';
     protected $options     = [
-        '--date'      => 'Specific target date to fetch (format: YYYY-MM-DD, defaults to today)',
-        '--vectorize' => 'Automatically vectorize new unindexed products after sync',
-        '--quiet'     => 'Quiet mode - suppress CLI output except critical errors',
+        '--date'  => 'Specific target date to fetch (format: YYYY-MM-DD, defaults to today)',
+        '--quiet' => 'Quiet mode - suppress CLI output except critical errors',
     ];
 
     public function run(array $params)
@@ -25,7 +24,22 @@ class CronDaily extends BaseCommand
         $startTime = microtime(true);
         $quiet = CLI::getOption('quiet') !== null;
 
-        $targetDate = CLI::getOption('date') ?: date('Y-m-d');
+        $targetDate = CLI::getOption('date');
+        if (empty($targetDate) && !empty($params)) {
+            foreach ($params as $p) {
+                if (preg_match('/^--date=(.*)$/', $p, $m)) {
+                    $targetDate = $m[1];
+                    break;
+                } elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $p)) {
+                    $targetDate = $p;
+                    break;
+                }
+            }
+        }
+        if (empty($targetDate)) {
+            $targetDate = date('Y-m-d');
+        }
+
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $targetDate)) {
             CLI::error("Invalid date format: '{$targetDate}'. Expected YYYY-MM-DD.");
             return;
@@ -39,9 +53,9 @@ class CronDaily extends BaseCommand
             CLI::write("==================================================", 'cyan');
         }
 
-        // 1. Run full sync across origins with daily cron trigger
+        // 1. Run sync for Winning products ONLY (رابحة فقط) with daily cron trigger
         $syncService = new SyncService();
-        $stats = $syncService->run($targetDate, 'cron');
+        $stats = $syncService->run($targetDate, 'cron', ['Winning']);
 
         $totalInserted = 0;
         $totalUpdated  = 0;
@@ -63,38 +77,6 @@ class CronDaily extends BaseCommand
             } else {
                 if (!$quiet) {
                     CLI::write("✅ [{$origin}] +{$inserted} inserted, ~{$updated} updated", 'green');
-                }
-            }
-        }
-
-        // 2. Optional: Vectorize new unindexed products
-        $vectorizeOption = CLI::getOption('vectorize');
-        if ($vectorizeOption !== null && $totalInserted > 0) {
-            if (!$quiet) {
-                CLI::write("🧠 Vectorizing new unindexed products...", 'blue');
-            }
-            try {
-                $vectorService = new CloudflareVectorService();
-                if ($vectorService->isConfigured()) {
-                    $productModel = new ProductModel();
-                    $unindexed = $productModel->select('id, title, ad_title, ad_body, country, origin')
-                                              ->where('origin', 'Winning')
-                                              ->orderBy('id', 'DESC')
-                                              ->limit(min($totalInserted, 100))
-                                              ->findAll();
-                    if (!empty($unindexed)) {
-                        $vecStats = $vectorService->bulkIndexProducts($unindexed, 25);
-                        if (!$quiet) {
-                            CLI::write("🧠 Vectorized {$vecStats['indexed']} products successfully.", 'green');
-                        }
-                    }
-                } elseif (!$quiet) {
-                    CLI::write("ℹ️ Cloudflare Vectorize not fully configured - skipping vectorization.", 'yellow');
-                }
-            } catch (\Throwable $ve) {
-                log_message('error', 'CronDaily Vectorize error: ' . $ve->getMessage());
-                if (!$quiet) {
-                    CLI::error("⚠️ Vectorize warning: " . $ve->getMessage());
                 }
             }
         }

@@ -34,10 +34,6 @@ if ($TargetDate -ne "") {
     $SparkArgs += "--date=$TargetDate"
 }
 
-if (-not $NoVectorize) {
-    $SparkArgs += "--vectorize"
-}
-
 try {
     & php $SparkArgs
     if ($LASTEXITCODE -eq 0) {

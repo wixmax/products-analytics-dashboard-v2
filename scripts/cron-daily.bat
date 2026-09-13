@@ -28,7 +28,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-php spark cron:daily --vectorize %*
+php spark cron:daily %*
 
 if %errorlevel% equ 0 (
     echo [%date% %time%] Daily Cron completed successfully.

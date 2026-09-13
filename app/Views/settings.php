@@ -579,10 +579,10 @@
           <!-- Card Cron: Scheduled Daily Tasks (Admin Only) -->
           <div class="settings-card" id="cron-settings-card">
             <div class="settings-card-title">
-              🕒 أتمتة الجلب اليومي للبيانات (Daily Cron Job)
+              🕒 أتمتة الجلب اليومي للمنتجات الرابحة (Daily Cron Job - Winning Only)
             </div>
             <p class="settings-card-desc">
-              جدولة جلب وتحديث المنتجات الفائزة والإحصائيات المحلية والدولية تلقائياً وحفظ لقطات البيانات (Snapshots) مع إمكانية الفهرسة بالذكاء الاصطناعي.
+              جدولة جلب وتحديث المنتجات الرابحة (Winning Products) فقط تلقائياً وحفظ لقطات البيانات (Snapshots) دون استهلاك موارد السيرفر بالفهرسة.
             </p>
 
             <!-- Cron Status Banner -->
@@ -592,7 +592,7 @@
                 <div id="cron-last-run-time" style="font-size: 0.85rem; font-weight: 800; color: var(--color-text-main); font-family: monospace;">جارٍ الفحص...</div>
               </div>
               <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
-                <div style="font-size: 0.75rem; color: #10b981; margin-bottom: 4px;">📥 منتجات جديدة مضافة</div>
+                <div style="font-size: 0.75rem; color: #10b981; margin-bottom: 4px;">📥 منتجات رابحة مضافة</div>
                 <div id="cron-last-inserted" style="font-size: 1.3rem; font-weight: 800; color: #10b981;">--</div>
               </div>
               <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
@@ -609,8 +609,8 @@
             <div class="actions-grid" style="margin-bottom: 1.25rem;">
               <div class="action-item">
                 <div class="action-item-info">
-                  <span class="action-item-title">⚡ تشغيل الجلب اليومي فوراً</span>
-                  <span class="action-item-desc">تنفيذ أمر الجلب اليومي مباشرة وحفظ البيانات في قاعدة البيانات وتحديث اللقطات.</span>
+                  <span class="action-item-title">⚡ تشغيل جلب المنتجات الرابحة فوراً</span>
+                  <span class="action-item-desc">تنفيذ جلب المنتجات الرابحة (Winning) فقط مباشرة وحفظ البيانات في قاعدة البيانات وتحديث اللقطات.</span>
                 </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                   <button id="btn-run-cron-now" class="btn btn-primary" style="font-weight: 700; background: linear-gradient(135deg, #10b981, #059669); border: none;" onclick="runDailyCron(false)">
@@ -640,7 +640,7 @@
                   <span>🐧 سطر Crontab لسيرفر Linux / cPanel (تشغيل يومياً 02:00 صباحاً):</span>
                   <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 0.75rem;" onclick="copyToClipboard('cron-crontab-input')">📋 نسخ</button>
                 </label>
-                <input type="text" id="cron-crontab-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="0 2 * * * cd <?= realpath(ROOTPATH) ?> && php spark cron:daily --vectorize >> <?= WRITEPATH ?>logs/cron_daily.log 2>&1" />
+                <input type="text" id="cron-crontab-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="0 2 * * * cd <?= realpath(ROOTPATH) ?> && php spark cron:daily >> <?= WRITEPATH ?>logs/cron_daily.log 2>&1" />
               </div>
 
               <div>
@@ -659,7 +659,7 @@
                   <span>🪟 تشغيل محلي في بيئة Windows (Task Scheduler أو PowerShell):</span>
                   <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 0.75rem;" onclick="copyToClipboard('cron-windows-input')">📋 نسخ</button>
                 </label>
-                <input type="text" id="cron-windows-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="php spark cron:daily --vectorize" />
+                <input type="text" id="cron-windows-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="php spark cron:daily" />
               </div>
             </div>
 

@@ -18,28 +18,30 @@ class SyncService
         $this->snapshotModel = new SnapshotModel();
     }
 
-    public function run(?string $date = null, string $trigger = 'manual'): array
+    public function run(?string $date = null, string $trigger = 'manual', array $origins = ['Winning']): array
     {
         $targetDate = $date ?: date('Y-m-d');
+        $stats = [];
 
-        $stats = [
-            'Local' => ['inserted' => 0, 'updated' => 0, 'failed' => false],
-            'Winning' => ['inserted' => 0, 'updated' => 0, 'failed' => false],
-            'China' => ['inserted' => 0, 'updated' => 0, 'failed' => false],
-            'Japan' => ['inserted' => 0, 'updated' => 0, 'failed' => false],
-        ];
+        // 1. Fetch Winning Products for targeted date (المنتجات الرابحة فقط)
+        if (in_array('Winning', $origins, true)) {
+            $stats['Winning'] = $this->syncWinningProducts($targetDate);
+        }
 
-        // 1. Fetch Insights (Local Products)
-        $stats['Local'] = $this->syncInsights();
+        // 2. Fetch Insights (Local Products) only if requested
+        if (in_array('Local', $origins, true)) {
+            $stats['Local'] = $this->syncInsights();
+        }
 
-        // 2. Fetch Winning Products for targeted date
-        $stats['Winning'] = $this->syncWinningProducts($targetDate);
+        // 3. Fetch China Products only if requested
+        if (in_array('China', $origins, true)) {
+            $stats['China'] = $this->syncInternationalProducts('China');
+        }
 
-        // 3. Fetch China Products
-        $stats['China'] = $this->syncInternationalProducts('China');
-
-        // 4. Fetch Japan Products
-        $stats['Japan'] = $this->syncInternationalProducts('Japan');
+        // 4. Fetch Japan Products only if requested
+        if (in_array('Japan', $origins, true)) {
+            $stats['Japan'] = $this->syncInternationalProducts('Japan');
+        }
 
         // Record execution stats
         $this->recordSyncRun($stats, $trigger, $targetDate);
@@ -152,97 +154,121 @@ class SyncService
     {
         $stats = ['inserted' => 0, 'updated' => 0, 'failed' => false];
         $targetDate = $date ?: date('Y-m-d');
-        $winningVersion = '1.10-1' . $targetDate;
-
-        $input = [
-            "0" => [
-                "json" => [
-                    "category" => "Popular;Electronics;Home & Garden;Health & Beauty;Apparel & Accessories;Tools;Baby & Toddler",
-                    "country" => "DZ;TN;MA;LY;EG;SA;QA;EA;OM;BH;KW;GB;IE;FR;BE;LU;CH;DE;AT;ES;IT;NL;PT;NG;CI;SN;KE",
-                    "v" => $winningVersion
-                ]
-            ]
+        
+        $versionsToTry = [
+            '1.10-1' . $targetDate,
+            '1.10' . $targetDate,
+            '1.10',
         ];
 
-        $apiVersion = $this->extractVersion($input);
-        $url = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($input, JSON_FORCE_OBJECT));
+        $rawList = [];
+        $rawBody = '';
+        $effectiveVersion = '';
 
-        try {
-            $response = $this->client->request('GET', $url, [
-                'headers' => [
-                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept' => 'application/json'
+        foreach ($versionsToTry as $ver) {
+            $input = [
+                "0" => [
+                    "json" => [
+                        "category" => "Popular;Home & Garden;Electronics;Baby & Toddler",
+                        "country"  => "DZ;TN;MA;LY;EG;SA;QA;AE;OM;BH;KW",
+                        "v"        => $ver
+                    ]
+                ],
+                "1" => [
+                    "json" => [
+                        "user_id"    => "anonymous",
+                        "session_id" => "-"
+                    ]
                 ]
-            ]);
+            ];
 
-            if ($response->getStatusCode() === 200) {
-                $rawBody = $response->getBody();
-                $data = json_decode($rawBody, true);
-                $base = is_array($data) ? ($data[0] ?? null) : $data;
-                $targetData = $base['result']['data']['json'] ?? null;
+            $url = 'https://www.overviewdata.io/api/trpc/data.winingProducts,stripe.getUserSubStatus?batch=1&input=' . urlencode(json_encode($input, JSON_FORCE_OBJECT));
 
-                if ($targetData) {
-                    $rawList = $targetData['productsEntries'] ?? $targetData['results'] ?? $targetData;
-                    if (!is_array($rawList) && isset($targetData['results'])) {
-                        $rawList = $targetData['results'];
-                    }
-                    if (!is_array($rawList)) {
-                        $rawList = [];
-                    }
+            try {
+                $response = $this->client->request('GET', $url, [
+                    'headers' => [
+                        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept'     => 'application/json'
+                    ]
+                ]);
 
-                    // Save snapshot before upserting products
-                    $snapInfo = $this->saveSnapshot('Winning', $apiVersion, $rawBody, count($rawList));
-                    if (!empty($snapInfo['is_duplicate'])) {
-                        return $stats; // Skip products table inserts and updates if duplicate
-                    }
-                    $snapshotId = $snapInfo['id'] ?? null;
+                if ($response->getStatusCode() === 200) {
+                    $body = $response->getBody();
+                    log_message('info', "syncWinningProducts [{$ver}] returned: " . substr($body, 0, 200));
+                    $data = json_decode($body, true);
+                    $base = is_array($data) ? ($data[0] ?? null) : $data;
+                    $targetData = $base['result']['data']['json'] ?? null;
 
-                    foreach ($rawList as $p) {
-                        $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
-                        $title = $p['title'] ?? $p['product_title'] ?? 'بدون عنوان';
-
-                        $existing = $this->model->where('product_url', $productUrl)
-                                          ->where('origin', 'Winning')
-                                          ->first();
-
-                        $dataToSave = [
-                            'title' => $title,
-                            'product_url' => $productUrl,
-                            'country' => $p['country'] ?? '',
-                            'algo' => $p['algorithm'] ?? $p['algo'] ?? 'winning',
-                            'ad_start_date' => $this->cleanDate($p['ad_start_date'] ?? null),
-                            'ads_count' => intval($p['ads_count'] ?? 0),
-                            'unique_image_count' => intval($p['unique_image_count'] ?? 0),
-                            'unique_video_count' => intval($p['unique_video_count'] ?? 0),
-                            'avg_creatives' => floatval($p['avg_creatives'] ?? 1),
-                            'ads_per_unique_url' => floatval($p['ads_per_unique_url'] ?? 1),
-                            'ad_title' => $p['ad_title'] ?? '',
-                            'ad_body' => $p['ad_body'] ?? '',
-                            'ad_image_urls' => is_array($p['ad_image_urls'] ?? null) ? implode(';', $p['ad_image_urls']) : ($p['ad_image_urls'] ?? ''),
-                            'ad_video_urls' => is_array($p['ad_video_urls'] ?? null) ? implode(';', $p['ad_video_urls']) : ($p['ad_video_urls'] ?? ''),
-                            'price_1' => strval($p['price_1'] ?? $p['price'] ?? '0'),
-                            'badge_algorithm' => $p['badge_algorithm'] ?? 'winning',
-                            'active_ads' => isset($p['active_ads']) ? (bool)$p['active_ads'] : true,
-                            'origin' => 'Winning',
-                            'api_version' => $apiVersion,
-                            'snapshot_id' => $snapshotId,
-                        ];
-
-                        if ($existing) {
-                            $this->model->update($existing['id'], $dataToSave);
-                            $stats['updated']++;
-                        } else {
-                            $this->model->insert($dataToSave);
-                            $stats['inserted']++;
+                    if ($targetData) {
+                        $list = $targetData['productsEntries'] ?? $targetData['results'] ?? [];
+                        if (is_array($list) && count($list) > 0) {
+                            $rawList = $list;
+                            $rawBody = $body;
+                            $effectiveVersion = $ver;
+                            break;
                         }
                     }
+                } else {
+                    log_message('warning', "syncWinningProducts [{$ver}] HTTP {$response->getStatusCode()}: " . substr($response->getBody(), 0, 200));
                 }
-            } else {
-                $stats['failed'] = true;
+            } catch (\Throwable $e) {
+                log_message('error', "syncWinningProducts error with v={$ver}: " . $e->getMessage());
             }
-        } catch (\Exception $e) {
-            $stats['failed'] = true;
         }
+
+        if (empty($rawList)) {
+            log_message('warning', "syncWinningProducts: No products returned for date {$targetDate}");
+            $stats['failed'] = true;
+            return $stats;
+        }
+
+        // Save snapshot only when products are found
+        $snapInfo = $this->saveSnapshot('Winning', $effectiveVersion, $rawBody, count($rawList));
+        if (!empty($snapInfo['is_duplicate'])) {
+            return $stats;
+        }
+        $snapshotId = $snapInfo['id'] ?? null;
+
+        foreach ($rawList as $p) {
+            $productUrl = $p['productUrl'] ?? $p['product_url'] ?? '';
+            $title = $p['title'] ?? $p['product_title'] ?? 'بدون عنوان';
+
+            $existing = $this->model->where('product_url', $productUrl)
+                              ->where('origin', 'Winning')
+                              ->first();
+
+            $dataToSave = [
+                'title' => $title,
+                'product_url' => $productUrl,
+                'country' => $p['country'] ?? '',
+                'algo' => $p['algorithm'] ?? $p['algo'] ?? 'winning',
+                'ad_start_date' => $this->cleanDate($p['ad_start_date'] ?? null),
+                'ads_count' => intval($p['ads_count'] ?? 0),
+                'unique_image_count' => intval($p['unique_image_count'] ?? 0),
+                'unique_video_count' => intval($p['unique_video_count'] ?? 0),
+                'avg_creatives' => floatval($p['avg_creatives'] ?? 1),
+                'ads_per_unique_url' => floatval($p['ads_per_unique_url'] ?? 1),
+                'ad_title' => $p['ad_title'] ?? '',
+                'ad_body' => $p['ad_body'] ?? '',
+                'ad_image_urls' => is_array($p['ad_image_urls'] ?? null) ? implode(';', $p['ad_image_urls']) : ($p['ad_image_urls'] ?? ''),
+                'ad_video_urls' => is_array($p['ad_video_urls'] ?? null) ? implode(';', $p['ad_video_urls']) : ($p['ad_video_urls'] ?? ''),
+                'price_1' => strval($p['price_1'] ?? $p['price'] ?? '0'),
+                'badge_algorithm' => $p['badge_algorithm'] ?? 'winning',
+                'active_ads' => isset($p['active_ads']) ? (bool)$p['active_ads'] : true,
+                'origin' => 'Winning',
+                'api_version' => $effectiveVersion,
+                'snapshot_id' => $snapshotId,
+            ];
+
+            if ($existing) {
+                $this->model->update($existing['id'], $dataToSave);
+                $stats['updated']++;
+            } else {
+                $this->model->insert($dataToSave);
+                $stats['inserted']++;
+            }
+        }
+
         return $stats;
     }
 

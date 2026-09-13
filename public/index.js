@@ -9,6 +9,7 @@ const COUNTRIES_LIST = [
   { code: "EG", name: "مصر", flag: "🇪🇬" },
   { code: "SA", name: "السعودية", flag: "🇸🇦" },
   { code: "QA", name: "قطر", flag: "🇶🇦" },
+  { code: "AE", name: "الإمارات", flag: "🇦🇪" },
   { code: "EA", name: "شرق أفريقيا", flag: "🌍" },
   { code: "OM", name: "عُمان", flag: "🇴🇲" },
   { code: "BH", name: "البحرين", flag: "🇧🇭" },
@@ -481,8 +482,11 @@ function getActiveFiltersObject() {
     country = selectedCountryValues.join(";");
   }
 
-  const versionNum = document.getElementById("filter-version").value || "1.10";
+  let versionNum = document.getElementById("filter-version").value || (mode === "winning" ? "1.10-1" : "1.10");
   const dateStr = document.getElementById("filter-date").value || "";
+  if (mode === "winning" && dateStr && versionNum === "1.10") {
+    versionNum = "1.10-1";
+  }
   const v = dateStr ? `${versionNum}${dateStr}` : versionNum;
 
   if (mode === "winning") {
@@ -492,6 +496,12 @@ function getActiveFiltersObject() {
           category,
           country,
           v,
+        },
+      },
+      1: {
+        json: {
+          user_id: "anonymous",
+          session_id: "-",
         },
       },
     };
@@ -528,7 +538,7 @@ function generateFullURL() {
   }
   const baseUrl =
     mode === "winning"
-      ? "https://www.overviewdata.io/api/trpc/data.winingProducts"
+      ? "https://www.overviewdata.io/api/trpc/data.winingProducts,stripe.getUserSubStatus"
       : "https://www.overviewdata.io/api/trpc/data.insights";
 
   const filterObject = getActiveFiltersObject();

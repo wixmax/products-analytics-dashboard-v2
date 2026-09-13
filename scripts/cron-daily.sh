@@ -34,7 +34,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Daily Cron Sync from $PROJECT_ROOT
 echo "======================================================================"
 
 # Execute Spark daily cron command
-"$PHP_BIN" spark cron:daily --vectorize "$@"
+"$PHP_BIN" spark cron:daily "$@"
 
 EXIT_CODE=$?
 if [ $EXIT_CODE -eq 0 ]; then
