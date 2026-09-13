@@ -473,15 +473,9 @@ class ProductFilterTool implements ToolInterface
                                     "country"  => ($countryFilter !== 'ALL' && $countryFilter !== 'ككل' && !empty($countryFilter)) ? $countryFilter : "DZ;TN;MA;LY;EG;SA;QA;AE;OM;BH;KW",
                                     "v"        => $winningVersion
                                 ]
-                            ],
-                            "1" => [
-                                "json" => [
-                                    "user_id"    => "anonymous",
-                                    "session_id" => "-"
-                                ]
                             ]
                         ];
-                        $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.winingProducts,stripe.getUserSubStatus?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
+                        $trpcUrl = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($inputObj, JSON_FORCE_OBJECT));
                         $syncService->fetchAndSaveTrpcUrl($trpcUrl);
 
                         if ($isAllClassifications) {

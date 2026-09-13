@@ -173,16 +173,10 @@ class SyncService
                         "country"  => "DZ;TN;MA;LY;EG;SA;QA;AE;OM;BH;KW",
                         "v"        => $ver
                     ]
-                ],
-                "1" => [
-                    "json" => [
-                        "user_id"    => "anonymous",
-                        "session_id" => "-"
-                    ]
                 ]
             ];
 
-            $url = 'https://www.overviewdata.io/api/trpc/data.winingProducts,stripe.getUserSubStatus?batch=1&input=' . urlencode(json_encode($input, JSON_FORCE_OBJECT));
+            $url = 'https://www.overviewdata.io/api/trpc/data.winingProducts?batch=1&input=' . urlencode(json_encode($input, JSON_FORCE_OBJECT));
 
             try {
                 $response = $this->client->request('GET', $url, [

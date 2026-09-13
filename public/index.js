@@ -498,12 +498,6 @@ function getActiveFiltersObject() {
           v,
         },
       },
-      1: {
-        json: {
-          user_id: "anonymous",
-          session_id: "-",
-        },
-      },
     };
   }
 
@@ -538,7 +532,7 @@ function generateFullURL() {
   }
   const baseUrl =
     mode === "winning"
-      ? "https://www.overviewdata.io/api/trpc/data.winingProducts,stripe.getUserSubStatus"
+      ? "https://www.overviewdata.io/api/trpc/data.winingProducts"
       : "https://www.overviewdata.io/api/trpc/data.insights";
 
   const filterObject = getActiveFiltersObject();
