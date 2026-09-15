@@ -152,18 +152,22 @@ class SyncService
 
     private function syncWinningProducts(?string $date = null): array
     {
-        $stats = ['inserted' => 0, 'updated' => 0, 'failed' => false];
+        $stats = ['inserted' => 0, 'updated' => 0, 'failed' => false, 'error' => null];
         $targetDate = $date ?: date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day', strtotime($targetDate)));
         
         $versionsToTry = [
             '1.10-1' . $targetDate,
             '1.10' . $targetDate,
+            '1.10-1' . $yesterday,
+            '1.10' . $yesterday,
             '1.10',
         ];
 
         $rawList = [];
         $rawBody = '';
         $effectiveVersion = '';
+        $lastError = null;
 
         foreach ($versionsToTry as $ver) {
             $input = [
@@ -182,13 +186,17 @@ class SyncService
                 $response = $this->client->request('GET', $url, [
                     'headers' => [
                         'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                        'Accept'     => 'application/json'
-                    ]
+                        'Accept'     => 'application/json',
+                        'Referer'    => 'https://www.overviewdata.io/'
+                    ],
+                    'http_errors' => false,
+                    'timeout'     => 45,
+                    'verify'      => false,
                 ]);
 
-                if ($response->getStatusCode() === 200) {
+                $statusCode = $response->getStatusCode();
+                if ($statusCode === 200) {
                     $body = $response->getBody();
-                    log_message('info', "syncWinningProducts [{$ver}] returned: " . substr($body, 0, 200));
                     $data = json_decode($body, true);
                     $base = is_array($data) ? ($data[0] ?? null) : $data;
                     $targetData = $base['result']['data']['json'] ?? null;
@@ -200,19 +208,28 @@ class SyncService
                             $rawBody = $body;
                             $effectiveVersion = $ver;
                             break;
+                        } else {
+                            $len = $targetData['len'] ?? 0;
+                            $lastError = "HTTP 200 ولكن النتائج فارغة (len={$len})";
                         }
+                    } else {
+                        $lastError = "استجابة غير متوقعة من API OverviewData";
                     }
                 } else {
-                    log_message('warning', "syncWinningProducts [{$ver}] HTTP {$response->getStatusCode()}: " . substr($response->getBody(), 0, 200));
+                    $lastError = "HTTP {$statusCode}: " . substr($response->getBody(), 0, 150);
+                    log_message('warning', "syncWinningProducts [{$ver}] {$lastError}");
                 }
             } catch (\Throwable $e) {
-                log_message('error', "syncWinningProducts error with v={$ver}: " . $e->getMessage());
+                $lastError = "خطأ اتصال (cURL/Network): " . $e->getMessage();
+                log_message('error', "syncWinningProducts error with v={$ver}: " . $lastError);
             }
         }
 
         if (empty($rawList)) {
-            log_message('warning', "syncWinningProducts: No products returned for date {$targetDate}");
+            $errorMsg = $lastError ?: "لم يتم استرجاع أي منتجات لتاريخ {$targetDate}";
+            log_message('warning', "syncWinningProducts: {$errorMsg}");
             $stats['failed'] = true;
+            $stats['error']  = $errorMsg;
             return $stats;
         }
 
@@ -788,6 +805,19 @@ class SyncService
                 $totalInserted,
                 $totalUpdated
             );
+
+            if ($hasFailure) {
+                $errParts = [];
+                foreach ($stats as $k => $v) {
+                    if (!empty($v['failed']) && !empty($v['error'])) {
+                        $errParts[] = "{$k}: {$v['error']}";
+                    }
+                }
+                if (!empty($errParts)) {
+                    $logLine .= "   └─ خطأ: " . implode(' | ', $errParts) . "\n";
+                }
+            }
+
             @file_put_contents($cronLogFile, $logLine, FILE_APPEND);
         } catch (\Throwable $e) {
             log_message('error', 'Failed to record sync run: ' . $e->getMessage());

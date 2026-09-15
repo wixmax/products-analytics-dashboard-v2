@@ -640,7 +640,7 @@
                   <span>🐧 سطر Crontab لسيرفر Linux / cPanel (تشغيل يومياً 02:00 صباحاً):</span>
                   <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 0.75rem;" onclick="copyToClipboard('cron-crontab-input')">📋 نسخ</button>
                 </label>
-                <input type="text" id="cron-crontab-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="0 2 * * * cd <?= realpath(ROOTPATH) ?> && php spark cron:daily >> <?= WRITEPATH ?>logs/cron_daily.log 2>&1" />
+                <input type="text" id="cron-crontab-input" class="form-control" readonly style="font-family: monospace; font-size: 0.8rem; background: var(--bg-app); direction: ltr; text-align: left;" value="0 2 * * * cd <?= realpath(ROOTPATH) ?> && /usr/local/bin/php spark cron:daily >> <?= WRITEPATH ?>logs/cron_daily.log 2>&1" />
               </div>
 
               <div>

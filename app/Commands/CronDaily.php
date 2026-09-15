@@ -72,7 +72,8 @@ class CronDaily extends BaseCommand
             if ($failed) {
                 $hasFailure = true;
                 if (!$quiet) {
-                    CLI::error("❌ [{$origin}] sync failed!");
+                    $reason = !empty($stat['error']) ? " (السبب: {$stat['error']})" : "";
+                    CLI::error("❌ [{$origin}] sync failed!{$reason}");
                 }
             } else {
                 if (!$quiet) {
