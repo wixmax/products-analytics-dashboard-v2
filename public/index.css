@@ -1070,6 +1070,36 @@ textarea:focus {
   color: #ef4444;
 }
 
+.product-sync-badge {
+  position: absolute;
+  right: 10px;
+  top: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  z-index: 5;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+
+.product-sync-badge.badge-updated {
+  background: rgba(16, 185, 129, 0.92);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.product-sync-badge.badge-new {
+  background: rgba(59, 130, 246, 0.92);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
 /* Pagination Styling */
 .pagination-container {
   margin: 2rem 0;

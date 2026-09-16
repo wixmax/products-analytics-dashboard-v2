@@ -320,9 +320,20 @@ function fallbackRenderTimeline(product, entries) {
   const engEl = document.getElementById('details-engagement');
   if (engEl) engEl.textContent = '7%';
   const firstSeenEl = document.getElementById('details-first-seen');
-  if (firstSeenEl) firstSeenEl.textContent = product.ad_start_date || product.created_at || '-';
+  const fs = product.ad_start_date || product.created_at || '-';
+  if (firstSeenEl) firstSeenEl.textContent = fs && fs.length > 10 ? fs.slice(0, 10) : fs;
+
   const lastSeenEl = document.getElementById('details-last-seen');
-  if (lastSeenEl) lastSeenEl.textContent = product.updated_at || product.created_at || '-';
+  if (lastSeenEl) {
+    const isUpdated = product.is_updated ?? (product.updated_at && product.created_at && (new Date(product.updated_at) - new Date(product.created_at)) > 180000);
+    const ls = product.updated_at || product.created_at || '-';
+    const lsFormatted = ls && ls.length > 10 ? ls.slice(0, 10) : ls;
+    if (isUpdated) {
+      lastSeenEl.innerHTML = `${lsFormatted} <span style="display:inline-block; margin-right:4px; font-size:0.7rem; background:rgba(16,185,129,0.15); color:#10b981; padding:2px 6px; border-radius:10px; font-weight:700;">🔄 مُحدث</span>`;
+    } else {
+      lastSeenEl.textContent = lsFormatted;
+    }
+  }
   const maxCreativesEl = document.getElementById('details-max-creatives');
   if (maxCreativesEl) maxCreativesEl.textContent = `${product.ads_count || 1} كرياتيف`;
   const reactEl = document.getElementById('details-reactivations');

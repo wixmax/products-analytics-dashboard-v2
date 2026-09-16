@@ -1419,6 +1419,16 @@ function buildProductCardHtml(p) {
     </button>
   `;
 
+  const isUpdated = p.is_updated ?? (p.updated_at && p.created_at && (new Date(p.updated_at) - new Date(p.created_at)) > 180000);
+  const isNew = p.is_new ?? (!isUpdated && p.created_at && (Date.now() - new Date(p.created_at)) < (7 * 86400000));
+  let syncBadgeHtml = '';
+  if (isUpdated) {
+    const upDate = p.updated_at ? p.updated_at.slice(0, 10) : '';
+    syncBadgeHtml = `<div class="product-sync-badge badge-updated" title="تم تحديث بيانات وإعلانات هذا المنتج مؤخراً (${upDate})">🔄 مُحدث</div>`;
+  } else if (isNew) {
+    syncBadgeHtml = `<div class="product-sync-badge badge-new" title="منتج جديد أضيف حديثاً">🆕 جديد</div>`;
+  }
+
   return `
     <article class="product-card index-product-card card-lazy-load" id="product-${safeId}">
       <div class="product-media">
@@ -1426,6 +1436,7 @@ function buildProductCardHtml(p) {
         <div class="status-badge ${p.active_ads ? "active" : "inactive"}">
           ${p.active_ads ? "🟢 نشط" : "🔴 متوقف"}
         </div>
+        ${syncBadgeHtml}
         <div class="country-flag-badge">
           <span>${flag}</span>
           <span>${p.country || "--"}</span>

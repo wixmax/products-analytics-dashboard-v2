@@ -312,6 +312,15 @@
             </div>
 
             <div class="filter-group">
+              <label for="catalog-sync-type">🔄 حالة المزامنة:</label>
+              <select id="catalog-sync-type" onchange="fetchCatalogProducts(1)">
+                <option value="all" selected>الكل (الجديد والمُحدث)</option>
+                <option value="updated">🔄 منتجات مُحدثة فقط</option>
+                <option value="new">🆕 منتجات جديدة فقط</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
               <label for="catalog-date">📅 النطاق الزمني:</label>
               <select id="catalog-date" onchange="fetchCatalogProducts(1)">
                 <option value="all" selected>جميع التواريخ</option>
@@ -328,6 +337,8 @@
                 <option value="relevance">🎯 الأكثر صلة (AI Relevance)</option>
                 <option value="ads-desc" selected>الأكثر إعلانات (Desc)</option>
                 <option value="ads-asc">الأقل إعلانات (Asc)</option>
+                <option value="updated-desc">🔄 الأحدث تحديثاً (Recently Updated)</option>
+                <option value="created-desc">🆕 الأحدث إضافة (Newest Added)</option>
                 <option value="date-desc">الأحدث تاريخاً</option>
                 <option value="date-asc">الأقدم تاريخاً</option>
                 <option value="title-asc">اسم المنتج أبجدياً</option>
@@ -490,6 +501,7 @@
         const origin = document.getElementById('catalog-origin').value;
         const country = document.getElementById('catalog-country').value;
         const status = document.getElementById('catalog-status').value;
+        const syncType = document.getElementById('catalog-sync-type')?.value || 'all';
         const date = document.getElementById('catalog-date').value;
         const sort = document.getElementById('catalog-sort').value;
         const search = document.getElementById('catalog-search').value.trim();
@@ -500,6 +512,7 @@
           origin: origin,
           country: country,
           status: status,
+          sync_type: syncType,
           date: date,
           sort: sort,
           search: search,
@@ -644,6 +657,16 @@
             </button>
           `;
 
+          const isUpdated = p.is_updated ?? (p.updated_at && p.created_at && (new Date(p.updated_at) - new Date(p.created_at)) > 180000);
+          const isNew = p.is_new ?? (!isUpdated && p.created_at && (Date.now() - new Date(p.created_at)) < (7 * 86400000));
+          let syncBadgeHtml = '';
+          if (isUpdated) {
+            const upDate = p.updated_at ? p.updated_at.slice(0, 10) : '';
+            syncBadgeHtml = `<div class="product-sync-badge badge-updated" title="تم تحديث بيانات وإعلانات هذا المنتج مؤخراً (${upDate})">🔄 مُحدث</div>`;
+          } else if (isNew) {
+            syncBadgeHtml = `<div class="product-sync-badge badge-new" title="منتج جديد أضيف حديثاً">🆕 جديد</div>`;
+          }
+
           return `
             <article class="product-card index-product-card" id="product-${safeId}">
               <div class="product-media">
@@ -656,6 +679,7 @@
                 <div class="status-badge ${isActive ? 'active' : 'inactive'}">
                   ${isActive ? '🟢 نشط' : '🔴 متوقف'}
                 </div>
+                ${syncBadgeHtml}
                 <div class="country-flag-badge">
                   <span>${flag}</span>
                   <span>${countryCode}</span>

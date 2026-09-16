@@ -119,6 +119,14 @@ class Products extends ResourceController
             $builder->where('active_ads', $status === 'active');
         }
 
+        // Sync status filter (updated vs new)
+        $syncType = $this->request->getVar('sync_type');
+        if ($syncType === 'updated') {
+            $builder->where("updated_at > created_at + INTERVAL '3 minutes'");
+        } elseif ($syncType === 'new') {
+            $builder->where("updated_at <= created_at + INTERVAL '3 minutes'");
+        }
+
         // Date filter
         if (!empty($dateFilter) && $dateFilter !== 'all') {
             $today = date('Y-m-d');
@@ -149,6 +157,12 @@ class Products extends ResourceController
                     $builder->orderBy($caseSql, '', false);
                 }
                 $builder->orderBy('ads_count', 'DESC');
+                break;
+            case 'updated-desc':
+                $builder->orderBy('updated_at', 'DESC');
+                break;
+            case 'created-desc':
+                $builder->orderBy('created_at', 'DESC');
                 break;
             case 'ads-desc':
                 if (!empty($semanticIds) && !empty($search)) {
@@ -234,6 +248,13 @@ class Products extends ResourceController
                 $p['collection'] = 'عامة';
             }
             $p['actualPrice'] = $p['price_1'];
+
+            // Compute sync update flags
+            $cTime = !empty($p['created_at']) ? strtotime($p['created_at']) : 0;
+            $uTime = !empty($p['updated_at']) ? strtotime($p['updated_at']) : 0;
+            $isUpdated = ($uTime > 0 && $cTime > 0 && ($uTime - $cTime) > 180);
+            $p['is_updated'] = $isUpdated;
+            $p['is_new'] = (!$isUpdated && $cTime > 0 && (time() - $cTime) < (7 * 86400));
         }
 
         return $this->respond([
