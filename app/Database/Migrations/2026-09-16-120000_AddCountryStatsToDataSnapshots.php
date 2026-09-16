@@ -1,74 +1,64 @@
 <?php
 
-namespace App\Libraries\Storage;
+namespace App\Database\Migrations;
 
-class SnapshotStorageHelper
+use CodeIgniter\Database\Migration;
+
+class AddCountryStatsToDataSnapshots extends Migration
 {
-    const COMPRESSED_PREFIX = '__GZ64__:';
-
-    /**
-     * Compress raw JSON string using gzip and base64 encoding.
-     */
-    public static function compress(string $rawJson): string
+    public function up()
     {
-        if (empty($rawJson) || strlen($rawJson) < 256) {
-            return $rawJson;
-        }
-
-        if (function_exists('gzencode')) {
-            $compressed = gzencode($rawJson, 9);
-            if ($compressed !== false) {
-                return self::COMPRESSED_PREFIX . base64_encode($compressed);
+        if ($this->db->tableExists('data_snapshots')) {
+            if (!$this->db->fieldExists('country_stats', 'data_snapshots')) {
+                $this->forge->addColumn('data_snapshots', [
+                    'country_stats' => [
+                        'type'       => 'TEXT',
+                        'null'       => true,
+                        'default'    => null,
+                        'after'      => 'product_count',
+                    ],
+                ]);
             }
-        }
 
-        return $rawJson;
-    }
+            // Backfill country_stats for existing snapshots
+            $snapshots = $this->db->table('data_snapshots')
+                ->select('id, origin, raw_json')
+                ->where('country_stats IS NULL OR country_stats = \'\'')
+                ->get()
+                ->getResultArray();
 
-    /**
-     * Decompress string if it was compressed, or return as-is for legacy plain JSON.
-     */
-    public static function decompress(?string $content): string
-    {
-        if (empty($content)) {
-            return '';
-        }
+            foreach ($snapshots as $snap) {
+                $rawJson = $snap['raw_json'] ?? '';
+                if (empty($rawJson)) {
+                    continue;
+                }
 
-        if (str_starts_with($content, self::COMPRESSED_PREFIX)) {
-            $b64 = substr($content, strlen(self::COMPRESSED_PREFIX));
-            $decoded = base64_decode($b64);
-            if ($decoded !== false && function_exists('gzdecode')) {
-                $unzipped = @gzdecode($decoded);
-                if ($unzipped !== false) {
-                    return $unzipped;
+                if (str_starts_with($rawJson, '__GZ64__:')) {
+                    $rawJson = @gzdecode(base64_decode(substr($rawJson, 9)));
+                }
+
+                $stats = $this->calculateStats($rawJson ?: '', $snap['origin'] ?? '');
+                if (!empty($stats)) {
+                    $this->db->table('data_snapshots')
+                        ->where('id', $snap['id'])
+                        ->update(['country_stats' => json_encode($stats, JSON_UNESCAPED_UNICODE)]);
                 }
             }
         }
-
-        // Return original content if not compressed or fallback
-        return $content;
     }
 
-    /**
-     * Check if a content string is compressed with the storage prefix.
-     */
-    public static function isCompressed(?string $content): bool
+    public function down()
     {
-        return !empty($content) && str_starts_with($content, self::COMPRESSED_PREFIX);
-    }
-
-    /**
-     * Extract country breakdown statistics from raw JSON snapshot content.
-     * Returns an array sorted descending by count, e.g. ['DZ' => 54, 'MA' => 33]
-     */
-    public static function extractCountryStats(?string $rawJson, string $origin = ''): array
-    {
-        if (empty($rawJson)) {
-            return [];
+        if ($this->db->tableExists('data_snapshots')) {
+            if ($this->db->fieldExists('country_stats', 'data_snapshots')) {
+                $this->forge->dropColumn('data_snapshots', 'country_stats');
+            }
         }
+    }
 
-        $decompressed = self::decompress($rawJson);
-        $decoded = json_decode($decompressed, true);
+    private function calculateStats(string $rawJson, string $origin): array
+    {
+        $decoded = json_decode($rawJson, true);
         if (!is_array($decoded)) {
             return [];
         }

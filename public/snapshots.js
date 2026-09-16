@@ -1,4 +1,52 @@
+const COUNTRY_MAP = {
+  DZ: { name: 'الجزائر', flag: '🇩🇿' },
+  MA: { name: 'المغرب', flag: '🇲🇦' },
+  EG: { name: 'مصر', flag: '🇪🇬' },
+  SA: { name: 'السعودية', flag: '🇸🇦' },
+  TN: { name: 'تونس', flag: '🇹🇳' },
+  QA: { name: 'قطر', flag: '🇶🇦' },
+  KW: { name: 'الكويت', flag: '🇰🇼' },
+  LY: { name: 'ليبيا', flag: '🇱🇾' },
+  BH: { name: 'البحرين', flag: '🇧🇭' },
+  AE: { name: 'الإمارات', flag: '🇦🇪' },
+  OM: { name: 'عُمان', flag: '🇴🇲' },
+  CN: { name: 'الصين', flag: '🇨🇳' },
+  JP: { name: 'اليابان', flag: '🇯🇵' },
+  US: { name: 'أمريكا', flag: '🇺🇸' },
+  IT: { name: 'إيطاليا', flag: '🇮🇹' },
+  FR: { name: 'فرنسا', flag: '🇫🇷' },
+  ES: { name: 'إسبانيا', flag: '🇪🇸' },
+  GB: { name: 'بريطانيا', flag: '🇬🇧' },
+  DE: { name: 'ألمانيا', flag: '🇩🇪' },
+  NL: { name: 'هولندا', flag: '🇳🇱' },
+  IE: { name: 'أيرلندا', flag: '🇮🇪' },
+  BE: { name: 'بلجيكا', flag: '🇧🇪' },
+  CH: { name: 'سويسرا', flag: '🇨🇭' },
+  AT: { name: 'النمسا', flag: '🇦🇹' },
+  PT: { name: 'البرتغال', flag: '🇵🇹' },
+  LU: { name: 'لوكسمبورغ', flag: '🇱🇺' },
+  KE: { name: 'كينيا', flag: '🇰🇪' },
+  NG: { name: 'نيجيريا', flag: '🇳🇬' },
+  CI: { name: 'ساحل العاج', flag: '🇨🇮' },
+  SN: { name: 'السنغال', flag: '🇸🇳' },
+  TR: { name: 'تركيا', flag: '🇹🇷' },
+  IQ: { name: 'العراق', flag: '🇮🇶' },
+  JO: { name: 'الأردن', flag: '🇯🇴' },
+  LB: { name: 'لبنان', flag: '🇱🇧' },
+  YE: { name: 'اليمن', flag: '🇾🇪' },
+  SD: { name: 'السودان', flag: '🇸🇩' },
+  SY: { name: 'سوريا', flag: '🇸🇾' },
+  PS: { name: 'فلسطين', flag: '🇵🇸' }
+};
+
+function getCountryInfo(code) {
+  const upper = (code || '').toUpperCase().trim();
+  return COUNTRY_MAP[upper] || { name: upper, flag: '🌐' };
+}
+
 let allSnapshots = [];
+let activeVersionFilter = '';
+let activeCountryFilter = '';
 
 function showToast(msg, type = 'success') {
   const container = document.getElementById('toast-container');
@@ -22,13 +70,66 @@ async function loadSnapshots() {
     if (!res.ok) throw new Error('فشل تحميل اللقطات');
     allSnapshots = await res.json();
 
+    // Populate country dropdown filter from loaded data
+    populateCountryFilter(allSnapshots);
+
     // Detect duplicates by api_version (same version = multiple snapshots)
     renderDuplicateAlert(allSnapshots);
-    renderSnapshots(allSnapshots);
     renderVersionFilter(allSnapshots);
+    applyActiveFilters();
   } catch (e) {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>خطأ في تحميل البيانات</h3><p>${e.message}</p></div>`;
   }
+}
+
+function populateCountryFilter(snapshots) {
+  const select = document.getElementById('filter-country');
+  if (!select) return;
+  const currentVal = select.value;
+
+  const countryCounts = {};
+  snapshots.forEach(s => {
+    let stats = s.country_stats || {};
+    if (typeof stats === 'string') {
+      try { stats = JSON.parse(stats); } catch (e) { stats = {}; }
+    }
+    const entries = Object.entries(stats || {});
+    entries.forEach(([code, count]) => {
+      countryCounts[code] = (countryCounts[code] || 0) + (parseInt(count) || 0);
+    });
+  });
+
+  const sortedCountries = Object.entries(countryCounts).sort((a, b) => b[1] - a[1]);
+
+  let optionsHtml = '<option value="">جميع البلدان</option>';
+  sortedCountries.forEach(([code, count]) => {
+    const info = getCountryInfo(code);
+    const selected = code === currentVal ? 'selected' : '';
+    optionsHtml += `<option value="${code}" ${selected}>${info.flag} ${info.name} (${count})</option>`;
+  });
+  select.innerHTML = optionsHtml;
+}
+
+function applyActiveFilters() {
+  let filtered = allSnapshots;
+  if (activeVersionFilter) {
+    filtered = filtered.filter(s => s.api_version === activeVersionFilter);
+  }
+  if (activeCountryFilter) {
+    filtered = filtered.filter(s => {
+      let stats = s.country_stats || {};
+      if (typeof stats === 'string') {
+        try { stats = JSON.parse(stats); } catch (e) { stats = {}; }
+      }
+      return Boolean(stats[activeCountryFilter]);
+    });
+  }
+  renderSnapshots(filtered);
+}
+
+function filterByCountry(countryCode) {
+  activeCountryFilter = countryCode;
+  applyActiveFilters();
 }
 
 /**
@@ -122,8 +223,8 @@ function renderVersionFilter(snapshots) {
 function filterByVersion(el, version) {
   document.querySelectorAll('.version-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
-  const filtered = version ? allSnapshots.filter(s => s.api_version === version) : allSnapshots;
-  renderSnapshots(filtered);
+  activeVersionFilter = version;
+  applyActiveFilters();
 }
 
 function renderSnapshots(snapshots) {
@@ -201,6 +302,50 @@ function renderSnapshots(snapshots) {
         ? 'border-right: 3px solid #10b981;'
         : '';
 
+    // Extract country stats
+    let countryStats = s.country_stats || {};
+    if (typeof countryStats === 'string') {
+      try { countryStats = JSON.parse(countryStats); } catch (e) { countryStats = {}; }
+    }
+    const countryEntries = Object.entries(countryStats || {});
+    countryEntries.sort((a, b) => b[1] - a[1]);
+    const totalCountries = countryEntries.length;
+
+    let countryBadgesHtml = '';
+    if (totalCountries > 0) {
+      const visibleLimit = 6;
+      const initialBadges = countryEntries.slice(0, visibleLimit);
+      const remainingBadges = countryEntries.slice(visibleLimit);
+
+      const renderBadge = ([code, count]) => {
+        const info = getCountryInfo(code);
+        return `<span class="country-pill" title="${info.name} (${code}): ${count} منتج">
+          <span class="country-flag">${info.flag}</span>
+          <span class="country-name">${info.name}</span>
+          <span class="country-count">${count}</span>
+        </span>`;
+      };
+
+      countryBadgesHtml = `
+        <div class="snapshot-countries-wrapper">
+          <div class="snapshot-countries-header">
+            🌍 البلدان (${totalCountries}):
+          </div>
+          <div class="snapshot-countries-list">
+            ${initialBadges.map(renderBadge).join('')}
+            ${remainingBadges.length > 0 ? `
+              <span class="country-pill-more" onclick="this.nextElementSibling.style.display='inline-flex'; this.style.display='none'; event.stopPropagation();">
+                +${remainingBadges.length} دول أخرى
+              </span>
+              <span class="country-pills-hidden" style="display:none; gap:6px; flex-wrap:wrap;">
+                ${remainingBadges.map(renderBadge).join('')}
+              </span>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
     html += `
       <div class="snapshot-card" style="${cardBorder}">
         <div class="snapshot-meta">
@@ -212,8 +357,10 @@ function renderSnapshots(snapshots) {
         <div class="snapshot-stats">
           <span><span class="stat-label">🆔</span> <span class="stat-value">#${s.id}</span></span>
           <span><span class="stat-label">📦 المنتجات:</span> <span class="stat-value">${s.product_count ?? 0}</span></span>
+          ${totalCountries > 0 ? `<span><span class="stat-label">🌍 البلدان:</span> <span class="stat-value">${totalCountries}</span></span>` : ''}
           ${s.data_hash ? `<span style="font-size:0.75rem; color:var(--color-text-muted);">🔑 <code>${s.data_hash.slice(0, 10)}…</code></span>` : ''}
         </div>
+        ${countryBadgesHtml}
         <div class="snapshot-actions">
           <button onclick="viewSnapshotJson(${s.id})">📄 عرض JSON</button>
           <button onclick="exportSingleSnapshot(${s.id})">📥 تصدير</button>
@@ -232,8 +379,22 @@ async function viewSnapshotJson(id) {
     if (!res.ok) throw new Error('فشل تحميل JSON');
     const snapshot = await res.json();
 
+    let countryStats = snapshot.country_stats || {};
+    if (typeof countryStats === 'string') {
+      try { countryStats = JSON.parse(countryStats); } catch (e) { countryStats = {}; }
+    }
+    const countryEntries = Object.entries(countryStats || {});
+    let countrySummary = '';
+    if (countryEntries.length > 0) {
+      countryEntries.sort((a, b) => b[1] - a[1]);
+      countrySummary = ` | 🌍 ${countryEntries.length} دول (` + countryEntries.map(([code, cnt]) => {
+        const inf = getCountryInfo(code);
+        return `${inf.flag} ${inf.name}: ${cnt}`;
+      }).join('، ') + ')';
+    }
+
     const info = document.getElementById('json-modal-info');
-    info.textContent = `🆔 #${snapshot.id} | ${snapshot.origin} | ${snapshot.api_version ? 'الإصدار: ' + snapshot.api_version : ''} | ${snapshot.product_count ?? 0} منتج`;
+    info.textContent = `🆔 #${snapshot.id} | ${snapshot.origin} | ${snapshot.api_version ? 'الإصدار: ' + snapshot.api_version : ''} | ${snapshot.product_count ?? 0} منتج${countrySummary}`;
 
     const pre = document.getElementById('json-modal-content');
     try {
@@ -287,6 +448,7 @@ async function exportSingleSnapshot(id) {
       is_snapshot_backup: true,
       origin: s.origin,
       api_version: s.api_version,
+      country_stats: s.country_stats,
       raw_json: s.raw_json
     };
     

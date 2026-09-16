@@ -93,6 +93,7 @@
         display: flex;
         gap: 20px;
         font-size: 0.85rem;
+        flex-wrap: wrap;
       }
       .snapshot-stats span {
         display: flex;
@@ -104,6 +105,75 @@
       }
       .snapshot-stats .stat-value {
         font-weight: 700;
+      }
+      .snapshot-countries-wrapper {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border-color);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .snapshot-countries-header {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--color-text-muted);
+      }
+      .snapshot-countries-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+      .country-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        color: var(--color-text-main);
+        transition: var(--transition-all);
+        cursor: default;
+      }
+      .country-pill:hover {
+        border-color: var(--color-primary);
+        background: var(--bg-primary-soft);
+      }
+      .country-pill .country-flag {
+        font-size: 0.95rem;
+        line-height: 1;
+      }
+      .country-pill .country-name {
+        font-weight: 600;
+      }
+      .country-pill .country-count {
+        background: var(--color-primary);
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: var(--radius-full);
+        line-height: 1.2;
+      }
+      .country-pill-more {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: var(--radius-full);
+        font-size: 0.72rem;
+        font-weight: 600;
+        background: rgba(99,102,241,0.1);
+        color: #6366f1;
+        border: 1px solid rgba(99,102,241,0.3);
+        cursor: pointer;
+        transition: var(--transition-all);
+      }
+      .country-pill-more:hover {
+        background: #6366f1;
+        color: white;
       }
       .snapshot-actions {
         display: flex;
@@ -227,6 +297,9 @@
             <option value="China">الصين (China)</option>
             <option value="Japan">اليابان (Japan)</option>
           </select>
+          <select id="filter-country" onchange="filterByCountry(this.value)">
+            <option value="">جميع البلدان</option>
+          </select>
           <button class="btn btn-secondary" onclick="loadSnapshots()">
             🔄 تحديث
           </button>
@@ -277,6 +350,6 @@
     <script>
       window.userIsAdmin = <?= (auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin')) ? 'true' : 'false' ?>;
     </script>
-    <script src="<?= base_url('snapshots.js') ?>?v=1.3"></script>
+    <script src="<?= base_url('snapshots.js') ?>?v=1.4"></script>
   </body>
 </html>

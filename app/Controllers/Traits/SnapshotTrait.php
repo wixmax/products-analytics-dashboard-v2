@@ -23,15 +23,19 @@ trait SnapshotTrait
         }
         $snapshots = $builder->findAll();
 
-        if (!$includeRaw) {
-            // Remove raw_json from listing for performance, include only metadata
-            $result = array_map(function ($s) {
+        $result = array_map(function ($s) use ($includeRaw) {
+            if (!$includeRaw) {
+                // Remove raw_json from listing for performance, include only metadata
                 unset($s['raw_json']);
-                return $s;
-            }, $snapshots);
-        } else {
-            $result = $snapshots;
-        }
+            }
+            if (!empty($s['country_stats']) && is_string($s['country_stats'])) {
+                $decoded = json_decode($s['country_stats'], true);
+                $s['country_stats'] = is_array($decoded) ? $decoded : [];
+            } else if (empty($s['country_stats'])) {
+                $s['country_stats'] = [];
+            }
+            return $s;
+        }, $snapshots);
 
         return $this->respond($result);
     }
@@ -58,6 +62,13 @@ trait SnapshotTrait
         // Decompress if compressed
         if (!empty($snapshot['raw_json'])) {
             $snapshot['raw_json'] = \App\Libraries\Storage\SnapshotStorageHelper::decompress($snapshot['raw_json']);
+        }
+
+        if (!empty($snapshot['country_stats']) && is_string($snapshot['country_stats'])) {
+            $decoded = json_decode($snapshot['country_stats'], true);
+            $snapshot['country_stats'] = is_array($decoded) ? $decoded : [];
+        } else if (empty($snapshot['country_stats'])) {
+            $snapshot['country_stats'] = [];
         }
 
         return $this->respond($snapshot);
@@ -258,11 +269,15 @@ trait SnapshotTrait
                     continue; // Skip duplicate snapshot import
                 }
 
+                $stats = \App\Libraries\Storage\SnapshotStorageHelper::extractCountryStats($rawJson, $origin);
+                $countryStats = !empty($stats) ? json_encode($stats, JSON_UNESCAPED_UNICODE) : null;
+
                 $dataToSave = [
                     'origin' => $origin,
                     'api_version' => $apiVersion,
                     'raw_json' => \App\Libraries\Storage\SnapshotStorageHelper::compress($rawJson),
                     'product_count' => $productCount,
+                    'country_stats' => $countryStats,
                     'data_hash' => $dataHash,
                 ];
 
@@ -345,11 +360,15 @@ trait SnapshotTrait
             ]);
         }
 
+        $stats = \App\Libraries\Storage\SnapshotStorageHelper::extractCountryStats($rawJson, $origin);
+        $countryStats = !empty($stats) ? json_encode($stats, JSON_UNESCAPED_UNICODE) : null;
+
         $dataToSave = [
             'origin' => $origin,
             'api_version' => $apiVersion,
             'raw_json' => \App\Libraries\Storage\SnapshotStorageHelper::compress($rawJson),
             'product_count' => $productCount,
+            'country_stats' => $countryStats,
             'data_hash' => $dataHash,
         ];
 

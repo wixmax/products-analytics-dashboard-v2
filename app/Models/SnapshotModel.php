@@ -13,7 +13,7 @@ class SnapshotModel extends TenantModel
     protected $useSoftDeletes   = false;
     protected $protectFields    = true;
     protected $allowedFields    = [
-        'origin', 'api_version', 'raw_json', 'product_count', 'data_hash',
+        'origin', 'api_version', 'raw_json', 'product_count', 'country_stats', 'data_hash',
         'created_at', 'updated_at'
     ];
 

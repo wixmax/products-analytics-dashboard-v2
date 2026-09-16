@@ -566,10 +566,13 @@ class SyncService
                 $newProductCount = is_array($entries) ? count($entries) : $productCount;
 
                 $newHash = md5($mergedJson);
+                $stats = \App\Libraries\Storage\SnapshotStorageHelper::extractCountryStats($mergedJson, $origin);
+                $countryStats = !empty($stats) ? json_encode($stats, JSON_UNESCAPED_UNICODE) : null;
 
                 $this->snapshotModel->update($existingVersion['id'], [
                     'raw_json'      => \App\Libraries\Storage\SnapshotStorageHelper::compress($mergedJson),
                     'product_count' => $newProductCount,
+                    'country_stats' => $countryStats,
                     'data_hash'     => $newHash,
                 ]);
 
@@ -589,13 +592,23 @@ class SyncService
             ->first();
 
         if ($existingHash) {
+            $stats = \App\Libraries\Storage\SnapshotStorageHelper::extractCountryStats($rawJson, $origin);
+            $countryStats = !empty($stats) ? json_encode($stats, JSON_UNESCAPED_UNICODE) : null;
+            $updateData = [];
+
             // DO NOT overwrite existing snapshot's api_version label if it already has one!
             if (!empty($apiVersion) && empty($existingHash['api_version'])) {
-                $this->snapshotModel->update($existingHash['id'], [
-                    'api_version'   => $apiVersion,
-                    'product_count' => $productCount,
-                ]);
+                $updateData['api_version']   = $apiVersion;
+                $updateData['product_count'] = $productCount;
             }
+            if (empty($existingHash['country_stats']) && !empty($countryStats)) {
+                $updateData['country_stats'] = $countryStats;
+            }
+
+            if (!empty($updateData)) {
+                $this->snapshotModel->update($existingHash['id'], $updateData);
+            }
+
             return [
                 'id' => (int)$existingHash['id'],
                 'is_duplicate' => true,
@@ -604,11 +617,15 @@ class SyncService
         }
 
         // 3. Create a new snapshot for this version
+        $stats = \App\Libraries\Storage\SnapshotStorageHelper::extractCountryStats($rawJson, $origin);
+        $countryStats = !empty($stats) ? json_encode($stats, JSON_UNESCAPED_UNICODE) : null;
+
         $data = [
             'origin'        => $origin,
             'api_version'   => $apiVersion,
             'raw_json'      => \App\Libraries\Storage\SnapshotStorageHelper::compress($rawJson),
             'product_count' => $productCount,
+            'country_stats' => $countryStats,
             'data_hash'     => $dataHash,
         ];
         $inserted = $this->snapshotModel->insert($data);
