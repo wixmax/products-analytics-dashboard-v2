@@ -253,6 +253,16 @@ class ToolRegistry
             'find_supplier_alternatives'            => 'choufliya_find_suppliers',
             'export_suppliers_csv'                  => 'choufliya_export_suppliers',
             'export_choufliya_suppliers'            => 'choufliya_export_suppliers',
+
+            // Cloudflare Jev Structured Evaluation Aliases
+            'jev_evaluate'                          => 'jev_evaluate_product',
+            'evaluate_product'                      => 'jev_evaluate_product',
+            'jev_eval_product'                      => 'jev_evaluate_product',
+            'evaluate_ad'                           => 'jev_evaluate_ad',
+            'jev_eval_ad'                           => 'jev_evaluate_ad',
+            'jev_evaluate_ad_copy'                  => 'jev_evaluate_ad',
+            'evaluate_custom'                       => 'jev_evaluate_custom',
+            'jev_eval_custom'                       => 'jev_evaluate_custom',
         ];
 
         $resolvedName = $aliases[$name] ?? $name;

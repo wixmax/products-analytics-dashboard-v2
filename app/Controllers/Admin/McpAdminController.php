@@ -290,6 +290,24 @@ class McpAdminController extends BaseController
                 'description' => 'تصدير بيانات الموردين وأسعار الجملة وتاريخ النشر وروابط الواتساب بصيغة CSV أو JSON.',
                 'badge'       => 'تصدير الموردين',
             ],
+            'jev_evaluate_product' => [
+                'name'        => 'jev_evaluate_product',
+                'title'       => 'تقييم المنتجات الهيكلي (Cloudflare Jev Product Evaluation)',
+                'description' => 'تقييم جدوى منتجات التجارة الإلكترونية و COD بحساب دقيق لمؤشرات حل المشاكل، الشراء العاطفي، ومخاطر الشحن والارتجاع بنموذج typesafe/jev.',
+                'badge'       => 'تقييم ذكي Jev',
+            ],
+            'jev_evaluate_ad' => [
+                'name'        => 'jev_evaluate_ad',
+                'title'       => 'تحليل وتقييم الإعلانات (Cloudflare Jev Ad Evaluation)',
+                'description' => 'تحليل نصوص وزوايا إعلانات فيسبوك، قوة الـ Hook الافتتاحي، فحص مخاطر مخالفة سياسات ميتا، وقوة الـ CTA بنموذج typesafe/jev.',
+                'badge'       => 'تحليل إعلانات Jev',
+            ],
+            'jev_evaluate_custom' => [
+                'name'        => 'jev_evaluate_custom',
+                'title'       => 'التقييم الهيكلي المخصص (Cloudflare Jev Custom Evaluation)',
+                'description' => 'تقييم سريع وشامل لأي نص أو كائن JSON مقابل أسئلة محددة النوع (noul, choice, score) باحتمالات معايرة ومخرجات مجانية تماماً.',
+                'badge'       => 'تقييم هيكلي شامل',
+            ],
         ];
 
         foreach ($allTools as $toolKey => &$toolMeta) {
