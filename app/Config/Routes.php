@@ -48,6 +48,8 @@ $routes->group('admin', ['filter' => 'group:superadmin,admin'], function($routes
     $routes->post('mcp/delete-skill', '\App\Controllers\Admin\McpAdminController::deleteSkill');
     $routes->post('mcp/toggle-skill', '\App\Controllers\Admin\McpAdminController::toggleSkill');
     $routes->post('mcp/reset-skills', '\App\Controllers\Admin\McpAdminController::resetDefaultSkills');
+    $routes->get('mcp/skill-history/(:segment)', '\App\Controllers\Admin\McpAdminController::getSkillHistory/$1');
+    $routes->post('mcp/restore-skill-version', '\App\Controllers\Admin\McpAdminController::restoreSkillVersion');
 });
 $routes->get('admin/users/stop-impersonating', '\App\Controllers\Admin\UsersController::stopImpersonating');
 

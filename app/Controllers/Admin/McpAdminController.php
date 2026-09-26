@@ -40,6 +40,15 @@ class McpAdminController extends BaseController
         }
     }
 
+    /**
+     * Helper to delete a setting from settings table.
+     */
+    private function deleteSetting(string $key): void
+    {
+        $db = \Config\Database::connect();
+        $db->table('settings')->where('key', $key)->delete();
+    }
+
     private function getDefaultSystemPrompt(): string
     {
         return 'تنبيه مهم: آلية العمل ومراحل التنفيذ
@@ -1200,10 +1209,10 @@ SKILL;
             return redirect()->to('/')->with('error', 'غير مسموح لك بالوصول.');
         }
 
-        $now          = date('Y-m-d H:i:s');
-        $codPrompt    = $this->getDefaultSystemPrompt();
-        $nanoPrompt   = $this->getDefaultNanoPrompt();
-        $geminiPrompt = $this->getDefaultGeminiAdsPrompt();
+        $now                   = date('Y-m-d H:i:s');
+        $codPrompt             = $this->getDefaultSystemPrompt();
+        $nanoPrompt            = $this->getDefaultNanoPrompt();
+        $geminiPrompt          = $this->getDefaultGeminiAdsPrompt();
         $geminiVoiceoverPrompt = $this->getDefaultGeminiAdsVoiceoverPrompt();
 
         $defaults = [
@@ -1257,6 +1266,33 @@ SKILL;
             ],
         ];
 
+        $user = auth()->user();
+        $userName = $user ? ($user->username ?? $user->email ?? 'المشرف') : 'النظام';
+
+        foreach ($defaults as $sKey => &$sData) {
+            $history = $this->getSkillHistoryList($sKey);
+            $maxV = 0;
+            foreach ($history as $h) {
+                if (isset($h['version']) && (int) $h['version'] > $maxV) {
+                    $maxV = (int) $h['version'];
+                }
+            }
+            $nextVersion = $maxV > 0 ? $maxV + 1 : 1;
+            $history[] = [
+                'version'      => $nextVersion,
+                'title'        => $sData['title'],
+                'instructions' => $sData['instructions'],
+                'change_note'  => 'استعادة التوجيهات الافتراضية للنظام',
+                'user_name'    => $userName,
+                'user_id'      => $user ? $user->id : null,
+                'created_at'   => $now,
+            ];
+            $this->saveSkillHistoryList($sKey, $history);
+            $sData['version']       = $nextVersion;
+            $sData['history_count'] = count($history);
+        }
+        unset($sData);
+
         $this->setSetting('mcp_system_prompt', $codPrompt);
         $this->setSetting('mcp_skills_list', json_encode($defaults, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
@@ -1285,6 +1321,8 @@ SKILL;
                         'instructions' => $this->getDefaultGeminiAdsPrompt(),
                         'enabled'      => true,
                         'is_system'    => true,
+                        'version'      => 1,
+                        'history_count'=> 1,
                     ];
                     $hasNewSkill = true;
                 }
@@ -1299,12 +1337,25 @@ SKILL;
                         'instructions' => $this->getDefaultGeminiAdsVoiceoverPrompt(),
                         'enabled'      => true,
                         'is_system'    => true,
+                        'version'      => 1,
+                        'history_count'=> 1,
                     ];
                     $hasNewSkill = true;
                 }
                 if ($hasNewSkill) {
                     $this->setSetting('mcp_skills_list', json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
                 }
+
+                foreach ($decoded as $k => &$item) {
+                    if (!isset($item['version'])) {
+                        $item['version'] = 1;
+                    }
+                    if (!isset($item['history_count'])) {
+                        $item['history_count'] = 1;
+                    }
+                }
+                unset($item);
+
                 return $decoded;
             }
         }
@@ -1326,6 +1377,8 @@ SKILL;
                 'instructions' => $codInstructions,
                 'enabled'      => true,
                 'is_system'    => true,
+                'version'      => 1,
+                'history_count'=> 1,
             ],
             'nano-banana-pro-consistent-ads' => [
                 'id'           => 'nano-banana-pro-consistent-ads',
@@ -1337,6 +1390,8 @@ SKILL;
                 'instructions' => $nanoInstructions,
                 'enabled'      => true,
                 'is_system'    => true,
+                'version'      => 1,
+                'history_count'=> 1,
             ],
             'gemini-facebook-product-ads' => [
                 'id'           => 'gemini-facebook-product-ads',
@@ -1348,6 +1403,8 @@ SKILL;
                 'instructions' => $geminiInstructions,
                 'enabled'      => true,
                 'is_system'    => true,
+                'version'      => 1,
+                'history_count'=> 1,
             ],
             'gemini-facebook-product-ads-voiceover' => [
                 'id'           => 'gemini-facebook-product-ads-voiceover',
@@ -1359,11 +1416,159 @@ SKILL;
                 'instructions' => $geminiVoiceoverInstructions,
                 'enabled'      => true,
                 'is_system'    => true,
+                'version'      => 1,
+                'history_count'=> 1,
             ],
         ];
 
         $this->setSetting('mcp_skills_list', json_encode($defaults, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         return $defaults;
+    }
+
+    /**
+     * Retrieve the version history array for a given skill.
+     * If no history exists yet, initializes it from the current skill instructions.
+     */
+    public function getSkillHistoryList(string $skillId): array
+    {
+        $raw = $this->getSetting('mcp_skill_history_' . $skillId);
+        if (!empty($raw)) {
+            $history = json_decode($raw, true);
+            if (is_array($history) && !empty($history)) {
+                return $history;
+            }
+        }
+
+        // Auto-bootstrap history v1 from current skill if available
+        $skills = $this->getSkillsList();
+        if (isset($skills[$skillId])) {
+            $current = $skills[$skillId];
+            $initialHistory = [
+                [
+                    'version'      => 1,
+                    'title'        => $current['title'] ?? $skillId,
+                    'instructions' => $current['instructions'] ?? '',
+                    'change_note'  => 'الإصدار المبدئي / التأسيسي للمهارة',
+                    'user_name'    => 'النظام (System)',
+                    'user_id'      => null,
+                    'created_at'   => $current['updated_at'] ?? date('Y-m-d H:i:s'),
+                ]
+            ];
+            $this->saveSkillHistoryList($skillId, $initialHistory);
+            return $initialHistory;
+        }
+
+        return [];
+    }
+
+    /**
+     * Save the version history array for a given skill.
+     */
+    public function saveSkillHistoryList(string $skillId, array $history): void
+    {
+        $this->setSetting('mcp_skill_history_' . $skillId, json_encode($history, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+
+    /**
+     * Return JSON list of version history for a skill.
+     */
+    public function getSkillHistory(string $skillId)
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return $this->response->setStatusCode(403)->setJSON(['status' => 'error', 'message' => 'غير مصرح لك بالوصول.']);
+        }
+
+        $slug = preg_replace('/[^a-z0-9\-_]/', '', strtolower($skillId));
+        $history = $this->getSkillHistoryList($slug);
+
+        $skills = $this->getSkillsList();
+        $skill = $skills[$slug] ?? null;
+
+        return $this->response->setJSON([
+            'status'          => 'success',
+            'skill_id'        => $slug,
+            'skill_title'     => $skill['title'] ?? $slug,
+            'current_version' => $skill['version'] ?? count($history),
+            'history'         => array_reverse($history), // Newest first
+        ]);
+    }
+
+    /**
+     * Restore a specific version of a skill from history.
+     */
+    public function restoreSkillVersion(): RedirectResponse
+    {
+        if (!auth()->loggedIn() || !auth()->user()->inGroup('superadmin', 'admin')) {
+            return redirect()->to('/')->with('error', 'غير مسموح لك بالوصول.');
+        }
+
+        $skillId       = trim((string) $this->request->getPost('skill_id'));
+        $targetVersion = (int) $this->request->getPost('version');
+
+        $slug   = preg_replace('/[^a-z0-9\-_]/', '', strtolower($skillId));
+        $skills = $this->getSkillsList();
+
+        if (!isset($skills[$slug])) {
+            return redirect()->back()->with('error', 'المهارة المطلوبة غير موجودة.');
+        }
+
+        $history = $this->getSkillHistoryList($slug);
+        $found   = null;
+        foreach ($history as $item) {
+            if ((int) ($item['version'] ?? 0) === $targetVersion) {
+                $found = $item;
+                break;
+            }
+        }
+
+        if (!$found) {
+            return redirect()->back()->with('error', "الإصدار المطلوب (v{$targetVersion}) غير موجود في سجل المهارة.");
+        }
+
+        // Compute next version for the restore event
+        $maxV = 0;
+        foreach ($history as $h) {
+            if (isset($h['version']) && (int) $h['version'] > $maxV) {
+                $maxV = (int) $h['version'];
+            }
+        }
+        $nextVersion = $maxV + 1;
+
+        $user     = auth()->user();
+        $userName = $user ? ($user->username ?? $user->email ?? 'المشرف') : 'المشرف';
+        $now      = date('Y-m-d H:i:s');
+
+        // Create new history entry representing the rollback
+        $restoreEntry = [
+            'version'       => $nextVersion,
+            'title'         => $found['title'] ?? $skills[$slug]['title'],
+            'instructions'  => $found['instructions'] ?? '',
+            'change_note'   => "استعادة من الإصدار السابق (v{$targetVersion})",
+            'restored_from' => $targetVersion,
+            'user_name'     => $userName,
+            'user_id'       => $user ? $user->id : null,
+            'created_at'    => $now,
+        ];
+        $history[] = $restoreEntry;
+        $this->saveSkillHistoryList($slug, $history);
+
+        // Update active skill
+        $skills[$slug]['instructions']  = $found['instructions'] ?? '';
+        if (!empty($found['title'])) {
+            $skills[$slug]['title']     = $found['title'];
+        }
+        $skills[$slug]['version']       = $nextVersion;
+        $skills[$slug]['history_count'] = count($history);
+        $skills[$slug]['updated_at']    = $now;
+
+        $this->setSetting('mcp_skills_list', json_encode($skills, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+        // Sync cod-assistant system prompt if applicable
+        if ($slug === 'cod-assistant') {
+            $this->setSetting('mcp_system_prompt', $found['instructions'] ?? '');
+        }
+
+        return redirect()->back()->with('message', "تم استعادة الإصدار (v{$targetVersion}) للمهارة بنجاح، وتسجيله كإصدار نشط جديد (v{$nextVersion})! 📜🔄");
     }
 
     /**
@@ -1382,6 +1587,7 @@ SKILL;
         $badge        = trim((string) $this->request->getPost('badge'));
         $toolName     = trim((string) $this->request->getPost('tool_name'));
         $instructions = trim((string) $this->request->getPost('instructions'));
+        $changeNote   = trim((string) $this->request->getPost('change_note'));
         $enabled      = $this->request->getPost('enabled') === '1' || $this->request->getPost('enabled') === 'on';
 
         if (empty($skillId) || empty($title) || empty($instructions)) {
@@ -1406,13 +1612,46 @@ SKILL;
 
         $skills = $this->getSkillsList();
 
-        // If ID changed during edit, clean up old entry
+        // If ID changed during edit, clean up old entry and migrate history
         if (!empty($originalId) && $originalId !== $slug && isset($skills[$originalId])) {
             $isSys = $skills[$originalId]['is_system'] ?? false;
+            $oldHistory = $this->getSkillHistoryList($originalId);
+            if (!empty($oldHistory)) {
+                $this->saveSkillHistoryList($slug, $oldHistory);
+                $this->deleteSetting('mcp_skill_history_' . $originalId);
+            }
             unset($skills[$originalId]);
         } else {
             $isSys = $skills[$slug]['is_system'] ?? false;
         }
+
+        // Manage history versioning
+        $history = $this->getSkillHistoryList($slug);
+        $maxV = 0;
+        foreach ($history as $h) {
+            if (isset($h['version']) && (int) $h['version'] > $maxV) {
+                $maxV = (int) $h['version'];
+            }
+        }
+        $nextVersion = $maxV > 0 ? $maxV + 1 : 1;
+
+        $user     = auth()->user();
+        $userName = $user ? ($user->username ?? $user->email ?? 'المشرف') : 'المشرف';
+        if (empty($changeNote)) {
+            $changeNote = empty($history) ? 'الإصدار المبدئي للمهارة' : "تحديث رقم {$nextVersion}";
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $history[] = [
+            'version'      => $nextVersion,
+            'title'        => $title,
+            'instructions' => $instructions,
+            'change_note'  => $changeNote,
+            'user_name'    => $userName,
+            'user_id'      => $user ? $user->id : null,
+            'created_at'   => $now,
+        ];
+        $this->saveSkillHistoryList($slug, $history);
 
         $skills[$slug] = [
             'id'           => $slug,
@@ -1424,7 +1663,9 @@ SKILL;
             'instructions' => $instructions,
             'enabled'      => $enabled,
             'is_system'    => $isSys,
-            'updated_at'   => date('Y-m-d H:i:s'),
+            'version'      => $nextVersion,
+            'history_count'=> count($history),
+            'updated_at'   => $now,
         ];
 
         $this->setSetting('mcp_skills_list', json_encode($skills, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
@@ -1434,7 +1675,7 @@ SKILL;
             $this->setSetting('mcp_system_prompt', $instructions);
         }
 
-        return redirect()->back()->with('message', "تم حفظ مهارة '{$title}' بنجاح! 🧠✨");
+        return redirect()->back()->with('message', "تم حفظ مهارة '{$title}' (الإصدار v{$nextVersion}) بنجاح! 🧠✨");
     }
 
     /**
@@ -1461,6 +1702,7 @@ SKILL;
         unset($skills[$skillId]);
 
         $this->setSetting('mcp_skills_list', json_encode($skills, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        $this->deleteSetting('mcp_skill_history_' . $skillId);
 
         return redirect()->back()->with('message', "تم حذف مهارة '{$skillTitle}' بنجاح. 🗑️");
     }

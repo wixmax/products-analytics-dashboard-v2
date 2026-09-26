@@ -392,6 +392,138 @@
           grid-template-columns: 1fr;
         }
       }
+
+      /* Skill History Modal & Timeline Styling */
+      .history-modal-dialog {
+        max-width: 1050px !important;
+      }
+      .history-layout {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 1.25rem;
+        min-height: 480px;
+      }
+      @media (max-width: 860px) {
+        .history-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      .history-sidebar {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        background: var(--bg-input);
+        overflow: hidden;
+      }
+      .history-sidebar-header {
+        padding: 10px 14px;
+        background: var(--bg-card);
+        border-bottom: 1px solid var(--border-color);
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .history-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        overflow-y: auto;
+        max-height: 480px;
+      }
+      .history-item {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: var(--transition-all);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .history-item:hover {
+        border-color: var(--color-primary);
+        transform: translateY(-1px);
+      }
+      .history-item.active {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+        background: rgba(99, 102, 241, 0.05);
+      }
+      .history-item-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .history-version-badge {
+        font-weight: 800;
+        font-size: 0.8rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: rgba(99, 102, 241, 0.12);
+        color: var(--color-primary);
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .history-version-badge.is-current {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--color-success);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+      }
+      .history-date {
+        font-size: 0.72rem;
+        color: var(--color-text-muted);
+      }
+      .history-note {
+        font-size: 0.8rem;
+        color: var(--color-text-main);
+        line-height: 1.4;
+      }
+      .history-meta {
+        font-size: 0.72rem;
+        color: var(--color-text-muted);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .history-preview-panel {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        background: var(--bg-card);
+        overflow: hidden;
+      }
+      .history-preview-header {
+        padding: 10px 14px;
+        background: var(--bg-input);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .history-preview-content {
+        padding: 14px;
+        flex: 1;
+        overflow-y: auto;
+        max-height: 430px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        color: var(--color-text-main);
+        background: var(--bg-card);
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
       .form-group label {
         display: block;
         font-weight: 700;
@@ -597,7 +729,12 @@
                       <div class="tool-name">
                         🧠 <?= esc($sId) ?>
                       </div>
-                      <span class="tool-badge"><?= esc($skill['badge'] ?? 'AI Skill') ?></span>
+                      <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
+                        <span class="tool-badge"><?= esc($skill['badge'] ?? 'AI Skill') ?></span>
+                        <span class="tool-badge" style="background: rgba(16, 185, 129, 0.12); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25); font-weight: 700;">
+                          v<?= esc($skill['version'] ?? 1) ?>
+                        </span>
+                      </div>
                     </div>
 
                     <form action="<?= base_url('admin/mcp/toggle-skill') ?>" method="POST" id="form-toggle-skill-<?= esc($sId) ?>">
@@ -636,7 +773,12 @@
                       <span>الحالة: <strong><?= $isEnabled ? '🟢 مفعلة' : '🔴 معطلة' ?></strong></span>
                     </div>
 
-                    <div style="display: flex; gap: 6px; align-items: center;">
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                      <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; display: flex; align-items: center; gap: 4px;" onclick="openSkillHistoryModal('<?= esc($sId) ?>', <?= esc(json_encode($skill['title'] ?? $sId, JSON_UNESCAPED_UNICODE), 'attr') ?>)">
+                        <span>📜</span>
+                        <span>السجل (<?= esc($skill['history_count'] ?? 1) ?>)</span>
+                      </button>
+
                       <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copySkillInstructions(<?= esc(json_encode($skill['instructions'] ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE), 'attr') ?>)">
                         📋 نسخ
                       </button>
@@ -842,6 +984,12 @@
               <textarea name="instructions" id="modal_instructions" rows="12" placeholder="اكتب هنا القواعد، المراحل، ونماذج البرومبتات التوجيهية للذكاء الاصطناعي..." required></textarea>
             </div>
 
+            <div class="form-group" id="changeNoteGroup">
+              <label for="modal_change_note">ملاحظة التعديل / سبب التحديث في هذا الإصدار (Changelog Note)</label>
+              <input type="text" name="change_note" id="modal_change_note" placeholder="مثال: تحسين صياغة برومبتات الفيديو، أو إضافة أمثلة جديدة..." />
+              <span style="font-size:0.72rem; color:var(--color-text-muted);">اختياري: يتم توثيق هذه الملاحظة تلقائياً في سجل تاريخ المهارة للرجوع إليها مستقبلاً</span>
+            </div>
+
             <div style="display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg-input); border-radius:var(--radius-sm); border:1px solid var(--border-color);">
               <label class="switch">
                 <input type="checkbox" name="enabled" id="modal_enabled" value="1" checked />
@@ -865,11 +1013,106 @@
       </div>
     </div>
 
+    <!-- Modal: AI Skill Version History -->
+    <div class="modal-backdrop" id="skillHistoryModal" onclick="handleHistoryBackdropClick(event)">
+      <div class="modal-dialog history-modal-dialog">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span>📜</span>
+            <span>سجل وتاريخ إصدارات المهارة: <span id="historySkillTitle" style="color:var(--color-primary);"></span></span>
+          </div>
+          <button type="button" class="modal-close" onclick="closeSkillHistoryModal()">&times;</button>
+        </div>
+
+        <div class="modal-body" style="padding: 1.25rem;">
+          <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 4px;">
+            يتم توثيق كل تعديل أو تحديث تلقائياً كنسخة محفوظة. يمكنك معاينة التوجيهات السابقة، نسخها، أو استعادتها للعمل فوراً.
+          </div>
+
+          <div id="historyLoading" style="display:flex; justify-content:center; align-items:center; padding:3rem; gap:10px; color:var(--color-text-muted);">
+            <div class="spinner-border" style="width:24px; height:24px; border:2px solid var(--color-primary); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+            <span>جارِ تحميل سجل الإصدارات...</span>
+          </div>
+
+          <div id="historyEmpty" style="display:none; text-align:center; padding:3rem 1rem; color:var(--color-text-muted);">
+            <div style="font-size:2.5rem; margin-bottom:8px;">📜</div>
+            <div style="font-weight:700;">لا توجد إصدارات مسجلة بعد لهذه المهارة</div>
+          </div>
+
+          <div id="historyContainer" class="history-layout" style="display:none;">
+            <!-- Left: Timeline / Versions List -->
+            <div class="history-sidebar">
+              <div class="history-sidebar-header">
+                <span>الإصدارات المسجلة (<span id="historyCountBadge">0</span>)</span>
+                <span style="font-size:0.75rem; color:var(--color-text-muted);">من الأحدث للأقدم</span>
+              </div>
+              <div class="history-list" id="historyItemsList">
+                <!-- Injected via JS -->
+              </div>
+            </div>
+
+            <!-- Right: Preview & Rollback Actions -->
+            <div class="history-preview-panel">
+              <div class="history-preview-header">
+                <div>
+                  <span style="font-weight:700; font-size:0.88rem;">معاينة الإصدار:</span>
+                  <span id="previewVersionBadge" class="history-version-badge" style="margin-right:4px;">v1</span>
+                  <span id="previewCurrentTag" class="tool-badge" style="display:none; background:rgba(16,185,129,0.15); color:var(--color-success); border-color:rgba(16,185,129,0.3); margin-right:4px;">🟢 الإصدار النشط حالياً</span>
+                </div>
+
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="copyCurrentPreviewInstructions()">
+                    📋 نسخ التوجيهات
+                  </button>
+
+                  <button type="button" class="btn btn-primary" id="btnRestoreSelectedVersion" style="padding:4px 14px; font-size:0.75rem; background:var(--color-success);" onclick="restoreSelectedVersion()">
+                    🔄 استعادة هذا الإصدار
+                  </button>
+                </div>
+              </div>
+
+              <div style="padding:8px 14px; background:rgba(99,102,241,0.04); border-bottom:1px solid var(--border-color); font-size:0.78rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <span style="color:var(--color-text-muted);">الملاحظة: </span>
+                  <strong id="previewChangeNote" style="color:var(--color-text-main);">-</strong>
+                </div>
+                <div>
+                  <span style="color:var(--color-text-muted);">الكاتب: </span>
+                  <span id="previewAuthor" style="color:var(--color-text-main);">-</span>
+                  <span style="margin:0 4px; color:var(--border-color);">|</span>
+                  <span id="previewTimestamp" style="color:var(--color-text-muted);">-</span>
+                </div>
+              </div>
+
+              <div class="history-preview-content" id="historyPreviewText"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeSkillHistoryModal()">
+            إغلاق
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden form for Restoring Skill Version -->
+    <form id="formRestoreSkillVersion" action="<?= base_url('admin/mcp/restore-skill-version') ?>" method="POST" style="display:none;">
+      <?= csrf_field() ?>
+      <input type="hidden" name="skill_id" id="restore_skill_id" value="" />
+      <input type="hidden" name="version" id="restore_version" value="" />
+    </form>
+
     <script>
       window.DEFAULT_COD_PROMPT = <?= json_encode($defaultSystemPrompt, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
       window.DEFAULT_NANO_PROMPT = <?= json_encode($defaultNanoPrompt, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
       window.DEFAULT_GEMINI_PROMPT = <?= json_encode($defaultGeminiPrompt ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
       window.DEFAULT_GEMINI_VOICEOVER_PROMPT = <?= json_encode($defaultGeminiVoiceoverPrompt ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+
+      let currentHistoryData = [];
+      let selectedHistoryIndex = 0;
+      let activeHistorySkillId = '';
 
       document.addEventListener("DOMContentLoaded", async () => {
         await setupTheme();
@@ -907,6 +1150,7 @@
         document.getElementById('modal_badge').value = 'Custom Skill مهارة مخصصة';
         document.getElementById('modal_description').value = '';
         document.getElementById('modal_instructions').value = '';
+        document.getElementById('modal_change_note').value = 'الإصدار المبدئي للمهارة';
         document.getElementById('modal_enabled').checked = true;
 
         document.getElementById('skillModal').classList.add('active');
@@ -931,6 +1175,8 @@
         document.getElementById('modal_badge').value = skill.badge || '';
         document.getElementById('modal_description').value = skill.description || '';
         document.getElementById('modal_instructions').value = skill.instructions || '';
+        document.getElementById('modal_change_note').value = '';
+        document.getElementById('modal_change_note').placeholder = 'مثال: تعديل وتحديث في توجيهات المهارة...';
         document.getElementById('modal_enabled').checked = Boolean(skill.enabled);
 
         document.getElementById('skillModal').classList.add('active');
@@ -948,9 +1194,161 @@
         }
       }
 
+      // History Modal Functions
+      async function openSkillHistoryModal(skillId, skillTitle) {
+        activeHistorySkillId = skillId;
+        document.getElementById('historySkillTitle').innerText = skillTitle || skillId;
+        document.getElementById('historyLoading').style.display = 'flex';
+        document.getElementById('historyEmpty').style.display = 'none';
+        document.getElementById('historyContainer').style.display = 'none';
+        
+        document.getElementById('skillHistoryModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        try {
+          const res = await fetch('<?= base_url('admin/mcp/skill-history') ?>/' + encodeURIComponent(skillId));
+          if (!res.ok) {
+            throw new Error('فشل جلب سجل المهارة.');
+          }
+          const data = await res.json();
+          document.getElementById('historyLoading').style.display = 'none';
+
+          if (!data || !data.history || data.history.length === 0) {
+            document.getElementById('historyEmpty').style.display = 'block';
+            return;
+          }
+
+          currentHistoryData = data.history;
+          const currentVersion = data.current_version;
+          document.getElementById('historyCountBadge').innerText = currentHistoryData.length;
+          document.getElementById('historyContainer').style.display = 'grid';
+
+          renderHistoryList(currentVersion);
+          selectHistoryVersion(0, currentVersion);
+        } catch (err) {
+          console.error(err);
+          document.getElementById('historyLoading').style.display = 'none';
+          alert('حدث خطأ أثناء تحميل سجل المهارة: ' + err.message);
+          closeSkillHistoryModal();
+        }
+      }
+
+      function renderHistoryList(currentVersion) {
+        const listEl = document.getElementById('historyItemsList');
+        listEl.innerHTML = '';
+
+        currentHistoryData.forEach((item, index) => {
+          const isCurrent = Number(item.version) === Number(currentVersion);
+          const div = document.createElement('div');
+          div.className = 'history-item' + (index === 0 ? ' active' : '');
+          div.id = 'history-item-' + index;
+          div.onclick = () => selectHistoryVersion(index, currentVersion);
+
+          div.innerHTML = `
+            <div class="history-item-top">
+              <span class="history-version-badge ${isCurrent ? 'is-current' : ''}">
+                v${item.version} ${isCurrent ? '🟢 نشط' : ''}
+              </span>
+              <span class="history-date">${item.created_at || ''}</span>
+            </div>
+            <div class="history-note">
+              ${escapeHtml(item.change_note || 'تحديث بدون ملاحظة')}
+            </div>
+            <div class="history-meta">
+              <span>✍️ ${escapeHtml(item.user_name || 'المشرف')}</span>
+              ${item.restored_from ? `<span style="color:var(--color-primary); font-size:0.7rem;">(مستعاد من v${item.restored_from})</span>` : ''}
+            </div>
+          `;
+          listEl.appendChild(div);
+        });
+      }
+
+      function selectHistoryVersion(index, currentVersion) {
+        selectedHistoryIndex = index;
+        const item = currentHistoryData[index];
+        if (!item) return;
+
+        document.querySelectorAll('.history-item').forEach((el, idx) => {
+          if (idx === index) {
+            el.classList.add('active');
+          } else {
+            el.classList.remove('active');
+          }
+        });
+
+        const isCurrent = Number(item.version) === Number(currentVersion);
+        document.getElementById('previewVersionBadge').innerText = 'v' + item.version;
+        document.getElementById('previewCurrentTag').style.display = isCurrent ? 'inline-flex' : 'none';
+        document.getElementById('previewChangeNote').innerText = item.change_note || 'تحديث بدون ملاحظة';
+        document.getElementById('previewAuthor').innerText = item.user_name || 'المشرف';
+        document.getElementById('previewTimestamp').innerText = item.created_at || '';
+        document.getElementById('historyPreviewText').textContent = item.instructions || '';
+
+        const restoreBtn = document.getElementById('btnRestoreSelectedVersion');
+        if (isCurrent) {
+          restoreBtn.innerText = '✅ الإصدار النشط حالياً';
+          restoreBtn.disabled = true;
+          restoreBtn.style.opacity = '0.6';
+          restoreBtn.style.cursor = 'not-allowed';
+        } else {
+          restoreBtn.innerText = '🔄 استعادة الإصدار (v' + item.version + ')';
+          restoreBtn.disabled = false;
+          restoreBtn.style.opacity = '1';
+          restoreBtn.style.cursor = 'pointer';
+        }
+      }
+
+      function restoreSelectedVersion() {
+        const item = currentHistoryData[selectedHistoryIndex];
+        if (!item || !activeHistorySkillId) return;
+
+        const v = item.version;
+        if (confirm(`هل أنت متأكد من رغبتك في استعادة الإصدار (v${v}) لهذه المهارة؟\n\nسيتم تطبيق توجيهات الإصدار السابق فوراً وتسجيلها كإصدار جديد مع الاحتفاظ بجميع النسخ السابقة.`)) {
+          document.getElementById('restore_skill_id').value = activeHistorySkillId;
+          document.getElementById('restore_version').value = v;
+          document.getElementById('formRestoreSkillVersion').submit();
+        }
+      }
+
+      function copyCurrentPreviewInstructions() {
+        const item = currentHistoryData[selectedHistoryIndex];
+        if (!item || !item.instructions) {
+          alert('لا توجد توجيهات لنسخها.');
+          return;
+        }
+        navigator.clipboard.writeText(item.instructions).then(() => {
+          alert(`تم نسخ توجيهات الإصدار (v${item.version}) بنجاح! 📋✨`);
+        }).catch(err => {
+          console.error(err);
+          alert('فشل نسخ التوجيهات.');
+        });
+      }
+
+      function closeSkillHistoryModal() {
+        document.getElementById('skillHistoryModal').classList.remove('active');
+        document.body.style.overflow = '';
+      }
+
+      function handleHistoryBackdropClick(e) {
+        if (e.target.id === 'skillHistoryModal') {
+          closeSkillHistoryModal();
+        }
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           closeSkillModal();
+          closeSkillHistoryModal();
         }
       });
 
