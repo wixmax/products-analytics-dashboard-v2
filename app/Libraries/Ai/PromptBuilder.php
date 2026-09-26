@@ -121,4 +121,99 @@ class PromptBuilder
 
         return $prompt;
     }
+
+    /**
+     * Standard typed evaluation questions for COD product viability using typesafe/jev
+     */
+    public static function getJevProductEvaluationQuestions(): array
+    {
+        return [
+            'is_problem_solving' => [
+                'type'         => 'noul',
+                'instructions' => 'Does this product solve a clear, practical problem or alleviate specific pain points for consumers?'
+            ],
+            'niche' => [
+                'type'         => 'choice',
+                'instructions' => 'Which primary market category does this product belong to?',
+                'criteria'     => [
+                    'beauty_personal_care' => 'Skincare, haircare, cosmetics, grooming and personal hygiene',
+                    'kitchen_home'         => 'Cooking utensils, cleaning, home organization, decor',
+                    'health_wellness'      => 'Fitness, posture correctors, pain relief, orthopedic',
+                    'gadgets_electronics'  => 'Phone accessories, smart tools, car gadgets, tech devices',
+                    'automotive'           => 'Car accessories, repair kits, detailing, emergency tools',
+                    'general_merchandise'  => 'Clothing, toys, jewelry, novelty items'
+                ]
+            ],
+            'impulse_buy' => [
+                'type'         => 'score',
+                'instructions' => 'Rate the impulse buy potential and visual wow-factor for social media advertising (COD market)',
+                'criteria'     => [
+                    'Low: utility item or needs high consideration and research',
+                    'Moderate: interesting with some visual appeal or novelty',
+                    'High: strong instant wow-factor, high emotional impulse to order immediately'
+                ]
+            ],
+            'shipping_delivery_risk' => [
+                'type'         => 'score',
+                'instructions' => 'Rate the logistical and delivery risk in a cash-on-delivery environment (breakage, fragile materials, heavy weight, or high return rates)',
+                'criteria'     => [
+                    'Low risk: compact, lightweight, durable, easy to pack and deliver safely',
+                    'Moderate risk: delicate components or sizing dependency',
+                    'High risk: fragile glass/ceramic, heavy/bulky, high probability of return or shipping damage'
+                ]
+            ],
+            'winning_potential' => [
+                'type'         => 'score',
+                'instructions' => 'Overall rating of whether this product can be scaled profitably as a winning COD product',
+                'criteria'     => [
+                    'Low: saturated or difficult to market via COD',
+                    'Moderate: viable for testing with targeted angles',
+                    'High: excellent winning potential for aggressive scaling'
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Standard typed evaluation questions for ad creative and copy using typesafe/jev
+     */
+    public static function getJevAdEvaluationQuestions(): array
+    {
+        return [
+            'marketing_angle' => [
+                'type'         => 'choice',
+                'instructions' => 'What is the primary psychological or marketing angle employed in this ad copy?',
+                'criteria'     => [
+                    'problem_solution' => 'Emphasizes pain points and demonstrates the solution',
+                    'social_proof'     => 'Customer reviews, testimonials, influencer endorsement',
+                    'urgency_scarcity' => 'Limited time discounts, ending sales, limited stock warnings',
+                    'emotional_status' => 'Status, luxury, transformation, self-improvement',
+                    'novelty_curiosity' => 'Unusual demonstration, curiosity gap, innovative feature'
+                ]
+            ],
+            'is_hook_effective' => [
+                'type'         => 'noul',
+                'instructions' => 'Does the headline/copy provide a compelling scroll-stopping hook within the opening statement?'
+            ],
+            'policy_risk' => [
+                'type'         => 'score',
+                'instructions' => 'Rate the Facebook Advertising Policy compliance risk (deceptive claims, before/after imagery, medical cures, unrealistic promises)',
+                'criteria'     => [
+                    'Safe: complies with standard advertising policies',
+                    'Borderline: aggressive claims or sensitive topic that might trigger review',
+                    'High risk: severe policy violations, guaranteed medical cures, or deceptive promises'
+                ]
+            ],
+            'call_to_action_strength' => [
+                'type'         => 'score',
+                'instructions' => 'How clear, urgent, and frictionless is the call-to-action (CTA)?',
+                'criteria'     => [
+                    'Weak: vague or missing CTA',
+                    'Moderate: standard shop now or learn more direction',
+                    'Strong: compelling COD offer, cash on delivery assurance, clear next step'
+                ]
+            ]
+        ];
+    }
 }
+

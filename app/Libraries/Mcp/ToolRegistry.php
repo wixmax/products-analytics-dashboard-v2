@@ -9,6 +9,7 @@ use App\Libraries\Mcp\Tools\ProductFilterTool;
 use App\Libraries\Mcp\Tools\VectorSearchTool;
 use App\Libraries\Mcp\Tools\FacebookAdsTools;
 use App\Libraries\Mcp\Tools\ChoufliyaTools;
+use App\Libraries\Mcp\Tools\JevEvaluationTools;
 
 class ToolRegistry
 {
@@ -57,6 +58,11 @@ class ToolRegistry
         $this->register(new ChoufliyaTools('choufliya_search_by_image'));
         $this->register(new ChoufliyaTools('choufliya_find_suppliers'));
         $this->register(new ChoufliyaTools('choufliya_export_suppliers'));
+
+        // Cloudflare Jev Structured Evaluation Suite
+        $this->register(new JevEvaluationTools('jev_evaluate_product'));
+        $this->register(new JevEvaluationTools('jev_evaluate_ad'));
+        $this->register(new JevEvaluationTools('jev_evaluate_custom'));
     }
 
     public function register(ToolInterface $tool): void

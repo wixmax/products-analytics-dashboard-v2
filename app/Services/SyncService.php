@@ -18,14 +18,14 @@ class SyncService
         $this->snapshotModel = new SnapshotModel();
     }
 
-    public function run(?string $date = null, string $trigger = 'manual', array $origins = ['Winning']): array
+    public function run(?string $date = null, string $trigger = 'manual', array $origins = ['Winning'], ?array $countries = null): array
     {
         $targetDate = $date ?: date('Y-m-d');
         $stats = [];
 
         // 1. Fetch Winning Products for targeted date (المنتجات الرابحة فقط)
         if (in_array('Winning', $origins, true)) {
-            $stats['Winning'] = $this->syncWinningProducts($targetDate);
+            $stats['Winning'] = $this->syncWinningProducts($targetDate, $countries);
         }
 
         // 2. Fetch Insights (Local Products) only if requested
@@ -150,11 +150,50 @@ class SyncService
         return $stats;
     }
 
-    private function syncWinningProducts(?string $date = null): array
+    private function syncWinningProducts(?string $date = null, ?array $countries = null): array
     {
         $stats = ['inserted' => 0, 'updated' => 0, 'failed' => false, 'error' => null];
         $targetDate = $date ?: date('Y-m-d');
         $yesterday = date('Y-m-d', strtotime('-1 day', strtotime($targetDate)));
+
+        // If countries not provided, check database setting
+        if ($countries === null || empty($countries)) {
+            try {
+                $settingModel = new \App\Models\SettingModel();
+                $settingRow = $settingModel->where('key', 'cron_winning_countries')->first();
+                if ($settingRow && !empty($settingRow['value'])) {
+                    $val = $settingRow['value'];
+                    if (is_string($val)) {
+                        $decoded = json_decode($val, true);
+                        $countries = is_array($decoded) ? $decoded : explode(',', $val);
+                    } elseif (is_array($val)) {
+                        $countries = $val;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Graceful fallback
+            }
+        }
+
+        // Clean & sanitize country codes (2 uppercase letters)
+        $cleanCountries = [];
+        if (!empty($countries)) {
+            foreach ($countries as $c) {
+                $c = strtoupper(trim(strval($c)));
+                if (preg_match('/^[A-Z]{2}$/', $c)) {
+                    $cleanCountries[] = $c;
+                }
+            }
+        }
+        $cleanCountries = array_values(array_unique($cleanCountries));
+
+        // Default COD target countries if none specified
+        if (empty($cleanCountries)) {
+            $cleanCountries = ['DZ', 'TN', 'MA', 'LY', 'EG', 'SA', 'QA', 'AE', 'OM', 'BH', 'KW'];
+        }
+
+        $countryParam = implode(';', $cleanCountries);
+        $stats['target_countries'] = $cleanCountries;
         
         $versionsToTry = [
             '1.10-1' . $targetDate,
@@ -174,7 +213,7 @@ class SyncService
                 "0" => [
                     "json" => [
                         "category" => "Popular;Home & Garden;Electronics;Baby & Toddler",
-                        "country"  => "DZ;TN;MA;LY;EG;SA;QA;AE;OM;BH;KW",
+                        "country"  => $countryParam,
                         "v"        => $ver
                     ]
                 ]

@@ -605,6 +605,43 @@
               </div>
             </div>
 
+            <!-- Country Selection Section -->
+            <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.25rem;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 0.85rem;">
+                <div>
+                  <h4 style="margin: 0 0 4px 0; font-size: 0.95rem; font-weight: 800; color: var(--color-text-main); display: flex; align-items: center; gap: 6px;">
+                    <span>🌍</span> تحديد الدول المستهدفة للجلب اليومي (Target Countries)
+                  </h4>
+                  <span style="font-size: 0.8rem; color: var(--color-text-muted);">
+                    اختر الأسواق والدول التي ترغب في جلب وتحديث منتجاتها الرابحة فقط لتوفير الوقت والتركيز على مجالات استهدافك:
+                  </span>
+                </div>
+                <!-- Presets Buttons -->
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                  <button type="button" class="btn btn-secondary" style="padding: 3px 9px; font-size: 0.72rem; font-weight: 700;" onclick="setCronCountriesPreset('all')">الكل (16)</button>
+                  <button type="button" class="btn btn-secondary" style="padding: 3px 9px; font-size: 0.72rem; font-weight: 700;" onclick="setCronCountriesPreset('maghreb')">🇲🇦 شمال إفريقيا</button>
+                  <button type="button" class="btn btn-secondary" style="padding: 3px 9px; font-size: 0.72rem; font-weight: 700;" onclick="setCronCountriesPreset('gcc')">🇸🇦 دول الخليج</button>
+                  <button type="button" class="btn btn-secondary" style="padding: 3px 9px; font-size: 0.72rem; font-weight: 700;" onclick="setCronCountriesPreset('ma_only')">المغرب فقط</button>
+                  <button type="button" class="btn btn-secondary" style="padding: 3px 9px; font-size: 0.72rem; color: #ef4444;" onclick="setCronCountriesPreset('none')">إلغاء التحديد</button>
+                </div>
+              </div>
+
+              <!-- Countries Grid of Toggle Pills -->
+              <div id="cron-countries-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 1rem;">
+                <!-- Populated dynamically via JS -->
+              </div>
+
+              <!-- Footer with Counter and Save Button -->
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 0.85rem;">
+                <div style="font-size: 0.82rem; font-weight: 700; color: var(--color-text-muted);">
+                  المحدد حالياً: <span id="cron-countries-count" style="color: #10b981; font-weight: 800; font-size: 1rem;">0</span> دولة
+                </div>
+                <button type="button" id="btn-save-cron-countries" class="btn btn-primary" style="padding: 6px 16px; font-size: 0.82rem; font-weight: 700; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none;" onclick="saveCronCountries()">
+                  💾 حفظ وتثبيت الدول المحددة
+                </button>
+              </div>
+            </div>
+
             <!-- Action Buttons Grid -->
             <div class="actions-grid" style="margin-bottom: 1.25rem;">
               <div class="action-item">
@@ -772,6 +809,8 @@
         }
         await setupTheme();
         await loadSettings();
+        initCronCommandsData();
+        renderCronCountriesGrid();
         await loadCronStatus();
       });
 
@@ -1537,6 +1576,176 @@
         });
       }
 
+      // -------------------------------------------------------------
+      // Cron Target Countries Catalog & Logic
+      // -------------------------------------------------------------
+      const CRON_COUNTRIES_CATALOG = [
+        { code: "MA", name: "المغرب", flag: "🇲🇦", region: "maghreb" },
+        { code: "DZ", name: "الجزائر", flag: "🇩🇿", region: "maghreb" },
+        { code: "TN", name: "تونس", flag: "🇹🇳", region: "maghreb" },
+        { code: "LY", name: "ليبيا", flag: "🇱🇾", region: "maghreb" },
+        { code: "EG", name: "مصر", flag: "🇪🇬", region: "maghreb" },
+        { code: "SA", name: "السعودية", flag: "🇸🇦", region: "gcc" },
+        { code: "AE", name: "الإمارات", flag: "🇦🇪", region: "gcc" },
+        { code: "QA", name: "قطر", flag: "🇶🇦", region: "gcc" },
+        { code: "KW", name: "الكويت", flag: "🇰🇼", region: "gcc" },
+        { code: "OM", name: "عُمان", flag: "🇴🇲", region: "gcc" },
+        { code: "BH", name: "البحرين", flag: "🇧🇭", region: "gcc" },
+        { code: "GB", name: "بريطانيا", flag: "🇬🇧", region: "europe" },
+        { code: "FR", name: "فرنسا", flag: "🇫🇷", region: "europe" },
+        { code: "ES", name: "إسبانيا", flag: "🇪🇸", region: "europe" },
+        { code: "DE", name: "ألمانيا", flag: "🇩🇪", region: "europe" },
+        { code: "IT", name: "إيطاليا", flag: "🇮🇹", region: "europe" }
+      ];
+
+      let selectedCronCountries = new Set(["DZ", "TN", "MA", "LY", "EG", "SA", "QA", "AE", "OM", "BH", "KW"]);
+
+      function initCronCommandsData() {
+        const crontabInput = document.getElementById('cron-crontab-input');
+        if (crontabInput && !crontabInput.dataset.original) {
+          crontabInput.dataset.original = crontabInput.value;
+        }
+        const windowsInput = document.getElementById('cron-windows-input');
+        if (windowsInput && !windowsInput.dataset.original) {
+          windowsInput.dataset.original = windowsInput.value;
+        }
+      }
+
+      function renderCronCountriesGrid() {
+        const grid = document.getElementById('cron-countries-grid');
+        const countEl = document.getElementById('cron-countries-count');
+        if (!grid) return;
+
+        grid.innerHTML = '';
+        CRON_COUNTRIES_CATALOG.forEach(country => {
+          const isSelected = selectedCronCountries.has(country.code);
+          const pill = document.createElement('div');
+          pill.className = 'cron-country-pill';
+          pill.style.cssText = `
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            border: 1.5px solid ${isSelected ? '#3b82f6' : 'var(--border-color)'};
+            background: ${isSelected ? 'rgba(59, 130, 246, 0.12)' : 'var(--bg-app)'};
+            color: ${isSelected ? '#3b82f6' : 'var(--color-text-main)'};
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s ease;
+            font-size: 0.8rem;
+            font-weight: ${isSelected ? '700' : '500'};
+          `;
+          pill.onclick = () => toggleCronCountry(country.code);
+
+          pill.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <span style="font-size: 1.15rem; line-height: 1;">${country.flag}</span>
+              <span style="overflow: hidden; text-overflow: ellipsis;">${country.name}</span>
+            </div>
+            <span style="font-size: 0.72rem; font-family: monospace; opacity: 0.85; margin-right: 4px;">${isSelected ? '✓' : country.code}</span>
+          `;
+          grid.appendChild(pill);
+        });
+
+        if (countEl) {
+          countEl.textContent = selectedCronCountries.size;
+        }
+
+        updateCronCommandStrings();
+      }
+
+      function toggleCronCountry(code) {
+        if (selectedCronCountries.has(code)) {
+          selectedCronCountries.delete(code);
+        } else {
+          selectedCronCountries.add(code);
+        }
+        renderCronCountriesGrid();
+      }
+
+      function setCronCountriesPreset(preset) {
+        if (preset === 'all') {
+          CRON_COUNTRIES_CATALOG.forEach(c => selectedCronCountries.add(c.code));
+        } else if (preset === 'maghreb') {
+          selectedCronCountries.clear();
+          CRON_COUNTRIES_CATALOG.filter(c => c.region === 'maghreb').forEach(c => selectedCronCountries.add(c.code));
+        } else if (preset === 'gcc') {
+          selectedCronCountries.clear();
+          CRON_COUNTRIES_CATALOG.filter(c => c.region === 'gcc').forEach(c => selectedCronCountries.add(c.code));
+        } else if (preset === 'ma_only') {
+          selectedCronCountries.clear();
+          selectedCronCountries.add('MA');
+        } else if (preset === 'none') {
+          selectedCronCountries.clear();
+        }
+        renderCronCountriesGrid();
+      }
+
+      async function saveCronCountries() {
+        if (selectedCronCountries.size === 0) {
+          showToast("⚠️ يرجى تحديد دولة واحدة على الأقل قبل الحفظ", "warning");
+          return;
+        }
+
+        const btn = document.getElementById('btn-save-cron-countries');
+        const origText = btn ? btn.innerHTML : '';
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '⏳ جارٍ الحفظ...';
+        }
+
+        try {
+          const countriesArray = Array.from(selectedCronCountries);
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              key: 'cron_winning_countries',
+              value: countriesArray
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            showToast(`تم حفظ وتثبيت ${countriesArray.length} دولة مستهدفة للجلب اليومي بنجاح 💾`, "success");
+            updateCronCommandStrings();
+          } else {
+            showToast("❌ " + (data.message || data.messages?.error || "فشل حفظ إعدادات الدول"), "error");
+          }
+        } catch (err) {
+          console.error("Save cron countries error:", err);
+          showToast("❌ تعذر الاتصال بالسيرفر لحفظ الدول", "error");
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+          }
+        }
+      }
+
+      function updateCronCommandStrings() {
+        const countriesStr = Array.from(selectedCronCountries).join(',');
+        const crontabInput = document.getElementById('cron-crontab-input');
+        const windowsInput = document.getElementById('cron-windows-input');
+        const webhookInput = document.getElementById('cron-webhook-input');
+
+        if (crontabInput && crontabInput.dataset.original) {
+          crontabInput.value = countriesStr 
+            ? crontabInput.dataset.original.replace('cron:daily', `cron:daily --countries=${countriesStr}`)
+            : crontabInput.dataset.original;
+        }
+        if (windowsInput && windowsInput.dataset.original) {
+          windowsInput.value = countriesStr 
+            ? `${windowsInput.dataset.original} --countries=${countriesStr}`
+            : windowsInput.dataset.original;
+        }
+        if (webhookInput && webhookInput.dataset.baseUrl) {
+          webhookInput.value = countriesStr
+            ? `${webhookInput.dataset.baseUrl}&countries=${encodeURIComponent(countriesStr)}`
+            : webhookInput.dataset.baseUrl;
+        }
+      }
+
       async function loadCronStatus(showMessage = false) {
         try {
           const res = await fetch('/api/cron/status');
@@ -1553,8 +1762,18 @@
           const logContainer = document.getElementById('cron-log-container');
           const logTail = document.getElementById('cron-log-tail');
 
+          // Initialize configured countries from backend
+          if (data.configured_countries && Array.isArray(data.configured_countries) && data.configured_countries.length > 0) {
+            selectedCronCountries = new Set(data.configured_countries);
+            renderCronCountriesGrid();
+          }
+
           if (data.cron_url && webhookInput) {
-            webhookInput.value = data.cron_url;
+            webhookInput.dataset.baseUrl = data.cron_url;
+            const countriesStr = Array.from(selectedCronCountries).join(',');
+            webhookInput.value = countriesStr 
+              ? `${data.cron_url}&countries=${encodeURIComponent(countriesStr)}` 
+              : data.cron_url;
           }
 
           if (lastRun) {
@@ -1590,6 +1809,11 @@
       }
 
       async function runDailyCron(isAsync = false) {
+        if (selectedCronCountries.size === 0) {
+          showToast("⚠️ يرجى تحديد دولة واحدة على الأقل قبل تشغيل الجلب", "warning");
+          return;
+        }
+
         const btnId = isAsync ? 'btn-run-cron-async' : 'btn-run-cron-now';
         const btn = document.getElementById(btnId);
         const originalText = btn ? btn.innerHTML : '';
@@ -1599,10 +1823,15 @@
           btn.innerHTML = isAsync ? '⏳ جارٍ الجدولة...' : '⏳ جارٍ الجلب...';
         }
 
-        showToast(isAsync ? "جارٍ إطلاق مهمة الـ Cron بالخلفية..." : "جارٍ جلب البيانات وحفظ اللقطات...", "info");
+        const countriesStr = Array.from(selectedCronCountries).join(',');
+        showToast(isAsync 
+          ? `جارٍ إطلاق مهمة الـ Cron بالخلفية لـ (${selectedCronCountries.size} دولة)...` 
+          : `جارٍ جلب البيانات وحفظ اللقطات لـ (${selectedCronCountries.size} دولة)...`, 
+          "info"
+        );
 
         try {
-          const url = `/api/cron/daily?async=${isAsync ? 1 : 0}`;
+          const url = `/api/cron/daily?async=${isAsync ? 1 : 0}&countries=${encodeURIComponent(countriesStr)}`;
           const res = await fetch(url, { method: 'POST' });
           const data = await res.json();
 

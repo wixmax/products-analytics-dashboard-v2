@@ -37,7 +37,14 @@ trait CronTrait
             $providedSecret = substr((string)$providedSecret, 7);
         }
 
-        $isAdmin = auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin');
+        $isAdmin = false;
+        try {
+            if (function_exists('auth') && auth()->loggedIn() && auth()->user()) {
+                $isAdmin = auth()->user()->inGroup('superadmin', 'admin');
+            }
+        } catch (\Throwable $e) {
+            $isAdmin = false;
+        }
         $isAuthorized = ($isAdmin || (!empty($providedSecret) && hash_equals($expectedSecret, (string)$providedSecret)));
 
         if (!$isAuthorized) {
@@ -49,33 +56,58 @@ trait CronTrait
             return $this->fail('Invalid date format. Expected YYYY-MM-DD.');
         }
 
+        // Parse optional countries parameter
+        $countriesParam = $this->request->getVar('countries');
+        if (empty($countriesParam)) {
+            $json = $this->request->getJSON(true);
+            $countriesParam = $json['countries'] ?? null;
+        }
+
+        $countries = null;
+        if (!empty($countriesParam)) {
+            if (is_array($countriesParam)) {
+                $countries = $countriesParam;
+            } else {
+                $parts = explode(',', str_replace(';', ',', strval($countriesParam)));
+                $countries = array_filter(array_map('trim', $parts));
+            }
+            // Sanitize
+            $countries = array_values(array_filter(array_map(fn($c) => strtoupper(trim($c)), $countries), fn($c) => preg_match('/^[A-Z]{2}$/', $c)));
+        }
+
         $isAsync = filter_var($this->request->getVar('async'), FILTER_VALIDATE_BOOLEAN);
 
         // If async execution requested, dispatch background task to avoid HTTP timeout
         if ($isAsync) {
             $runner = new BackgroundTaskRunner();
-            $task = $runner->dispatchSparkCommand('cron:daily', ['--date' => $targetDate]);
+            $args = ['--date' => $targetDate];
+            if (!empty($countries)) {
+                $args['--countries'] = implode(',', $countries);
+            }
+            $task = $runner->dispatchSparkCommand('cron:daily', $args);
             return $this->respond([
-                'success' => true,
-                'message' => 'Daily cron job dispatched asynchronously',
-                'mode'    => 'async',
-                'task_id' => $task['task_id'],
-                'date'    => $targetDate,
+                'success'   => true,
+                'message'   => 'Daily cron job dispatched asynchronously',
+                'mode'      => 'async',
+                'task_id'   => $task['task_id'],
+                'date'      => $targetDate,
+                'countries' => $countries,
             ]);
         }
 
         // Synchronous execution
         $syncService = new SyncService();
         $trigger = $isAdmin ? 'manual_admin' : 'webhook';
-        $stats = $syncService->run($targetDate, $trigger);
+        $stats = $syncService->run($targetDate, $trigger, ['Winning'], $countries);
 
         return $this->respond([
-            'success' => true,
-            'message' => 'Daily data sync executed successfully',
-            'mode'    => 'sync',
-            'date'    => $targetDate,
-            'stats'   => $stats,
-            'summary' => SyncService::getLastSyncRun(),
+            'success'   => true,
+            'message'   => 'Daily data sync executed successfully',
+            'mode'      => 'sync',
+            'date'      => $targetDate,
+            'countries' => $stats['Winning']['target_countries'] ?? $countries,
+            'stats'     => $stats,
+            'summary'   => SyncService::getLastSyncRun(),
         ]);
     }
 
@@ -100,8 +132,33 @@ trait CronTrait
             }
         }
 
+        // Load configured winning countries
+        $countriesRow = $settingModel->where('key', 'cron_winning_countries')->first();
+        $configuredCountries = ['DZ', 'TN', 'MA', 'LY', 'EG', 'SA', 'QA', 'AE', 'OM', 'BH', 'KW'];
+        if ($countriesRow && !empty($countriesRow['value'])) {
+            $val = $countriesRow['value'];
+            if (is_string($val)) {
+                $decoded = json_decode($val, true);
+                if (is_array($decoded) && !empty($decoded)) {
+                    $configuredCountries = $decoded;
+                } else {
+                    $configuredCountries = array_filter(array_map('trim', explode(',', $val)));
+                }
+            } elseif (is_array($val) && !empty($val)) {
+                $configuredCountries = $val;
+            }
+        }
+        $configuredCountries = array_values(array_unique(array_map('strtoupper', $configuredCountries)));
+
         // Only reveal secret if admin
-        $isAdmin = auth()->loggedIn() && auth()->user()->inGroup('superadmin', 'admin');
+        $isAdmin = false;
+        try {
+            if (function_exists('auth') && auth()->loggedIn() && auth()->user()) {
+                $isAdmin = auth()->user()->inGroup('superadmin', 'admin');
+            }
+        } catch (\Throwable $e) {
+            $isAdmin = false;
+        }
 
         $cronLogDir = WRITEPATH . 'logs' . DIRECTORY_SEPARATOR . 'cron' . DIRECTORY_SEPARATOR;
         $cronLogFile = $cronLogDir . 'daily_sync_' . date('Y-m') . '.log';
@@ -112,11 +169,12 @@ trait CronTrait
         }
 
         return $this->respond([
-            'success'       => true,
-            'last_run'      => $lastRun,
-            'cron_secret'   => $isAdmin ? $secret : null,
-            'cron_url'      => $isAdmin ? site_url('api/cron/daily?secret=' . $secret) : null,
-            'recent_logs'   => $recentLogTail,
+            'success'              => true,
+            'last_run'             => $lastRun,
+            'configured_countries' => $configuredCountries,
+            'cron_secret'          => $isAdmin ? $secret : null,
+            'cron_url'             => $isAdmin ? site_url('api/cron/daily?secret=' . $secret) : null,
+            'recent_logs'          => $recentLogTail,
         ]);
     }
 
